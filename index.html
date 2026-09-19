@@ -116,8 +116,12 @@ create trigger on_auth_user_created
 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>البوابة الرئيسية للموظفين</title>
+<title>البوابة الرئيسية للأنظمة</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗂️</text></svg>">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#5C4033">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -152,30 +156,30 @@ create trigger on_auth_user_created
 <style>
   :root {
     color-scheme: light;
-    --bg: #F5F6F8;
+    --bg: #FDFBF7;
     --surface: #FFFFFF;
-    --surface-2: #EEF0F4;
-    --border: #E2E5EA;
-    --text: #1A1F2B;
-    --muted: #6B7280;
-    --primary: #1D2B4F;
-    --primary-2: #33477A;
-    --accent: #2E7D6B;
-    --accent-2: #3E9C87;
+    --surface-2: #F5F0EB;
+    --border: #E8DFD5;
+    --text: #2C221E;
+    --muted: #7A6E65;
+    --primary: #5C4033;
+    --primary-2: #4A3328;
+    --accent: #A0522D;
+    --accent-2: #8B4513;
     --danger: #C0392B;
   }
   html.dark {
     color-scheme: dark;
-    --bg: #10141C;
-    --surface: #1A2030;
-    --surface-2: #202840;
-    --border: #2A3142;
-    --text: #E7E9EE;
-    --muted: #9AA3B2;
-    --primary: #4C6AA8;
-    --primary-2: #6B87C4;
-    --accent: #3E9C87;
-    --accent-2: #58BBA5;
+    --bg: #181311;
+    --surface: #231C18;
+    --surface-2: #2D2420;
+    --border: #3D312B;
+    --text: #F3ECE4;
+    --muted: #A6988D;
+    --primary: #8C6D58;
+    --primary-2: #A3816A;
+    --accent: #C48148;
+    --accent-2: #D8955C;
     --danger: #E0685A;
   }
   * { box-sizing: border-box; }
@@ -234,16 +238,94 @@ create trigger on_auth_user_created
   *:focus-visible { outline: 2px solid var(--primary-2); outline-offset: 2px; }
 
   .system-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    position: relative;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--surface) 70%, transparent);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border: 1px solid color-mix(in srgb, var(--card-color, var(--border)) 30%, var(--border));
+    border-radius: 1.25rem;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: .85rem;
+    text-decoration: none;
+    color: var(--text);
+    transition: transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s ease, border-color .28s ease;
+  }
+  .system-card::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(140% 100% at 0% 0%, var(--card-color, var(--primary)) 0%, transparent 55%);
+    opacity: .14;
+    pointer-events: none;
   }
   .system-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 30px -12px rgba(0,0,0,.18);
-    border-color: var(--primary-2);
+    transform: translateY(-6px) scale(1.015);
+    box-shadow: 0 22px 48px -20px color-mix(in srgb, var(--card-color, var(--primary)) 55%, black 15%);
+    border-color: var(--card-color, var(--primary-2));
   }
-  html.dark .system-card:hover { box-shadow: 0 10px 30px -12px rgba(0,0,0,.5); }
+  .system-card:hover .system-card-arrow { transform: translate(4px, -2px); opacity: 1; }
+  html.dark .system-card:hover { box-shadow: 0 22px 48px -18px rgba(0,0,0,.55); }
+
+  .system-card-arrow {
+    transition: transform .22s ease, opacity .22s ease;
+    opacity: .55;
+    font-weight: 700;
+  }
+
+  /* ===== شبكة بطاقات الموظف الديناميكية ===== */
+  #employee-grid {
+    display: grid;
+    gap: 1.25rem;
+    align-items: stretch;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+  #employee-grid.grid-count-1 {
+    grid-template-columns: 1fr;
+  }
+  #employee-grid.grid-count-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @media (max-width: 720px) {
+    #employee-grid.grid-count-2 { grid-template-columns: 1fr; }
+  }
+  #employee-grid.grid-count-3 {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-auto-rows: 1fr;
+  }
+  #employee-grid.grid-count-4 {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-auto-rows: 1fr;
+  }
+  #employee-grid.fill-height {
+    min-height: calc(100dvh - var(--header-h, 64px) - 5.5rem);
+  }
+  #employee-grid-wrap.full-bleed {
+    width: 100vw;
+    position: relative;
+    left: 50%;
+    margin-left: -50vw;
+    padding-left: clamp(1rem, 4vw, 3.5rem);
+    padding-right: clamp(1rem, 4vw, 3.5rem);
+  }
+
+  /* البطاقة الفاخرة عند وجود نظام واحد فقط */
+  .system-card.hero-card {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 3rem 2rem;
+    gap: 1.5rem;
+  }
+  .system-card.hero-card .icon-chip {
+    width: 6.5rem; height: 6.5rem;
+    font-size: 3rem;
+    border-radius: 1.75rem;
+  }
+  .system-card.hero-card h3 { font-size: clamp(1.5rem, 3vw, 2.5rem); }
+  .system-card.hero-card p { font-size: clamp(.95rem, 1.4vw, 1.15rem); max-width: 40ch; }
+  .system-card.hero-card .system-card-arrow { font-size: 1.1rem; }
 
   .icon-chip {
     width: 3rem; height: 3rem;
@@ -253,24 +335,54 @@ create trigger on_auth_user_created
     flex-shrink: 0;
   }
 
+  /* ===== الشريط العلوي الزجاجي ===== */
+  .glass-header {
+    background: color-mix(in srgb, var(--surface) 78%, transparent);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+  }
+
   .tab-btn {
     color: var(--muted);
-    border-bottom: 2px solid transparent;
+    position: relative;
+    transition: color .2s ease;
   }
   .tab-btn.active {
     color: var(--text);
-    border-bottom-color: var(--primary);
     font-weight: 700;
   }
-
-  .spinner {
-    width: 2.75rem; height: 2.75rem;
-    border-radius: 999px;
-    border: 3px solid var(--border);
-    border-top-color: var(--primary);
-    animation: spin 0.85s linear infinite;
+  #admin-tabs { position: relative; }
+  .tab-indicator {
+    position: absolute;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--primary);
+    transition: left .25s cubic-bezier(.4,0,.2,1), width .25s cubic-bezier(.4,0,.2,1);
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* أيقونة التحميل: شبكة أنظمة (4 مربعات) تضيء بالتتابع */
+  .systems-loader {
+    display: grid;
+    grid-template-columns: repeat(2, 1.35rem);
+    grid-template-rows: repeat(2, 1.35rem);
+    gap: .4rem;
+  }
+  .systems-loader span {
+    border-radius: .4rem;
+    background: var(--primary);
+    animation: systemPulse 1.2s ease-in-out infinite;
+  }
+  .systems-loader span:nth-child(2) { background: var(--accent); animation-delay: .15s; }
+  .systems-loader span:nth-child(4) { background: var(--accent); animation-delay: .3s; }
+  .systems-loader span:nth-child(3) { animation-delay: .45s; }
+  @keyframes systemPulse {
+    0%, 100% { opacity: .22; transform: scale(.82); }
+    50%      { opacity: 1;   transform: scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .systems-loader span { animation-duration: 2.4s; }
+  }
 
   .fade-in { animation: fadeIn .35s ease both; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
@@ -298,10 +410,23 @@ create trigger on_auth_user_created
 
 <body class="min-h-screen">
 
+<!-- ============ تنبيه تثبيت التطبيق (PWA) ============ -->
+<div id="pwa-install-banner" class="hidden fixed inset-x-0 bottom-0 z-40 p-3 sm:p-4 flex justify-center" style="padding-bottom: calc(env(safe-area-inset-bottom, 0px) + .75rem);">
+  <div class="card-surface rounded-2xl px-4 py-3 shadow-lg flex items-center gap-3 max-w-md w-full fade-in" style="backdrop-filter: blur(14px);">
+    <div class="icon-chip" style="background:var(--primary); color:#fff; width:2.5rem; height:2.5rem; font-size:1.2rem;">📲</div>
+    <div class="flex-1 min-w-0">
+      <p class="font-bold text-sm">ثبّت البوابة كتطبيق</p>
+      <p class="muted text-xs">وصول أسرع من شاشة جهازك الرئيسية</p>
+    </div>
+    <button id="pwa-install-btn" class="btn-primary rounded-lg px-3 py-1.5 text-xs font-bold whitespace-nowrap">تثبيت</button>
+    <button id="pwa-dismiss-btn" class="btn-ghost rounded-lg w-8 h-8 flex items-center justify-center text-sm flex-shrink-0" aria-label="إغلاق">✕</button>
+  </div>
+</div>
+
 <!-- ============ شاشة التحميل + Watchdog ============ -->
 <div id="loading-screen" class="fixed inset-0 z-50 flex items-center justify-center" style="background:var(--bg);">
   <div class="flex flex-col items-center gap-4">
-    <div class="spinner"></div>
+    <div class="systems-loader" role="img" aria-label="جارٍ التحميل"><span></span><span></span><span></span><span></span></div>
     <p class="muted text-sm" id="loading-text">جارٍ التحقق من الجلسة…</p>
   </div>
 </div>
@@ -322,7 +447,7 @@ create trigger on_auth_user_created
       <div class="icon-chip mx-auto mb-4" style="background:var(--primary); font-size:1.75rem;">
         <span style="filter:grayscale(0);">🗂️</span>
       </div>
-      <h1 class="font-display font-extrabold text-2xl">البوابة الرئيسية للموظفين</h1>
+      <h1 class="font-display font-extrabold text-2xl">البوابة الرئيسية للأنظمة</h1>
       <p class="muted text-sm mt-1">سجّل دخولك للوصول إلى الأنظمة المتاحة لك</p>
     </div>
 
@@ -354,18 +479,18 @@ create trigger on_auth_user_created
 <div id="app-shell" class="hidden min-h-screen flex flex-col">
 
   <!-- الشريط العلوي -->
-  <header class="sticky top-0 z-30 border-b" style="background:var(--surface); border-color:var(--border); padding-top: env(safe-area-inset-top, 0px);">
+  <header class="glass-header sticky top-0 z-30 border-b" style="border-color:var(--border); padding-top: env(safe-area-inset-top, 0px);">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
       <div class="flex items-center gap-2.5">
         <div class="icon-chip" style="background:var(--primary); width:2.4rem; height:2.4rem; font-size:1.15rem;">🗂️</div>
         <div class="leading-tight">
-          <p class="font-display font-bold text-sm sm:text-base">البوابة الرئيسية للموظفين</p>
+          <p class="font-display font-bold text-sm sm:text-base">البوابة الرئيسية للأنظمة</p>
           <p class="muted text-xs" id="header-user-name">—</p>
         </div>
       </div>
 
       <div class="flex items-center gap-2">
-        <span id="admin-badge" class="hidden text-xs font-bold px-2.5 py-1 rounded-full" style="background:rgba(46,125,107,.12); color:var(--accent);">مدير</span>
+        <span id="admin-badge" class="hidden text-xs font-bold px-2.5 py-1 rounded-full" style="background:rgba(160,82,45,.12); color:var(--accent);">مدير</span>
 
         <button id="theme-toggle" class="btn-ghost rounded-lg w-9 h-9 flex items-center justify-center text-sm" title="تبديل المظهر" aria-label="تبديل المظهر">
           <span id="theme-icon">🌙</span>
@@ -381,10 +506,11 @@ create trigger on_auth_user_created
       <button class="tab-btn py-3 text-sm" data-tab="permissions">الصلاحيات</button>
       <button class="tab-btn py-3 text-sm" data-tab="cards">إدارة البطاقات</button>
       <button class="tab-btn py-3 text-sm" data-tab="users">الموظفون</button>
+      <div id="tab-indicator" class="tab-indicator"></div>
     </div>
   </header>
 
-  <main class="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-7">
+  <main id="app-main" class="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-7">
 
     <!-- ===== لوحة الموظف: عرض الأنظمة المتاحة ===== -->
     <section id="panel-employee" class="fade-in">
@@ -393,7 +519,9 @@ create trigger on_auth_user_created
         <p class="muted text-sm mt-0.5">الأنظمة والأدوات المتاحة لحسابك</p>
       </div>
 
-      <div id="employee-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+      <div id="employee-grid-wrap">
+        <div id="employee-grid"></div>
+      </div>
 
       <div id="employee-empty" class="hidden card-surface rounded-2xl p-10 text-center">
         <div class="icon-chip mx-auto mb-3" style="background:var(--surface-2); font-size:1.75rem;">📭</div>
@@ -451,7 +579,7 @@ create trigger on_auth_user_created
               </div>
               <div>
                 <label class="text-xs font-medium mb-1 block">اللون</label>
-                <input id="card-color" type="color" value="#1D2B4F" class="input-field w-full rounded-lg h-[38px] px-1.5 py-1">
+                <input id="card-color" type="color" value="#5C4033" class="input-field w-full rounded-lg h-[38px] px-1.5 py-1">
               </div>
             </div>
             <div>
@@ -488,11 +616,11 @@ create trigger on_auth_user_created
             <div>
               <label class="text-xs font-medium mb-1 block">اسم المستخدم *</label>
               <input required id="user-username" class="input-field w-full rounded-lg px-3 py-2 text-sm" placeholder="ahmed.m" autocomplete="off">
-              <p class="muted text-[11px] mt-1">أحرف إنجليزية صغيرة وأرقام و . _ - فقط، 3 أحرف على الأقل</p>
+              <p class="muted text-[11px] mt-1">حروف عربية أو إنجليزية وأرقام و . _ - فقط، 3 أحرف على الأقل</p>
             </div>
             <div>
               <label class="text-xs font-medium mb-1 block">كلمة المرور *</label>
-              <input required id="user-password" type="text" minlength="6" class="input-field w-full rounded-lg px-3 py-2 text-sm" placeholder="6 أحرف على الأقل" autocomplete="off">
+              <input required id="user-password" type="text" minlength="4" class="input-field w-full rounded-lg px-3 py-2 text-sm" placeholder="4 أحرف على الأقل" autocomplete="off">
             </div>
             <button type="submit" id="user-submit" class="btn-accent rounded-lg py-2.5 text-sm font-bold mt-1">إضافة الموظف</button>
           </form>
@@ -552,18 +680,42 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // نطاق وهمي داخلي: نحوّل اسم المستخدم إلى "إيميل" شكلي عشان نستخدم نظام مصادقة Supabase
-// القائم على البريد، بدون ما نطلب من أحد إيميل حقيقي.
+// القائم على البريد، بدون ما نطلب من أحد إيميل حقيقي. الدالة تدعم اسم مستخدم عربي
+// عن طريق توليد بصمة (hash) ثابتة وآمنة بحروف/أرقام إنجليزية فقط لبناء الإيميل الداخلي.
 const USERNAME_DOMAIN = 'employees.local';
+
+function normalizeUsername(input) {
+  // نوحّد شكل النص (تشكيل يونيكود موحّد) ونشيل المسافات الزايدة من الطرفين
+  // ونحوّل الأحرف الإنجليزية لصغيرة، بدون ما نخرّب الأحرف العربية (ما لها حالة كبيرة/صغيرة)
+  return (input || '')
+    .normalize('NFKC')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[A-Z]/g, c => c.toLowerCase());
+}
+
+function isValidUsername(u) {
+  // يسمح بالحروف العربية + الإنجليزية + الأرقام + . _ - والمسافة بين الكلمات، 3 أحرف على الأقل
+  return /^[\u0600-\u06FFA-Za-z0-9._\- ]{3,30}$/.test(u) && u.trim().length >= 3;
+}
+
+function usernameHash(str) {
+  // بصمة نصّية ثابتة (deterministic) بحروف/أرقام إنجليزية فقط، صالحة لبناء إيميل صحيح تقنياً
+  // حتى لو اسم المستخدم الأصلي مكتوب بالعربي
+  let h1 = 0, h2 = 0;
+  for (let i = 0; i < str.length; i++) {
+    const code = str.codePointAt(i);
+    h1 = (Math.imul(31, h1) + code) | 0;
+    h2 = (Math.imul(131, h2) + code + i) | 0;
+  }
+  return (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36);
+}
+
 function usernameToEmail(input) {
   const raw = (input || '').trim();
   if (raw.includes('@')) return raw.toLowerCase(); // يسمح بتسجيل دخول بإيميل حقيقي (مثلاً حساب الأدمن الأول)
-  return normalizeUsername(raw) + '@' + USERNAME_DOMAIN;
-}
-function normalizeUsername(input) {
-  return (input || '').trim().toLowerCase().replace(/\s+/g, '.');
-}
-function isValidUsername(u) {
-  return /^[a-z0-9_.-]{3,30}$/.test(u);
+  const norm = normalizeUsername(raw);
+  return 'u' + usernameHash(norm) + '@' + USERNAME_DOMAIN;
 }
 
 /* ---------------- حالة التطبيق ---------------- */
@@ -696,6 +848,7 @@ function showLogin() {
 function showApp() {
   el('view-login').classList.add('hidden');
   el('app-shell').classList.remove('hidden');
+  requestAnimationFrame(() => { updateHeaderHeightVar(); updateTabIndicator(); });
 }
 
 el('login-form').addEventListener('submit', async (e) => {
@@ -804,16 +957,21 @@ async function loadAdminData() {
 }
 
 /* ============================================================
-   عرض شبكة الأنظمة (الموظف)
+   عرض شبكة الأنظمة (الموظف) — شبكة ديناميكية تملأ المساحة المتاحة
    ============================================================ */
 function renderEmployeeGrid() {
   const grid = el('employee-grid');
+  const wrap = el('employee-grid-wrap');
   const empty = el('employee-empty');
   grid.innerHTML = '';
 
   const myCards = state.profile.is_admin
     ? state.cards.filter(c => state.myPermittedCardIds.has(c.id))
     : state.cards;
+
+  grid.className = grid.className.replace(/\bgrid-count-\S+/g, '').trim();
+  wrap.classList.remove('full-bleed');
+  grid.classList.remove('fill-height');
 
   if (myCards.length === 0) {
     grid.classList.add('hidden');
@@ -823,26 +981,59 @@ function renderEmployeeGrid() {
   grid.classList.remove('hidden');
   empty.classList.add('hidden');
 
+  const count = myCards.length;
+  const countClass = count === 1 ? 'grid-count-1'
+    : count === 2 ? 'grid-count-2'
+    : count === 3 ? 'grid-count-3'
+    : count === 4 ? 'grid-count-4'
+    : 'grid-count-many';
+  grid.classList.add(countClass);
+  if (count <= 4) grid.classList.add('fill-height');
+  if (count <= 2) wrap.classList.add('full-bleed');
+
   myCards.forEach(card => {
     const tags = Array.isArray(card.tags) ? card.tags : [];
+    const color = card.color || '#5C4033';
     const a = document.createElement('a');
     a.href = card.url;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
-    a.className = 'system-card rounded-2xl p-5 flex flex-col gap-3 fade-in';
+    a.className = 'system-card fade-in' + (count === 1 ? ' hero-card' : '');
+    a.style.setProperty('--card-color', color);
     a.innerHTML = `
-      <div class="flex items-start gap-3">
-        <div class="icon-chip" style="background:${card.color || '#1D2B4F'}22; color:${card.color || '#1D2B4F'};">${card.icon || '🗂️'}</div>
-        <div class="min-w-0">
-          <h3 class="font-display font-bold text-[15px] truncate">${escapeHtml(card.title)}</h3>
-          ${card.description ? `<p class="muted text-xs mt-0.5 line-clamp-2">${escapeHtml(card.description)}</p>` : ''}
+      <div class="flex items-start gap-3 ${count === 1 ? 'flex-col items-center' : ''}">
+        <div class="icon-chip" style="background:${color}22; color:${color};">${card.icon || '🗂️'}</div>
+        <div class="min-w-0 ${count === 1 ? 'text-center' : ''}">
+          <h3 class="font-display font-bold ${count === 1 ? '' : 'text-[15px] truncate'}">${escapeHtml(card.title)}</h3>
+          ${card.description ? `<p class="muted ${count === 1 ? 'mt-1.5' : 'text-xs mt-0.5 line-clamp-2'}">${escapeHtml(card.description)}</p>` : ''}
         </div>
       </div>
-      ${tags.length ? `<div class="flex flex-wrap gap-1.5 mt-auto">${tags.map(t => `<span class="text-[11px] px-2 py-0.5 rounded-full" style="background:var(--surface-2); color:var(--muted);">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+      ${tags.length ? `<div class="flex flex-wrap gap-1.5 ${count === 1 ? 'justify-center' : 'mt-auto'}">${tags.map(t => `<span class="text-[11px] px-2 py-0.5 rounded-full" style="background:var(--surface-2); color:var(--muted);">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+      <div class="system-card-arrow flex items-center gap-1.5 text-sm ${count === 1 ? 'justify-center' : ''}" style="color:${color}; margin-top:auto;">
+        <span>دخول النظام</span><span>↗</span>
+      </div>
     `;
     grid.appendChild(a);
   });
 }
+
+/* ============================================================
+   ارتفاع الهيدر (لحساب الشبكة الملء) + مؤشر التبويب المتحرك
+   ============================================================ */
+function updateHeaderHeightVar() {
+  const header = document.querySelector('#app-shell > header');
+  if (header) document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
+}
+function updateTabIndicator() {
+  const tabsWrap = el('admin-tabs');
+  const indicator = el('tab-indicator');
+  if (!tabsWrap || !indicator || tabsWrap.classList.contains('hidden')) return;
+  const activeBtn = tabsWrap.querySelector('.tab-btn.active');
+  if (!activeBtn) return;
+  indicator.style.left = activeBtn.offsetLeft + 'px';
+  indicator.style.width = activeBtn.offsetWidth + 'px';
+}
+window.addEventListener('resize', () => { updateHeaderHeightVar(); updateTabIndicator(); });
 
 /* ============================================================
    تبويبات الأدمن
@@ -858,6 +1049,7 @@ function setActiveTab(tab) {
   el('panel-cards').classList.toggle('hidden', tab !== 'cards');
   el('panel-users').classList.toggle('hidden', tab !== 'users');
   if (tab === 'users') renderUsersList();
+  requestAnimationFrame(() => { updateHeaderHeightVar(); updateTabIndicator(); });
 }
 
 /* ============================================================
@@ -959,7 +1151,7 @@ function renderCardsList() {
     const row = document.createElement('div');
     row.className = 'card-surface rounded-xl p-4 flex items-center gap-3.5';
     row.innerHTML = `
-      <div class="icon-chip" style="background:${card.color || '#1D2B4F'}22; color:${card.color || '#1D2B4F'};">${card.icon || '🗂️'}</div>
+      <div class="icon-chip" style="background:${card.color || '#5C4033'}22; color:${card.color || '#5C4033'};">${card.icon || '🗂️'}</div>
       <div class="min-w-0 flex-1">
         <h4 class="font-bold text-sm truncate">${escapeHtml(card.title)}</h4>
         <p class="muted text-xs truncate">${escapeHtml(card.url)}</p>
@@ -989,7 +1181,7 @@ el('card-form').addEventListener('submit', async (e) => {
       url: el('card-url').value.trim(),
       description: el('card-description').value.trim() || null,
       icon: el('card-icon').value.trim() || '🗂️',
-      color: el('card-color').value || '#1D2B4F',
+      color: el('card-color').value || '#5C4033',
       tags,
     };
 
@@ -1002,7 +1194,7 @@ el('card-form').addEventListener('submit', async (e) => {
     renderEmployeeGrid();
     el('card-form').reset();
     el('card-icon').value = '🗂️';
-    el('card-color').value = '#1D2B4F';
+    el('card-color').value = '#5C4033';
     showToast('تمت إضافة البطاقة بنجاح');
   } catch (err) {
     console.error(err);
@@ -1079,11 +1271,11 @@ el('user-form').addEventListener('submit', async (e) => {
   const username = normalizeUsername(usernameRaw);
 
   if (!isValidUsername(username)) {
-    showToast('اسم المستخدم غير صالح (أحرف إنجليزية صغيرة وأرقام و . _ - فقط، 3 أحرف على الأقل)', 'error');
+    showToast('اسم المستخدم غير صالح (حروف عربية/إنجليزية وأرقام و . _ - فقط، 3 أحرف على الأقل)', 'error');
     return;
   }
-  if (password.length < 6) {
-    showToast('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'error');
+  if (password.length < 4) {
+    showToast('كلمة المرور يجب أن تكون 4 أحرف على الأقل', 'error');
     return;
   }
   if (state.allProfiles.some(p => p.username === username)) {
@@ -1158,6 +1350,38 @@ function escapeHtml(str) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+/* ============================================================
+   تثبيت البوابة كتطبيق (PWA) + تسجيل الـ Service Worker
+   ============================================================ */
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if (!localStorage.getItem('pwa-install-dismissed')) {
+    el('pwa-install-banner').classList.remove('hidden');
+  }
+});
+el('pwa-install-btn').addEventListener('click', async () => {
+  el('pwa-install-banner').classList.add('hidden');
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  try { await deferredInstallPrompt.userChoice; } catch (_) {}
+  deferredInstallPrompt = null;
+});
+el('pwa-dismiss-btn').addEventListener('click', () => {
+  el('pwa-install-banner').classList.add('hidden');
+  localStorage.setItem('pwa-install-dismissed', '1');
+});
+window.addEventListener('appinstalled', () => {
+  el('pwa-install-banner').classList.add('hidden');
+  deferredInstallPrompt = null;
+});
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
 }
 
 /* ---------------- تشغيل ---------------- */
