@@ -496,7 +496,7 @@ if (!window.supabase || typeof window.supabase.createClient !== 'function') {
   throw new Error('فشل تحميل مكتبة Supabase JS — تحقق من الاتصال بالإنترنت أو من حجب الشبكة لروابط CDN.');
 }
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ---------------- حالة التطبيق ---------------- */
 const state = {
@@ -596,7 +596,7 @@ el('confirm-ok').addEventListener('click', async () => {
 async function init() {
   startWatchdog(12000);
   try {
-    const { data, error } = await supabase.auth.getSession();
+    const { data, error } = await sb.auth.getSession();
     if (error) throw error;
     state.session = data.session;
 
@@ -613,7 +613,7 @@ async function init() {
   }
   hideLoadingScreen();
 
-  supabase.auth.onAuthStateChange((event, session) => {
+  sb.auth.onAuthStateChange((event, session) => {
     state.session = session;
     if (event === 'SIGNED_OUT') {
       showLogin();
@@ -641,7 +641,7 @@ el('login-form').addEventListener('submit', async (e) => {
   el('login-submit-text').textContent = 'جارٍ الدخول…';
 
   try {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await sb.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
     startWatchdog(12000);
@@ -658,7 +658,7 @@ el('login-form').addEventListener('submit', async (e) => {
 });
 
 el('logout-btn').addEventListener('click', async () => {
-  await supabase.auth.signOut();
+  await sb.auth.signOut();
   state.profile = null;
   state.cards = [];
   state.myPermittedCardIds = new Set();
@@ -671,7 +671,7 @@ el('logout-btn').addEventListener('click', async () => {
 async function loadProfileAndData() {
   const userId = state.session.user.id;
 
-  const { data: profile, error: profileErr } = await supabase
+  const { data: profile, error: profileErr } = await sb
     .from('profiles').select('*').eq('id', userId).single();
   if (profileErr) throw profileErr;
   state.profile = profile;
@@ -690,7 +690,7 @@ async function loadProfileAndData() {
 
 async function loadEmployeeData() {
   const userId = state.session.user.id;
-  const { data: perms, error: permErr } = await supabase
+  const { data: perms, error: permErr } = await sb
     .from('user_permissions').select('card_id').eq('user_id', userId);
   if (permErr) throw permErr;
 
@@ -703,7 +703,7 @@ async function loadEmployeeData() {
     return;
   }
 
-  const { data: cards, error: cardsErr } = await supabase
+  const { data: cards, error: cardsErr } = await sb
     .from('cards').select('*').in('id', cardIds).order('created_at', { ascending: true });
   if (cardsErr) throw cardsErr;
 
@@ -713,9 +713,9 @@ async function loadEmployeeData() {
 
 async function loadAdminData() {
   const [cardsRes, profilesRes, permsRes] = await Promise.all([
-    supabase.from('cards').select('*').order('created_at', { ascending: true }),
-    supabase.from('profiles').select('*').order('created_at', { ascending: true }),
-    supabase.from('user_permissions').select('user_id, card_id'),
+    sb.from('cards').select('*').order('created_at', { ascending: true }),
+    sb.from('profiles').select('*').order('created_at', { ascending: true }),
+    sb.from('user_permissions').select('user_id, card_id'),
   ]);
   if (cardsRes.error) throw cardsRes.error;
   if (profilesRes.error) throw profilesRes.error;
@@ -846,11 +846,11 @@ el('perm-search').addEventListener('input', (e) => renderPermissionsMatrix(e.tar
 async function togglePermission(userId, cardId, shouldGrant) {
   try {
     if (shouldGrant) {
-      const { error } = await supabase.from('user_permissions').insert({ user_id: userId, card_id: cardId });
+      const { error } = await sb.from('user_permissions').insert({ user_id: userId, card_id: cardId });
       if (error) throw error;
       state.allPermissions.push({ user_id: userId, card_id: cardId });
     } else {
-      const { error } = await supabase.from('user_permissions').delete()
+      const { error } = await sb.from('user_permissions').delete()
         .eq('user_id', userId).eq('card_id', cardId);
       if (error) throw error;
       state.allPermissions = state.allPermissions.filter(p => !(p.user_id === userId && p.card_id === cardId));
@@ -922,7 +922,7 @@ el('card-form').addEventListener('submit', async (e) => {
       tags,
     };
 
-    const { data, error } = await supabase.from('cards').insert(payload).select().single();
+    const { data, error } = await sb.from('cards').insert(payload).select().single();
     if (error) throw error;
 
     state.cards.push(data);
@@ -944,7 +944,7 @@ el('card-form').addEventListener('submit', async (e) => {
 
 async function deleteCard(cardId) {
   try {
-    const { error } = await supabase.from('cards').delete().eq('id', cardId);
+    const { error } = await sb.from('cards').delete().eq('id', cardId);
     if (error) throw error;
     state.cards = state.cards.filter(c => c.id !== cardId);
     state.allPermissions = state.allPermissions.filter(p => p.card_id !== cardId);
