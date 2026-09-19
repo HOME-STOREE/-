@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<!--
+  ═══════════════════════════════════════════════════════════════════════
+  📌 هذا الملف يحتوي على كل شيء: تسجيل الدخول، الواجهة الرئيسية للموظف
+     (بطاقات ديناميكية حسب الصلاحيات)، ولوحة تحكم المدير (إدارة الموظفين
+     + منشئ البطاقات) — بدون أي ملفات خارجية إضافية غير Supabase.
+
+  🔧 قبل الاستخدام:
+     1) أنشئ مشروع في supabase.com
+     2) افتح SQL Editor وشغّل كامل كتلة SQL أدناه مرة واحدة
+     3) عدّل SUPABASE_URL و SUPABASE_ANON_KEY داخل وسم <script> بالأسفل
+     4) أنشئ حسابات الموظفين من Authentication → Users → Add user
+     5) فعّل أول حساب أدمن يدوياً بالسطر آخر كتلة SQL
+
+  ═══════════════════════════════════════════════════════════════════════
+  -- 1) جدول ملفات المستخدمين (يرتبط بـ auth.users)
+  create table if not exists public.profiles (
+    id         uuid primary key references auth.users(id) on delete cascade,
+    full_name  text,
+    email      text,
+    is_admin   boolean not null default false,
+    created_at timestamptz not null default now()
+  );
+
+  -- 2) جدول البطاقات (الأنظمة/المواقع) — يُدار بالكامل من لوحة تحكم الأدمن
+  create table if not exists public.cards (
+    id            uuid primary key default gen_random_uuid(),
+    title         text not null,
+    description   text,
+    url           text not null,
+    icon          text,        -- اسم أيقونة جاهزة (مثل home / box / book) أو كود SVG مخصص
+    color_key     text default 'amber',   -- amber | green | gold | blue | rose | teal
+    category_key  text,        -- مُعرّف داخلي اختياري (slug)
+    tags          text[] default '{}',
+    created_at    timestamptz not null default now()
+  );
+
+  -- 3) جدول ربط الموظف بالبطاقات المصرح له بها
+  create table if not exists public.user_permissions (
+    user_id    uuid not null references public.profiles(id) on delete cascade,
+    card_id    uuid not null references public.cards(id) on delete cascade,
+    granted_at timestamptz not null default now(),
+    primary key (user_id, card_id)
+  );
+
+  -- 4) إنشاء صف profile تلقائياً عند تسجيل أي مستخدم جديد في نظام المصادقة
+  create or replace function public.handle_new_user()
+  returns trigger language plpgsql security definer set search_path = public as $$
+  begin
+    insert into public.profiles (id, full_name, email)
+    values (new.id, coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email,'@',1)), new.email)
+    on conflict (id) do nothing;
+    return new;
+  end; $$;
+  drop trigger if exists on_auth_user_created on auth.users;
+  create trigger on_auth_user_created after insert on auth.users
+    for each row execute procedure public.handle_new_user();
+
+  -- 5) دالة مساعدة لمعرفة إن كان المستخدم الحالي أدمن (تتجنب تكرار RLS)
+  create or replace function public.is_admin()
+  returns boolean language sql security definer stable set search_path = public as $$
+    select coalesce((select is_admin from public.profiles where id = auth.uid()), false);
+  $$;
+
+  -- 6) تفعيل RLS + السياسات
+  alter table public.profiles enable row level security;
+  alter table public.cards enable row level security;
+  alter table public.user_permissions enable row level security;
+
+  drop policy if exists "profiles_select_own"  on public.profiles;
+  drop policy if exists "profiles_admin_all"   on public.profiles;
+  drop policy if exists "cards_select_auth"    on public.cards;
+  drop policy if exists "cards_admin_write"    on public.cards;
+  drop policy if exists "perm_select_own"      on public.user_permissions;
+  drop policy if exists "perm_admin_all"       on public.user_permissions;
+
+  create policy "profiles_select_own" on public.profiles for select using (auth.uid() = id);
+  create policy "profiles_admin_all"  on public.profiles for all
+    using (public.is_admin()) with check (public.is_admin());
+
+  create policy "cards_select_auth" on public.cards for select using (auth.uid() is not null);
+  create policy "cards_admin_write" on public.cards for all
+    using (public.is_admin()) with check (public.is_admin());
+
+  create policy "perm_select_own" on public.user_permissions for select using (auth.uid() = user_id);
+  create policy "perm_admin_all"  on public.user_permissions for all
+    using (public.is_admin()) with check (public.is_admin());
+
+  -- 7) لتفعيل أول حساب أدمن بعد إنشائه من Authentication:
+  -- update public.profiles set is_admin = true where email = 'admin@example.com';
+  ═══════════════════════════════════════════════════════════════════════
+-->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>البوابة الرئيسية</title>
+<meta name="description" content="البوابة الرئيسية لأنظمة الموظفين">
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4a3020">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="البوابة">
+
+<script>
+  (function(){
+    try{
+      var pref = localStorage.getItem('theme-preference') || 'auto';
+      var resolved = pref === 'auto' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : pref;
+      document.documentElement.setAttribute('data-theme', resolved);
+      document.documentElement.setAttribute('data-theme-pref', pref);
+    }catch(e){}
+  })();
+</script>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+  :root{
+    --espresso:#2b1c13; --coffee:#4a3020; --cinnamon:#7a5236; --caramel:#a8794f; --latte:#cba573; --sand:#e7d7bd; --paper:#fffdfa;
+    --bg:#f7efe2; --bg-2:#fdfbf8; --panel:var(--paper); --line: rgba(74,48,32,0.14);
+    --text:var(--espresso); --text-dim: rgba(43,28,19,0.62);
+    --green:#3F6D4E; --green-bg:#E9F1E9;
+    --amber:#B3792C; --amber-bg:#FBF0DD;
+    --gold:#8a6a2f;  --gold-bg:#F7EFDC;
+    --blue:#2f6fa8;  --blue-bg:#e6f0f8;
+    --rose:#a83f5e;  --rose-bg:#f7e6ec;
+    --teal:#2f8a83;  --teal-bg:#e6f5f3;
+    --red:#c0392b;   --red-bg:#fbe9e7;
+    --toggle-bg: rgba(74,48,32,0.08);
+    color-scheme: light;
+  }
+  html[data-theme="dark"]{
+    --espresso:#f3e9db; --coffee:#e7d7bd; --cinnamon:#d7ac86; --caramel:#e0b784; --latte:#caa06d; --sand:#5a4736; --paper:#241b14;
+    --bg:#16100b; --bg-2:#1b140e; --panel:var(--paper); --line: rgba(231,215,189,0.14);
+    --text:#f3e9db; --text-dim: rgba(243,233,219,0.62);
+    --green:#8fd1a6; --green-bg:rgba(63,109,78,0.18);
+    --amber:#e8b565; --amber-bg:rgba(179,121,44,0.18);
+    --gold:#e3c876;  --gold-bg:rgba(138,106,47,0.20);
+    --blue:#7db3e0;  --blue-bg:rgba(47,111,168,0.18);
+    --rose:#e0879f;  --rose-bg:rgba(168,63,94,0.18);
+    --teal:#7cd0c7;  --teal-bg:rgba(47,138,131,0.18);
+    --red:#e8776a;   --red-bg:rgba(192,57,43,0.18);
+    --toggle-bg: rgba(255,255,255,0.06);
+    color-scheme: dark;
+  }
+  *{ font-family:'Tajawal', system-ui, sans-serif; }
+  html,body{ height:100%; }
+  body{
+    margin:0; min-height:100vh; display:flex; flex-direction:column;
+    background: linear-gradient(180deg, var(--bg-2) 0%, var(--bg-2) 35%, var(--bg) 100%);
+    color:var(--text); transition: background-color .3s ease, color .3s ease;
+  }
+  .glass{ background:rgba(255,253,250,0.82); border:1px solid var(--line); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
+  html[data-theme="dark"] .glass{ background:rgba(36,27,20,0.78); }
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:1.25rem; }
+
+  input,textarea,select{
+    background:transparent; border:1px solid var(--line); border-radius:.75rem;
+    padding:.6rem .9rem; width:100%; color:var(--text); outline:none; font-size:.9rem;
+    transition:border-color .2s ease;
+  }
+  input:focus,textarea:focus,select:focus{ border-color:var(--caramel); }
+  label{ display:block; font-size:.8rem; font-weight:700; color:var(--text-dim); margin-bottom:.35rem; }
+
+  .btn{ border-radius:999px; padding:.65rem 1.2rem; font-weight:700; font-size:.9rem; transition:opacity .2s ease; cursor:pointer; border:none; }
+  .btn-primary{ background:linear-gradient(135deg, var(--cinnamon), var(--caramel)); color:#fff; }
+  .btn-primary:hover{ opacity:.92; }
+  .btn-primary:disabled{ opacity:.55; cursor:not-allowed; }
+  .btn-ghost{ background:var(--toggle-bg); color:var(--text-dim); }
+  .btn-ghost:hover{ color:var(--espresso); }
+  .btn-danger{ background:var(--red-bg); color:var(--red); }
+
+  /* ===== شاشة التحميل ===== */
+  #view-loading{ position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; background:var(--bg); }
+  .spinner{ width:38px; height:38px; border-radius:999px; border:3px solid var(--line); border-top-color:var(--caramel); animation:spin .8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .fade-up{ animation:fadeUp .5s ease both; }
+  @keyframes fadeUp{ from{ opacity:0; transform:translateY(12px); } to{ opacity:1; transform:translateY(0); } }
+
+  /* ===== بطاقة نظام ديناميكية ===== */
+  .card{
+    position:relative; overflow:hidden; background:var(--panel); border:1px solid var(--line);
+    border-radius:1.5rem; padding:1.75rem; display:flex; flex-direction:column; gap:1.1rem;
+    text-decoration:none; transition:transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s ease, border-color .3s ease;
+  }
+  .card:hover{ transform:translateY(-6px); border-color:var(--caramel); box-shadow:0 20px 45px -18px rgba(74,48,32,0.35); }
+  .icon-wrap{ width:64px; height:64px; border-radius:1.1rem; display:flex; align-items:center; justify-content:center; }
+  .icon-wrap svg{ width:32px; height:32px; }
+  .tag-chip{ font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px; }
+
+  /* ===== شبكة البطاقات الديناميكية حسب العدد ===== */
+  #cardsGrid{ display:grid; gap:1.5rem; }
+  #cardsGrid[data-count="0"]{ display:none; }
+  #cardsGrid[data-count="1"]{ grid-template-columns:1fr; max-width:440px; margin-inline:auto; }
+  #cardsGrid[data-count="1"] .card{ padding:2.5rem; }
+  #cardsGrid[data-count="2"]{ grid-template-columns:1fr; max-width:800px; margin-inline:auto; }
+  @media (min-width:640px){ #cardsGrid[data-count="2"]{ grid-template-columns:1fr 1fr; } }
+  #cardsGrid[data-count="3plus"]{ grid-template-columns:1fr; }
+  @media (min-width:640px){ #cardsGrid[data-count="3plus"]{ grid-template-columns:1fr 1fr; } }
+  @media (min-width:1024px){ #cardsGrid[data-count="3plus"]{ grid-template-columns:1fr 1fr 1fr; } }
+
+  /* ===== لوحة الأدمن ===== */
+  table{ width:100%; border-collapse:collapse; }
+  th,td{ padding:.7rem .85rem; text-align:right; font-size:.85rem; white-space:nowrap; }
+  thead th{ color:var(--text-dim); font-weight:700; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--panel); }
+  tbody tr{ border-bottom:1px solid var(--line); }
+  tbody tr:last-child{ border-bottom:none; }
+  .chk{ width:18px; height:18px; accent-color:var(--caramel); cursor:pointer; }
+  .table-scroll{ overflow-x:auto; max-width:100%; }
+  .row-flash{ animation:flash .8s ease; }
+  @keyframes flash{ 0%{ background:var(--green-bg); } 100%{ background:transparent; } }
+
+  .tab-btn{ padding:.55rem 1.1rem; border-radius:999px; font-size:.85rem; font-weight:700; color:var(--text-dim); background:transparent; border:1px solid var(--line); cursor:pointer; }
+  .tab-btn.active{ background:var(--coffee); color:#fff; border-color:var(--coffee); }
+
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb{ background:var(--sand); border-radius:999px; }
+
+  .theme-switch{ display:flex; align-items:center; gap:2px; background:var(--toggle-bg); border:1px solid var(--line); border-radius:999px; padding:3px; }
+  .theme-switch button{ display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:999px; background:transparent; color:var(--text-dim); }
+  .theme-switch button.active{ background:var(--panel); color:var(--coffee); }
+  .theme-switch svg{ width:15px; height:15px; }
+</style>
+</head>
+<body>
+
+<!-- شاشة تحميل أولية -->
+<div id="view-loading"><div class="spinner"></div></div>
+
+<!-- ══════════════ شاشة تسجيل الدخول ══════════════ -->
+<div id="view-login" class="hidden flex-1 flex items-center justify-center px-4">
+  <div class="w-full max-w-sm panel p-8">
+    <div class="text-center mb-6">
+      <span class="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-3" style="background:linear-gradient(135deg, var(--cinnamon), var(--caramel));">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/>
+        </svg>
+      </span>
+      <h1 class="text-xl font-extrabold" style="color:var(--espresso);">تسجيل الدخول</h1>
+      <p class="mt-1 text-sm" style="color:var(--text-dim);">بوابة الموظفين</p>
+    </div>
+    <form id="login-form" class="flex flex-col gap-4">
+      <div>
+        <label>البريد الإلكتروني</label>
+        <input type="email" id="login-email" required autocomplete="username" placeholder="name@example.com">
+      </div>
+      <div>
+        <label>كلمة المرور</label>
+        <input type="password" id="login-password" required autocomplete="current-password" placeholder="••••••••">
+      </div>
+      <div id="login-error" class="hidden text-sm rounded-xl px-3 py-2" style="background:var(--red-bg); color:var(--red);"></div>
+      <button type="submit" id="login-submit" class="btn btn-primary w-full">دخول</button>
+    </form>
+    <p class="mt-5 text-xs text-center" style="color:var(--text-dim);">سيتم تذكّرك تلقائياً على هذا الجهاز بعد الدخول.</p>
+  </div>
+</div>
+
+<!-- ══════════════ التطبيق (بعد تسجيل الدخول) ══════════════ -->
+<div id="view-app" class="hidden flex-1 flex flex-col">
+
+  <header class="glass sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <span class="flex items-center justify-center w-9 h-9 rounded-xl" style="background:linear-gradient(135deg, var(--cinnamon), var(--caramel));">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/>
+          </svg>
+        </span>
+        <span class="font-extrabold text-lg" style="color:var(--espresso);">البوابة الرئيسية</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="employee-name" class="hidden sm:inline text-sm font-semibold" style="color:var(--text-dim);"></span>
+        <button id="admin-toggle-btn" class="hidden btn btn-ghost">⚙️ لوحة التحكم</button>
+        <button id="logout-btn" class="btn btn-ghost" title="تسجيل الخروج">🚪 خروج</button>
+        <div class="theme-switch" role="group" aria-label="المظهر">
+          <button id="theme-light" title="فاتح">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          </button>
+          <button id="theme-auto" title="تلقائي">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          </button>
+          <button id="theme-dark" title="داكن">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-6xl mx-auto w-full px-5 py-8">
+
+    <!-- ───────── واجهة الموظف: البطاقات ───────── -->
+    <section id="panel-employee">
+      <div class="text-center mb-8 fade-up">
+        <h1 class="text-2xl sm:text-3xl font-extrabold" style="color:var(--espresso);">اختر الوجهة التي تريد الدخول إليها</h1>
+        <p class="mt-2 text-sm" style="color:var(--text-dim);">اضغط على البطاقة للانتقال مباشرة إلى النظام.</p>
+      </div>
+      <div id="cardsGrid" data-count="0"></div>
+      <div id="no-access-msg" class="hidden max-w-md mx-auto text-center panel p-8">
+        <p class="text-lg font-bold" style="color:var(--espresso);">لا توجد صلاحيات مفعّلة لحسابك بعد</p>
+        <p class="mt-2 text-sm" style="color:var(--text-dim);">تواصل مع المدير المسؤول لتفعيل الوصول إلى الأنظمة.</p>
+      </div>
+    </section>
+
+    <!-- ───────── لوحة تحكم الأدمن ───────── -->
+    <section id="panel-admin" class="hidden">
+      <div class="flex items-center justify-between flex-wrap gap-3 mb-6">
+        <h1 class="text-2xl font-extrabold" style="color:var(--espresso);">لوحة تحكم المدير</h1>
+        <div class="flex items-center gap-2">
+          <button class="tab-btn active" data-tab="perms">الصلاحيات</button>
+          <button class="tab-btn" data-tab="cards">البطاقات</button>
+        </div>
+      </div>
+
+      <div id="toast" class="hidden mb-4 text-sm rounded-xl px-3 py-2" style="background:var(--green-bg); color:var(--green);"></div>
+
+      <!-- تبويب: مصفوفة صلاحيات الموظفين -->
+      <div id="tab-perms">
+        <p class="text-sm mb-4" style="color:var(--text-dim);">فعّل أو ألغِ وصول كل موظف لكل نظام. تُحفظ التغييرات فوراً.</p>
+        <div class="panel table-scroll">
+          <table>
+            <thead><tr id="perm-thead-row"><th>الموظف</th></tr></thead>
+            <tbody id="perm-tbody"></tbody>
+          </table>
+        </div>
+        <p id="perm-empty-msg" class="hidden text-center text-sm mt-6" style="color:var(--text-dim);">لا يوجد موظفون بعد.</p>
+      </div>
+
+      <!-- تبويب: إدارة البطاقات -->
+      <div id="tab-cards" class="hidden">
+        <div class="panel p-6 mb-6">
+          <h2 class="font-bold mb-4" style="color:var(--espresso);">➕ إضافة بطاقة نظام جديدة</h2>
+          <form id="card-form" class="grid sm:grid-cols-2 gap-4">
+            <div class="sm:col-span-2">
+              <label>رابط الموقع (URL) *</label>
+              <input type="url" id="cf-url" required placeholder="https://example.com">
+            </div>
+            <div>
+              <label>عنوان البطاقة *</label>
+              <input type="text" id="cf-title" required placeholder="سجل المستودع">
+            </div>
+            <div>
+              <label>لون البطاقة</label>
+              <select id="cf-color">
+                <option value="amber">كهرماني</option>
+                <option value="green">أخضر</option>
+                <option value="gold">ذهبي</option>
+                <option value="blue">أزرق</option>
+                <option value="rose">وردي</option>
+                <option value="teal">تركواز</option>
+              </select>
+            </div>
+            <div class="sm:col-span-2">
+              <label>الوصف</label>
+              <textarea id="cf-desc" rows="2" placeholder="شرح مختصر للخدمة"></textarea>
+            </div>
+            <div>
+              <label>الأيقونة</label>
+              <select id="cf-icon">
+                <option value="home">🏠 بيت</option>
+                <option value="box">📦 صندوق / مستودع</option>
+                <option value="book">📖 كتاب</option>
+                <option value="star">⭐ نجمة / نقاط</option>
+                <option value="chart">📊 رسم بياني</option>
+                <option value="users">👥 مستخدمون</option>
+                <option value="calendar">📅 تقويم</option>
+                <option value="settings">⚙️ إعدادات</option>
+                <option value="bell">🔔 تنبيه</option>
+                <option value="shield">🛡️ حماية</option>
+                <option value="heart">❤️ قلب</option>
+                <option value="folder">📁 ملف</option>
+              </select>
+            </div>
+            <div>
+              <label>وسوم الخدمة (Tags) <span style="font-weight:400">— افصل بينها بفاصلة</span></label>
+              <input type="text" id="cf-tags" placeholder="إدارة مخزون, حركة أصناف">
+            </div>
+            <div class="sm:col-span-2">
+              <button type="submit" class="btn btn-primary">💾 حفظ البطاقة</button>
+            </div>
+          </form>
+        </div>
+
+        <h2 class="font-bold mb-3" style="color:var(--espresso);">البطاقات الحالية</h2>
+        <div id="cards-list" class="flex flex-col gap-3"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="glass mt-auto">
+    <div class="max-w-6xl mx-auto px-5 py-4 text-center text-xs" style="color:var(--text-dim);">
+      &copy; <span id="year"></span> جميع الحقوق محفوظة
+    </div>
+  </footer>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   0) إعداد Supabase — عدّل القيمتين التاليتين بمعلومات مشروعك
+   ══════════════════════════════════════════════════════════════ */
+const SUPABASE_URL = 'https://fyavaxwknvfqlqwkkvko.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_d4hjVJmSfdHU6ahko7Krfg_anODG69X';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+});
+
+/* ══════════════════════════════════════════════════════════════
+   1) أيقونات جاهزة (SVG) — يختار الأدمن منها عند إنشاء بطاقة
+   ══════════════════════════════════════════════════════════════ */
+const ICONS = {
+  home:     '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/>',
+  box:      '<path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+  book:     '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5v13A2.5 2.5 0 0 0 6.5 20H20V4.5A2.5 2.5 0 0 0 17.5 2H6.5A2.5 2.5 0 0 0 4 4.5Z"/>',
+  star:     '<path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.86L12 17.77l-6.18 3.23L7 14.14 2 9.27l6.91-1.01L12 2Z"/>',
+  chart:    '<path d="M3 3v18h18"/><path d="M7 13v5M12 8v10M17 4v14"/>',
+  users:    '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.04Z"/>',
+  bell:     '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  shield:   '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
+  heart:    '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/>',
+  folder:   '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+};
+function iconSvg(key){
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[key] || ICONS.home}</svg>`;
+}
+const COLOR_KEYS = ['amber','green','gold','blue','rose','teal'];
+
+/* ══════════════════════════════════════════════════════════════
+   2) حالة عامة
+   ══════════════════════════════════════════════════════════════ */
+let currentSession = null;
+let currentProfile = null;
+let allCards = [];          // كل البطاقات (تُستخدم في العرضين)
+let myAllowedCardIds = new Set(); // للموظف: البطاقات المصرح له بها
+
+/* ══════════════════════════════════════════════════════════════
+   3) تسجيل الدخول / الخروج / التحقق من الجلسة
+   ══════════════════════════════════════════════════════════════ */
+function showView(id){
+  ['view-loading','view-login','view-app'].forEach(v => {
+    document.getElementById(v).classList.toggle('hidden', v !== id);
+  });
+}
+
+async function boot(){
+  try{
+    // مهلة أمان: لو تعليقت مكتبة Supabase (نادراً ما يصير بسبب قفل داخلي بين
+    // التبويبات) لا نخلي المستخدم عالق على شاشة التحميل للأبد — بعد 6 ثوانٍ
+    // ننتقل تلقائياً لشاشة تسجيل الدخول.
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000));
+    const { data: { session } } = await Promise.race([sb.auth.getSession(), timeout]);
+    if(!session){ showView('view-login'); return; }
+    await enterApp(session);
+  }catch(err){
+    console.error('boot() failed or timed out:', err);
+    showView('view-login');
+  }
+}
+
+async function enterApp(session){
+  currentSession = session;
+  const { data: profile, error } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+  if(error || !profile){ console.error(error); showView('view-login'); return; }
+  currentProfile = profile;
+
+  document.getElementById('employee-name').textContent = profile.full_name || profile.email || '';
+  if(profile.is_admin){
+    document.getElementById('admin-toggle-btn').classList.remove('hidden');
+    document.getElementById('admin-toggle-btn').classList.add('inline-flex');
+  }
+
+  await loadEmployeeCards();
+  showView('view-app');
+}
+
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errBox = document.getElementById('login-error');
+  const btn = document.getElementById('login-submit');
+  errBox.classList.add('hidden'); btn.disabled = true; btn.textContent = 'جارٍ الدخول...';
+
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+  btn.disabled = false; btn.textContent = 'دخول';
+  if(error){
+    errBox.textContent = error.message === 'Invalid login credentials' ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' : 'حدث خطأ أثناء تسجيل الدخول.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+  await enterApp(data.session);
+});
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await sb.auth.signOut();
+  currentSession = null; currentProfile = null;
+  document.getElementById('admin-toggle-btn').classList.add('hidden');
+  document.getElementById('login-email').value=''; document.getElementById('login-password').value='';
+  showView('view-login');
+});
+
+/* ══════════════════════════════════════════════════════════════
+   4) واجهة الموظف — جلب وعرض البطاقات المصرح بها فقط
+   ══════════════════════════════════════════════════════════════ */
+function cardTemplate(card){
+  const c = COLOR_KEYS.includes(card.color_key) ? card.color_key : 'amber';
+  const tags = Array.isArray(card.tags) ? card.tags : [];
+  return `
+    <a href="${card.url}" target="_blank" rel="noopener" class="card fade-up">
+      <div class="icon-wrap" style="background:var(--${c}-bg); color:var(--${c});">${iconSvg(card.icon)}</div>
+      <div class="flex-1">
+        <h2 class="text-xl font-bold" style="color:var(--espresso);">${escapeHtml(card.title)}</h2>
+        ${card.description ? `<p class="mt-2 text-sm leading-relaxed" style="color:var(--text-dim);">${escapeHtml(card.description)}</p>` : ''}
+        ${tags.length ? `<div class="mt-3 flex flex-wrap gap-1.5">${tags.map(t => `<span class="tag-chip" style="background:var(--${c}-bg); color:var(--${c});">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+      </div>
+      <div class="flex items-center justify-between text-sm font-semibold" style="color:var(--${c});">
+        <span>الدخول إلى الموقع</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 rtl:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+    </a>`;
+}
+function escapeHtml(s){
+  const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML;
+}
+
+async function loadEmployeeCards(){
+  const [{ data: cards, error: cErr }, { data: perms, error: pErr }] = await Promise.all([
+    sb.from('cards').select('*').order('created_at', { ascending: true }),
+    sb.from('user_permissions').select('card_id').eq('user_id', currentSession.user.id),
+  ]);
+  if(cErr) console.error(cErr);
+  if(pErr) console.error(pErr);
+
+  allCards = cards || [];
+  myAllowedCardIds = new Set((perms || []).map(p => p.card_id));
+
+  const allowedCards = allCards.filter(c => myAllowedCardIds.has(c.id));
+  const grid = document.getElementById('cardsGrid');
+  grid.innerHTML = allowedCards.map(cardTemplate).join('');
+  grid.dataset.count = allowedCards.length === 0 ? '0' : allowedCards.length === 1 ? '1' : allowedCards.length === 2 ? '2' : '3plus';
+  document.getElementById('no-access-msg').classList.toggle('hidden', allowedCards.length !== 0);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   5) لوحة تحكم الأدمن
+   ══════════════════════════════════════════════════════════════ */
+const adminToggleBtn = document.getElementById('admin-toggle-btn');
+adminToggleBtn.addEventListener('click', () => {
+  const inAdmin = !document.getElementById('panel-admin').classList.contains('hidden');
+  document.getElementById('panel-employee').classList.toggle('hidden', !inAdmin);
+  document.getElementById('panel-admin').classList.toggle('hidden', inAdmin);
+  adminToggleBtn.textContent = inAdmin ? '⚙️ لوحة التحكم' : '🏠 عرض البطاقات';
+  if(!inAdmin) loadAdminData();
+});
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.tab;
+    document.getElementById('tab-perms').classList.toggle('hidden', tab !== 'perms');
+    document.getElementById('tab-cards').classList.toggle('hidden', tab !== 'cards');
+  });
+});
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.remove('hidden');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.add('hidden'), 2200);
+}
+
+let adminEmployees = [];
+let adminPerms = [];  // كل صفوف user_permissions في النظام
+
+async function loadAdminData(){
+  const [{ data: employees, error: eErr }, { data: cards, error: cErr }, { data: perms, error: pErr }] = await Promise.all([
+    sb.from('profiles').select('*').order('full_name', { ascending: true }),
+    sb.from('cards').select('*').order('created_at', { ascending: true }),
+    sb.from('user_permissions').select('*'),
+  ]);
+  if(eErr) console.error(eErr);
+  if(cErr) console.error(cErr);
+  if(pErr) console.error(pErr);
+
+  adminEmployees = employees || [];
+  allCards = cards || [];
+  adminPerms = perms || [];
+
+  renderPermsTable();
+  renderCardsList();
+}
+
+function renderPermsTable(){
+  const theadRow = document.getElementById('perm-thead-row');
+  theadRow.innerHTML = '<th>الموظف</th>' + allCards.map(c => `<th class="text-center">${escapeHtml(c.title)}</th>`).join('');
+
+  const tbody = document.getElementById('perm-tbody');
+  document.getElementById('perm-empty-msg').classList.toggle('hidden', adminEmployees.length !== 0);
+
+  const hasPerm = (userId, cardId) => adminPerms.some(p => p.user_id === userId && p.card_id === cardId);
+
+  tbody.innerHTML = adminEmployees.map(emp => `
+    <tr id="perm-row-${emp.id}">
+      <td>
+        <div class="font-semibold" style="color:var(--espresso);">${escapeHtml(emp.full_name || '—')}${emp.is_admin ? ' <span style="font-size:11px;color:var(--gold);">(أدمن)</span>' : ''}</div>
+        <div class="text-xs" style="color:var(--text-dim);">${escapeHtml(emp.email || '')}</div>
+      </td>
+      ${allCards.map(c => `
+        <td class="text-center">
+          <input type="checkbox" class="chk" data-user="${emp.id}" data-card="${c.id}" ${hasPerm(emp.id, c.id) ? 'checked' : ''}>
+        </td>`).join('')}
+    </tr>`).join('');
+
+  tbody.querySelectorAll('input.chk').forEach(input => input.addEventListener('change', onPermToggle));
+}
+
+async function onPermToggle(e){
+  const input = e.target;
+  const userId = input.dataset.user, cardId = input.dataset.card;
+  input.disabled = true;
+
+  let error;
+  if(input.checked){
+    ({ error } = await sb.from('user_permissions').insert({ user_id: userId, card_id: cardId }));
+  } else {
+    ({ error } = await sb.from('user_permissions').delete().eq('user_id', userId).eq('card_id', cardId));
+  }
+
+  input.disabled = false;
+  if(error){
+    console.error(error);
+    input.checked = !input.checked;
+    showToast('⚠️ فشل حفظ التغيير');
+    return;
+  }
+  // إبقاء الحالة المحلية متزامنة
+  adminPerms = adminPerms.filter(p => !(p.user_id === userId && p.card_id === cardId));
+  if(input.checked) adminPerms.push({ user_id: userId, card_id: cardId });
+
+  const row = document.getElementById('perm-row-' + userId);
+  row.classList.remove('row-flash'); void row.offsetWidth; row.classList.add('row-flash');
+  showToast('✅ تم الحفظ');
+}
+
+function renderCardsList(){
+  const list = document.getElementById('cards-list');
+  if(allCards.length === 0){
+    list.innerHTML = `<p class="text-sm" style="color:var(--text-dim);">لا توجد بطاقات بعد — أضف أول بطاقة من النموذج بالأعلى.</p>`;
+    return;
+  }
+  list.innerHTML = allCards.map(c => {
+    const col = COLOR_KEYS.includes(c.color_key) ? c.color_key : 'amber';
+    return `
+    <div class="panel p-4 flex items-center gap-4">
+      <div class="icon-wrap" style="width:44px;height:44px;background:var(--${col}-bg); color:var(--${col});">${iconSvg(c.icon).replace('viewBox','width="22" height="22" viewBox')}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-bold truncate" style="color:var(--espresso);">${escapeHtml(c.title)}</div>
+        <div class="text-xs truncate" style="color:var(--text-dim);">${escapeHtml(c.url)}</div>
+      </div>
+      <button class="btn btn-danger" data-del="${c.id}">🗑 حذف</button>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => deleteCard(btn.dataset.del)));
+}
+
+async function deleteCard(cardId){
+  if(!confirm('حذف هذه البطاقة سيزيل وصول جميع الموظفين إليها. متابعة؟')) return;
+  const { error } = await sb.from('cards').delete().eq('id', cardId);
+  if(error){ console.error(error); showToast('⚠️ فشل الحذف'); return; }
+  await loadAdminData();
+  showToast('🗑 تم حذف البطاقة');
+}
+
+document.getElementById('card-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const title = document.getElementById('cf-title').value.trim();
+  const url = document.getElementById('cf-url').value.trim();
+  if(!title || !url) return;
+
+  const tags = document.getElementById('cf-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const payload = {
+    title,
+    url,
+    description: document.getElementById('cf-desc').value.trim(),
+    icon: document.getElementById('cf-icon').value,
+    color_key: document.getElementById('cf-color').value,
+    tags,
+  };
+
+  const { error } = await sb.from('cards').insert(payload);
+  if(error){ console.error(error); showToast('⚠️ فشل حفظ البطاقة'); return; }
+
+  e.target.reset();
+  showToast('✅ تمت إضافة البطاقة — فعّلها للموظفين من تبويب الصلاحيات');
+  await loadAdminData();
+});
+
+/* ══════════════════════════════════════════════════════════════
+   6) مبدّل المظهر (فاتح / تلقائي / داكن)
+   ══════════════════════════════════════════════════════════════ */
+const THEME_KEY = 'theme-preference';
+const btnLight = document.getElementById('theme-light');
+const btnAuto  = document.getElementById('theme-auto');
+const btnDark  = document.getElementById('theme-dark');
+const mediaDark = window.matchMedia('(prefers-color-scheme: dark)');
+
+function resolveTheme(pref){ return pref === 'auto' ? (mediaDark.matches ? 'dark' : 'light') : pref; }
+function applyTheme(pref){
+  const resolved = resolveTheme(pref);
+  document.documentElement.setAttribute('data-theme', resolved);
+  document.documentElement.setAttribute('data-theme-pref', pref);
+  try{ localStorage.setItem(THEME_KEY, pref); }catch(e){}
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if(metaTheme) metaTheme.setAttribute('content', resolved === 'dark' ? '#241b14' : '#4a3020');
+  [btnLight, btnAuto, btnDark].forEach(b => b.classList.remove('active'));
+  (pref === 'light' ? btnLight : pref === 'dark' ? btnDark : btnAuto).classList.add('active');
+}
+let currentPref = 'auto';
+try{ currentPref = localStorage.getItem(THEME_KEY) || 'auto'; }catch(e){}
+applyTheme(currentPref);
+btnLight.addEventListener('click', () => applyTheme('light'));
+btnAuto.addEventListener('click', () => applyTheme('auto'));
+btnDark.addEventListener('click', () => applyTheme('dark'));
+mediaDark.addEventListener('change', () => {
+  let pref = 'auto'; try{ pref = localStorage.getItem(THEME_KEY) || 'auto'; }catch(e){}
+  if(pref === 'auto') applyTheme('auto');
+});
+
+/* ══════════════════════════════════════════════════════════════
+   7) الإقلاع
+   ══════════════════════════════════════════════════════════════ */
+document.getElementById('year').textContent = new Date().getFullYear();
+boot();
+</script>
+
+</body>
+</html>
