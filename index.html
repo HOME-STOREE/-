@@ -610,7 +610,7 @@ function cardTemplate(card){
     </a>`;
 }
 function escapeHtml(s){
-  const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML;
+  const d = document.createElement('div'); d.textContent = (s === undefined || s === null) ? '' : s; return d.innerHTML;
 }
 
 async function loadEmployeeCards(){
