@@ -11,9 +11,13 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   full_name text,
+  username text unique,
   is_admin boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+-- إذا كان الجدول موجود مسبقاً من نسخة سابقة، نفّذ هذا السطر لإضافة عمود اسم المستخدم:
+-- alter table public.profiles add column if not exists username text unique;
 
 -- 2) جدول البطاقات / الأنظمة
 create table if not exists public.cards (
@@ -101,6 +105,12 @@ create trigger on_auth_user_created
 
 -- ملاحظة: لجعل أول حساب أدمن، نفّذ يدوياً بعد التسجيل:
 -- update public.profiles set is_admin = true where email = 'admin@example.com';
+
+-- ⚠️ خطوة إعداد إلزامية (مرة واحدة فقط) عشان ميزة "إضافة موظف" تشتغل:
+-- روح Supabase Dashboard → Authentication → Sign In / Providers → Email
+-- وأطفئ خيار "Confirm email" (تأكيد البريد الإلكتروني).
+-- لأن حسابات الموظفين تُنشأ بإيميل وهمي داخلي (مو إيميل حقيقي)، فلازم الحساب
+-- يصير مفعّل مباشرة بدون رسالة تأكيد ترسل لإيميل ما يقدر أحد يوصله.
 
 ================================================================================
 -->
@@ -319,9 +329,9 @@ create trigger on_auth_user_created
     <div class="card-surface rounded-2xl p-6 shadow-sm">
       <form id="login-form" class="flex flex-col gap-4">
         <div>
-          <label class="text-sm font-medium mb-1.5 block">البريد الإلكتروني</label>
-          <input type="email" id="login-email" required autocomplete="username"
-            class="input-field w-full rounded-xl px-3.5 py-2.5 text-sm" placeholder="name@company.com">
+          <label class="text-sm font-medium mb-1.5 block">اسم المستخدم</label>
+          <input type="text" id="login-email" required autocomplete="username"
+            class="input-field w-full rounded-xl px-3.5 py-2.5 text-sm" placeholder="اسم المستخدم">
         </div>
         <div>
           <label class="text-sm font-medium mb-1.5 block">كلمة المرور</label>
@@ -370,6 +380,7 @@ create trigger on_auth_user_created
       <button class="tab-btn active py-3 text-sm" data-tab="employee">أنظمتي</button>
       <button class="tab-btn py-3 text-sm" data-tab="permissions">الصلاحيات</button>
       <button class="tab-btn py-3 text-sm" data-tab="cards">إدارة البطاقات</button>
+      <button class="tab-btn py-3 text-sm" data-tab="users">الموظفون</button>
     </div>
   </header>
 
@@ -461,6 +472,42 @@ create trigger on_auth_user_created
       </div>
     </section>
 
+    <!-- ===== لوحة الأدمن: الموظفون ===== -->
+    <section id="panel-users" class="hidden fade-in">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <div class="lg:col-span-1">
+          <h2 class="font-display font-extrabold text-xl mb-1">إضافة موظف</h2>
+          <p class="muted text-sm mb-4">أدخل اسم مستخدم وكلمة مرور — بدون إيميل</p>
+
+          <form id="user-form" class="card-surface rounded-2xl p-5 flex flex-col gap-3.5">
+            <div>
+              <label class="text-xs font-medium mb-1 block">الاسم الكامل</label>
+              <input id="user-fullname" class="input-field w-full rounded-lg px-3 py-2 text-sm" placeholder="مثال: أحمد محمد">
+            </div>
+            <div>
+              <label class="text-xs font-medium mb-1 block">اسم المستخدم *</label>
+              <input required id="user-username" class="input-field w-full rounded-lg px-3 py-2 text-sm" placeholder="ahmed.m" autocomplete="off">
+              <p class="muted text-[11px] mt-1">أحرف إنجليزية صغيرة وأرقام و . _ - فقط، 3 أحرف على الأقل</p>
+            </div>
+            <div>
+              <label class="text-xs font-medium mb-1 block">كلمة المرور *</label>
+              <input required id="user-password" type="text" minlength="6" class="input-field w-full rounded-lg px-3 py-2 text-sm" placeholder="6 أحرف على الأقل" autocomplete="off">
+            </div>
+            <button type="submit" id="user-submit" class="btn-accent rounded-lg py-2.5 text-sm font-bold mt-1">إضافة الموظف</button>
+          </form>
+        </div>
+
+        <div class="lg:col-span-2">
+          <h2 class="font-display font-extrabold text-xl mb-1">الموظفون الحاليون</h2>
+          <p class="muted text-sm mb-4">كل الحسابات المسجّلة في البوابة</p>
+          <div id="users-list" class="flex flex-col gap-3"></div>
+          <p id="users-empty" class="hidden muted text-sm text-center py-10">لا يوجد موظفون بعد. أضف أول حساب من النموذج المجاور.</p>
+        </div>
+
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -496,7 +543,28 @@ if (!window.supabase || typeof window.supabase.createClient !== 'function') {
   throw new Error('فشل تحميل مكتبة Supabase JS — تحقق من الاتصال بالإنترنت أو من حجب الشبكة لروابط CDN.');
 }
 
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false
+  }
+});
+
+// نطاق وهمي داخلي: نحوّل اسم المستخدم إلى "إيميل" شكلي عشان نستخدم نظام مصادقة Supabase
+// القائم على البريد، بدون ما نطلب من أحد إيميل حقيقي.
+const USERNAME_DOMAIN = 'employees.local';
+function usernameToEmail(input) {
+  const raw = (input || '').trim();
+  if (raw.includes('@')) return raw.toLowerCase(); // يسمح بتسجيل دخول بإيميل حقيقي (مثلاً حساب الأدمن الأول)
+  return normalizeUsername(raw) + '@' + USERNAME_DOMAIN;
+}
+function normalizeUsername(input) {
+  return (input || '').trim().toLowerCase().replace(/\s+/g, '.');
+}
+function isValidUsername(u) {
+  return /^[a-z0-9_.-]{3,30}$/.test(u);
+}
 
 /* ---------------- حالة التطبيق ---------------- */
 const state = {
@@ -632,7 +700,7 @@ function showApp() {
 
 el('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const email = el('login-email').value.trim();
+  const email = usernameToEmail(el('login-email').value);
   const password = el('login-password').value;
   const btn = el('login-submit');
   const errBox = el('login-error');
@@ -649,7 +717,7 @@ el('login-form').addEventListener('submit', async (e) => {
     clearWatchdog();
     showApp();
   } catch (err) {
-    errBox.textContent = 'تعذّر تسجيل الدخول: تحقق من البريد الإلكتروني وكلمة المرور.';
+    errBox.textContent = 'تعذّر تسجيل الدخول: تحقق من اسم المستخدم وكلمة المرور.';
     errBox.classList.remove('hidden');
   } finally {
     btn.disabled = false;
@@ -676,7 +744,7 @@ async function loadProfileAndData() {
   if (profileErr) throw profileErr;
   state.profile = profile;
 
-  el('header-user-name').textContent = profile.full_name || profile.email || '';
+  el('header-user-name').textContent = profile.full_name || profile.username || profile.email || '';
   el('admin-badge').classList.toggle('hidden', !profile.is_admin);
   el('admin-tabs').classList.toggle('hidden', !profile.is_admin);
 
@@ -788,6 +856,8 @@ function setActiveTab(tab) {
   el('panel-employee').classList.toggle('hidden', tab !== 'employee');
   el('panel-permissions').classList.toggle('hidden', tab !== 'permissions');
   el('panel-cards').classList.toggle('hidden', tab !== 'cards');
+  el('panel-users').classList.toggle('hidden', tab !== 'users');
+  if (tab === 'users') renderUsersList();
 }
 
 /* ============================================================
@@ -812,6 +882,7 @@ function renderPermissionsMatrix(filter = '') {
 
   const filtered = state.allProfiles.filter(p =>
     (p.full_name || '').toLowerCase().includes(filter.toLowerCase()) ||
+    (p.username || '').toLowerCase().includes(filter.toLowerCase()) ||
     (p.email || '').toLowerCase().includes(filter.toLowerCase())
   );
 
@@ -821,7 +892,7 @@ function renderPermissionsMatrix(filter = '') {
     const nameCell = document.createElement('td');
     nameCell.className = 'px-3 py-2.5 text-sm sticky right-0 whitespace-nowrap';
     nameCell.style.background = 'var(--surface)';
-    nameCell.innerHTML = `<div class="font-medium">${escapeHtml(profile.full_name || '—')}</div><div class="muted text-xs">${escapeHtml(profile.email || '')}</div>`;
+    nameCell.innerHTML = `<div class="font-medium">${escapeHtml(profile.full_name || profile.username || '—')}</div><div class="muted text-xs">${escapeHtml(profile.username ? '@' + profile.username : (profile.email || ''))}</div>`;
     tr.appendChild(nameCell);
 
     state.cards.forEach(card => {
@@ -956,6 +1027,123 @@ async function deleteCard(cardId) {
   } catch (err) {
     console.error(err);
     showToast('تعذّر حذف البطاقة', 'error');
+  }
+}
+
+/* ============================================================
+   إدارة الموظفين (الأدمن) — إنشاء حساب باسم مستخدم وكلمة مرور فقط
+   ============================================================ */
+function renderUsersList() {
+  const list = el('users-list');
+  const emptyMsg = el('users-empty');
+  list.innerHTML = '';
+
+  if (state.allProfiles.length === 0) {
+    emptyMsg.classList.remove('hidden');
+    return;
+  }
+  emptyMsg.classList.add('hidden');
+
+  state.allProfiles
+    .slice()
+    .sort((a, b) => (a.username || a.full_name || '').localeCompare(b.username || b.full_name || ''))
+    .forEach(profile => {
+      const permCount = state.allPermissions.filter(p => p.user_id === profile.id).length;
+      const row = document.createElement('div');
+      row.className = 'card-surface rounded-xl p-4 flex items-center gap-3.5';
+      row.innerHTML = `
+        <div class="icon-chip" style="background:var(--surface-2);">${profile.is_admin ? '👑' : '👤'}</div>
+        <div class="min-w-0 flex-1">
+          <h4 class="font-bold text-sm truncate">${escapeHtml(profile.full_name || profile.username || '—')}</h4>
+          <p class="muted text-xs truncate">${escapeHtml(profile.username ? '@' + profile.username : (profile.email || ''))}</p>
+          <p class="muted text-[11px] mt-0.5">${permCount} صلاحية نظام${profile.is_admin ? ' · مدير' : ''}</p>
+        </div>
+        ${profile.id === state.session.user.id ? '' : `<button class="btn-danger rounded-lg px-3 py-1.5 text-xs font-bold whitespace-nowrap" data-delete-user="${profile.id}">حذف</button>`}
+      `;
+      const delBtn = row.querySelector('[data-delete-user]');
+      if (delBtn) {
+        delBtn.addEventListener('click', () => {
+          openConfirm(`سيتم حذف حساب «${profile.full_name || profile.username}» وكل صلاحياته نهائياً. هل تريد المتابعة؟`, () => deleteUserProfile(profile.id));
+        });
+      }
+      list.appendChild(row);
+    });
+}
+
+el('user-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = el('user-submit');
+  const fullName = el('user-fullname').value.trim();
+  const usernameRaw = el('user-username').value;
+  const password = el('user-password').value;
+  const username = normalizeUsername(usernameRaw);
+
+  if (!isValidUsername(username)) {
+    showToast('اسم المستخدم غير صالح (أحرف إنجليزية صغيرة وأرقام و . _ - فقط، 3 أحرف على الأقل)', 'error');
+    return;
+  }
+  if (password.length < 6) {
+    showToast('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'error');
+    return;
+  }
+  if (state.allProfiles.some(p => p.username === username)) {
+    showToast('اسم المستخدم مستخدم مسبقاً، اختر اسماً آخر', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'جارٍ الإضافة…';
+
+  // نستخدم عميل Supabase مؤقّت ومنفصل تماماً عن جلسة الأدمن الحالية،
+  // عشان إنشاء حساب الموظف ما يسجّل خروج الأدمن أو يبدّل جلسته.
+  const tempClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+  });
+
+  try {
+    const email = usernameToEmail(username);
+    const { data, error } = await tempClient.auth.signUp({ email, password });
+    if (error) throw error;
+    if (!data.user) throw new Error('لم يتم إنشاء الحساب. تأكد من إيقاف "Confirm email" في إعدادات Supabase.');
+
+    const newUserId = data.user.id;
+
+    // ننتظر لحظة بسيطة عشان الـ trigger يكون أنشأ صف profile قبل ما نحدّثه
+    await new Promise(r => setTimeout(r, 400));
+
+    const { error: updateErr } = await sb.from('profiles')
+      .update({ username, full_name: fullName || username })
+      .eq('id', newUserId);
+    if (updateErr) throw updateErr;
+
+    state.allProfiles.push({ id: newUserId, email, full_name: fullName || username, username, is_admin: false });
+
+    el('user-form').reset();
+    renderUsersList();
+    renderPermissionsMatrix(el('perm-search').value);
+    showToast('تمت إضافة الموظف بنجاح — امنحه صلاحيات من تبويب «الصلاحيات»');
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || 'تعذّر إضافة الموظف', 'error');
+  } finally {
+    try { await tempClient.auth.signOut(); } catch (_) {}
+    btn.disabled = false;
+    btn.textContent = 'إضافة الموظف';
+  }
+});
+
+async function deleteUserProfile(userId) {
+  try {
+    const { error } = await sb.from('profiles').delete().eq('id', userId);
+    if (error) throw error;
+    state.allProfiles = state.allProfiles.filter(p => p.id !== userId);
+    state.allPermissions = state.allPermissions.filter(p => p.user_id !== userId);
+    renderUsersList();
+    renderPermissionsMatrix(el('perm-search').value);
+    showToast('تم حذف حساب الموظف من قاعدة البيانات (لا يزال بإمكانه الحاجة لحذف حساب الدخول يدوياً من Supabase Auth إن لزم)');
+  } catch (err) {
+    console.error(err);
+    showToast('تعذّر حذف الموظف', 'error');
   }
 }
 
