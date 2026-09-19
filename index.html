@@ -464,6 +464,14 @@ function showView(id){
   });
 }
 
+// أداة مساعدة: تُنفّذ أي وعد (promise) مع مهلة زمنية قصوى. إذا لم يُنجز الوعد
+// خلال المدة المحددة (شبكة بطيئة/متعطلة، خادم متوقف، إلخ) يُرفض بخطأ واضح
+// بدل أن يبقى معلّقاً للأبد.
+function withTimeout(promise, ms, label){
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout: ' + label)), ms));
+  return Promise.race([promise, timeout]);
+}
+
 async function boot(){
   // إذا فشل إنشاء عميل Supabase من الأساس (مثلاً المكتبة لم تُحمّل)، لا فائدة
   // من محاولة استخدامه — نعرض رسالة خطأ واضحة في شاشة الدخول بدل ترك دائرة
@@ -479,19 +487,34 @@ async function boot(){
     // مهلة أمان: لو تعليقت مكتبة Supabase (نادراً ما يصير بسبب قفل داخلي بين
     // التبويبات) لا نخلي المستخدم عالق على شاشة التحميل للأبد — بعد 6 ثوانٍ
     // ننتقل تلقائياً لشاشة تسجيل الدخول.
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000));
-    const { data: { session } } = await Promise.race([sb.auth.getSession(), timeout]);
+    const { data: { session } } = await withTimeout(sb.auth.getSession(), 6000, 'getSession');
     if(!session){ showView('view-login'); return; }
     await enterApp(session);
   }catch(err){
     console.error('boot() failed or timed out:', err);
     showView('view-login');
+    const errBox = document.getElementById('login-error');
+    errBox.textContent = 'تعذّر تحميل الجلسة. حدّث الصفحة أو سجّل الدخول من جديد.';
+    errBox.classList.remove('hidden');
   }
 }
 
 async function enterApp(session){
   currentSession = session;
-  const { data: profile, error } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+  let profile, error;
+  try{
+    ({ data: profile, error } = await withTimeout(
+      sb.from('profiles').select('*').eq('id', session.user.id).single(),
+      8000, 'load profile'
+    ));
+  }catch(err){
+    console.error('enterApp() profile fetch failed or timed out:', err);
+    showView('view-login');
+    const errBox = document.getElementById('login-error');
+    errBox.textContent = 'تعذّر تحميل بيانات الحساب. حدّث الصفحة وحاول مجدداً.';
+    errBox.classList.remove('hidden');
+    return;
+  }
   if(error || !profile){ console.error(error); showView('view-login'); return; }
   currentProfile = profile;
 
@@ -501,7 +524,11 @@ async function enterApp(session){
     document.getElementById('admin-toggle-btn').classList.add('inline-flex');
   }
 
-  await loadEmployeeCards();
+  try{
+    await loadEmployeeCards();
+  }catch(err){
+    console.error('loadEmployeeCards() failed:', err);
+  }
   showView('view-app');
 }
 
@@ -564,10 +591,13 @@ function escapeHtml(s){
 }
 
 async function loadEmployeeCards(){
-  const [{ data: cards, error: cErr }, { data: perms, error: pErr }] = await Promise.all([
-    sb.from('cards').select('*').order('created_at', { ascending: true }),
-    sb.from('user_permissions').select('card_id').eq('user_id', currentSession.user.id),
-  ]);
+  const [{ data: cards, error: cErr }, { data: perms, error: pErr }] = await withTimeout(
+    Promise.all([
+      sb.from('cards').select('*').order('created_at', { ascending: true }),
+      sb.from('user_permissions').select('card_id').eq('user_id', currentSession.user.id),
+    ]),
+    8000, 'load cards'
+  );
   if(cErr) console.error(cErr);
   if(pErr) console.error(pErr);
 
@@ -773,6 +803,22 @@ mediaDark.addEventListener('change', () => {
    ══════════════════════════════════════════════════════════════ */
 document.getElementById('year').textContent = new Date().getFullYear();
 boot();
+
+// ══════════════════════════════════════════════════════════════
+// حارس أمان أخير (Watchdog): مهما كان سبب التعليق — حتى لو حدث في مكان لم
+// نتوقعه — إذا بقيت شاشة التحميل ظاهرة بعد 10 ثوانٍ من بدء الصفحة، نجبر
+// الانتقال لشاشة تسجيل الدخول بدل ترك المستخدم عالقاً للأبد.
+// ══════════════════════════════════════════════════════════════
+setTimeout(() => {
+  const loadingView = document.getElementById('view-loading');
+  if(loadingView && !loadingView.classList.contains('hidden')){
+    console.warn('Watchdog: boot() لم يكتمل خلال 10 ثوانٍ — الانتقال إجبارياً لشاشة الدخول.');
+    showView('view-login');
+    const errBox = document.getElementById('login-error');
+    errBox.textContent = 'استغرق تحميل الصفحة وقتاً أطول من المعتاد. حدّث الصفحة وحاول مجدداً.';
+    errBox.classList.remove('hidden');
+  }
+}, 10000);
 </script>
 
 </body>
