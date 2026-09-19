@@ -237,49 +237,264 @@ create trigger on_auth_user_created
   a, button { -webkit-tap-highlight-color: transparent; }
   *:focus-visible { outline: 2px solid var(--primary-2); outline-offset: 2px; }
 
+  /* ============================================================
+     بطاقات الأنظمة — هوية بصرية تلقائية حسب عنوان النظام
+     المتغيرات: --c1 اللون الأساسي | --c2 اللون الثانوي | --on-c1 لون النص فوق --c1
+     ============================================================ */
   .system-card {
+    --c1: #5C4033;
+    --c2: color-mix(in srgb, var(--c1) 60%, #fff);
+    --on-c1: #fff;
+    --c1-text: color-mix(in srgb, var(--c1) 42%, var(--text));
+    --tint-a: 20%;
+    --tint-b: 8%;
+    --sc-quran-tile: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'%3E%3Cg fill='none' stroke='black' stroke-width='1.2'%3E%3Crect x='9' y='9' width='26' height='26'/%3E%3Crect x='9' y='9' width='26' height='26' transform='rotate(45 22 22)'/%3E%3Ccircle cx='22' cy='22' r='4'/%3E%3C/g%3E%3C/svg%3E");
+
     position: relative;
-    overflow: hidden;
-    background: color-mix(in srgb, var(--surface) 70%, transparent);
-    backdrop-filter: blur(18px) saturate(160%);
-    -webkit-backdrop-filter: blur(18px) saturate(160%);
-    border: 1px solid color-mix(in srgb, var(--card-color, var(--border)) 30%, var(--border));
-    border-radius: 1.25rem;
-    padding: 1.5rem;
     display: flex;
     flex-direction: column;
-    gap: .85rem;
+    overflow: hidden;
+    background: var(--surface);
+    border: 1px solid color-mix(in srgb, var(--c1) 20%, var(--border));
+    border-radius: 1.5rem;
+    box-shadow: 0 1px 2px rgba(44,34,30,.06), 0 16px 36px -20px rgba(44,34,30,.30);
     text-decoration: none;
     color: var(--text);
-    transition: transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s ease, border-color .28s ease;
+    transition: transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s ease, border-color .3s ease;
   }
-  .system-card::before {
-    content: '';
-    position: absolute; inset: 0;
-    background: radial-gradient(140% 100% at 0% 0%, var(--card-color, var(--primary)) 0%, transparent 55%);
-    opacity: .14;
-    pointer-events: none;
+  html.dark .system-card {
+    --tint-a: 32%;
+    --tint-b: 14%;
+    box-shadow: 0 1px 2px rgba(0,0,0,.45), 0 16px 36px -18px rgba(0,0,0,.65);
   }
   .system-card:hover {
-    transform: translateY(-6px) scale(1.015);
-    box-shadow: 0 22px 48px -20px color-mix(in srgb, var(--card-color, var(--primary)) 55%, black 15%);
-    border-color: var(--card-color, var(--primary-2));
+    transform: translateY(-4px);
+    border-color: color-mix(in srgb, var(--c1) 50%, var(--border));
+    box-shadow: 0 1px 2px rgba(44,34,30,.06), 0 28px 50px -22px color-mix(in srgb, var(--c1) 60%, transparent);
   }
-  .system-card:hover .system-card-arrow { transform: translate(4px, -2px); opacity: 1; }
-  html.dark .system-card:hover { box-shadow: 0 22px 48px -18px rgba(0,0,0,.55); }
+  html.dark .system-card:hover {
+    box-shadow: 0 1px 2px rgba(0,0,0,.45), 0 28px 50px -20px rgba(0,0,0,.7);
+  }
+  .system-card:active { transform: translateY(-1px); }
 
-  .system-card-arrow {
-    transition: transform .22s ease, opacity .22s ease;
-    opacity: .55;
-    font-weight: 700;
+  /* ---- ثيمات الهوية (الألوان تتبدل تلقائياً مع الوضع الداكن) ---- */
+  .system-card.theme-warehouse { --c1: #5C4033; --c2: #8B6B55; --on-c1: #fff; }
+  html.dark .system-card.theme-warehouse { --c1: #A3816A; --c2: #8C6D58; --on-c1: #1F1612; }
+
+  .system-card.theme-quran { --c1: #5F6B3A; --c2: #B8963E; --on-c1: #fff; }
+  html.dark .system-card.theme-quran { --c1: #A3AE72; --c2: #D2B25E; --on-c1: #1B2010; }
+
+  .system-card.theme-points { --c1: #A65A17; --c2: #E2A72E; --on-c1: #fff; }
+  html.dark .system-card.theme-points { --c1: #E39B45; --c2: #F2C14E; --on-c1: #2A1607; }
+
+  /* ---- الرأس الملوّن المتدرج ---- */
+  .sc-head {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.4rem 1.5rem 1.3rem;
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--c1) var(--tint-a), var(--surface)) 0%,
+      color-mix(in srgb, var(--c2) var(--tint-b), var(--surface)) 100%);
+    border-bottom: 1px solid color-mix(in srgb, var(--c1) 14%, var(--border));
+  }
+  .sc-head::before {
+    content: '';
+    position: absolute; inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    /* الهوية العامة: وهج ناعم من لون النظام */
+    background: radial-gradient(90% 130% at 0% 0%, color-mix(in srgb, var(--c1) 18%, transparent), transparent 70%);
+  }
+
+  /* مستودع / مخزن / جرد — شبكة هندسية ناعمة */
+  .theme-warehouse .sc-head::before {
+    background-image:
+      linear-gradient(color-mix(in srgb, var(--c1) 20%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--c1) 20%, transparent) 1px, transparent 1px);
+    background-size: 24px 24px;
+    -webkit-mask-image: radial-gradient(130% 130% at 0% 0%, #000 0%, transparent 72%);
+            mask-image: radial-gradient(130% 130% at 0% 0%, #000 0%, transparent 72%);
+  }
+  /* قرآن / حفظ / تلاوة — نقش إسلامي (نجمة ثمانية) خفيف جداً */
+  .theme-quran .sc-head::before {
+    background: var(--c1);
+    opacity: .13;
+    -webkit-mask-image: var(--sc-quran-tile);
+            mask-image: var(--sc-quran-tile);
+    -webkit-mask-size: 44px 44px;
+            mask-size: 44px 44px;
+    -webkit-mask-repeat: repeat;
+            mask-repeat: repeat;
+  }
+  html.dark .theme-quran .sc-head::before { opacity: .2; }
+  /* نقاط / مكافآت / إنجاز — تدرج ضوئي دافئ */
+  .theme-points .sc-head::before {
+    background:
+      radial-gradient(60% 100% at 90% 0%, color-mix(in srgb, var(--c2) 50%, transparent), transparent 70%),
+      radial-gradient(70% 45% at 0% 100%, color-mix(in srgb, var(--c1) 24%, transparent), transparent 72%);
+  }
+
+  /* ---- الأيقونة الزجاجية ---- */
+  .sc-icon {
+    position: relative;
+    flex: none;
+    width: 3.6rem; height: 3.6rem;
+    display: grid; place-items: center;
+    border-radius: 1.15rem;
+    font-size: 1.85rem;
+    line-height: 1;
+    background: linear-gradient(145deg,
+      color-mix(in srgb, var(--surface) 78%, transparent),
+      color-mix(in srgb, var(--surface) 38%, transparent));
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+            backdrop-filter: blur(12px) saturate(150%);
+    border: 1px solid color-mix(in srgb, var(--c1) 26%, var(--surface));
+    box-shadow:
+      0 10px 22px -10px color-mix(in srgb, var(--c1) 60%, transparent),
+      inset 0 1px 0 rgba(255,255,255,.55);
+  }
+  .sc-icon.is-letter {
+    font-family: 'Cairo', sans-serif;
+    font-weight: 800;
+    font-size: 1.7rem;
+    color: var(--c1-text);
+  }
+
+  .sc-titles { min-width: 0; flex: 1; }
+  .sc-title {
+    font-family: 'Cairo', sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    line-height: 1.4;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .sc-desc {
+    margin-top: .3rem;
+    font-size: .85rem;
+    line-height: 1.7;
+    color: var(--muted);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  /* ---- التاجات ---- */
+  .sc-tags {
+    display: flex; flex-wrap: wrap; gap: .45rem;
+    padding: 1rem 1.5rem 0;
+  }
+  .sc-tag {
+    font-size: .75rem; font-weight: 500; line-height: 1;
+    padding: .42rem .75rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--c1) 8%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--c1) 18%, var(--border));
+    color: var(--c1-text);
+  }
+
+  /* ---- زر الإجراء ---- */
+  .sc-foot { padding: 1rem 1.5rem 1.4rem; }
+  .sc-cta {
+    display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+    padding-block: .5rem;
+    padding-inline: 1.1rem .55rem;
+    border-radius: 1rem;
+    font-weight: 700; font-size: .92rem;
+    color: var(--c1-text);
+    background: color-mix(in srgb, var(--c1) 9%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--c1) 24%, var(--border));
+    transition: background-color .3s ease, color .3s ease, border-color .3s ease, transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s ease;
+  }
+  .sc-cta-arrow {
+    width: 2rem; height: 2rem;
+    display: grid; place-items: center;
+    border-radius: .7rem;
+    font-size: 1rem; line-height: 1;
+    background: color-mix(in srgb, var(--c1) 16%, transparent);
+    transition: transform .3s cubic-bezier(.2,.8,.2,1), background-color .3s ease;
+  }
+  .system-card:hover .sc-cta,
+  .system-card:focus-visible .sc-cta {
+    background: var(--c1);
+    color: var(--on-c1);
+    border-color: var(--c1);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 22px -12px color-mix(in srgb, var(--c1) 80%, transparent);
+  }
+  .system-card:hover .sc-cta-arrow,
+  .system-card:focus-visible .sc-cta-arrow {
+    background: color-mix(in srgb, var(--on-c1) 22%, transparent);
+    transform: translate(3px, -3px);
+  }
+
+  /* ---- استغلال المساحة: عند 4 بطاقات أو أقل تتمدد وتُرتّب الأيقونة فوق العنوان ---- */
+  #employee-grid.fill-height .sc-head {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 1.15rem;
+    padding: 2rem 1.75rem 1.75rem;
+  }
+  #employee-grid.fill-height .sc-titles { flex: none; }
+  #employee-grid.fill-height .sc-icon {
+    width: 4.6rem; height: 4.6rem;
+    border-radius: 1.5rem;
+    font-size: 2.35rem;
+  }
+  #employee-grid.fill-height .sc-icon.is-letter { font-size: 2.2rem; }
+  #employee-grid.fill-height .sc-title { font-size: 1.35rem; }
+  #employee-grid.fill-height .sc-desc { font-size: .92rem; -webkit-line-clamp: 4; }
+  #employee-grid.fill-height .sc-tags { padding-inline: 1.75rem; }
+  #employee-grid.fill-height .sc-foot { padding-inline: 1.75rem; }
+
+  /* ---- بطاقة واحدة فقط: تصميم شاشة كاملة متمركز ---- */
+  #employee-grid .system-card.hero-card .sc-head {
+    align-items: center;
+    text-align: center;
+    padding: 3rem 2rem 2.5rem;
+    gap: 1.5rem;
+  }
+  #employee-grid .system-card.hero-card .sc-titles { flex: none; }
+  #employee-grid .system-card.hero-card .sc-icon {
+    width: 6.5rem; height: 6.5rem;
+    border-radius: 2rem;
+    font-size: 3.2rem;
+  }
+  #employee-grid .system-card.hero-card .sc-icon.is-letter { font-size: 3rem; }
+  #employee-grid .system-card.hero-card .sc-title { font-size: clamp(1.6rem, 3vw, 2.6rem); -webkit-line-clamp: 3; }
+  #employee-grid .system-card.hero-card .sc-desc {
+    font-size: clamp(.95rem, 1.4vw, 1.15rem);
+    max-width: 44ch; margin-inline: auto;
+    -webkit-line-clamp: 5;
+  }
+  #employee-grid .system-card.hero-card .sc-tags { justify-content: center; padding-inline: 2rem; }
+  #employee-grid .system-card.hero-card .sc-foot { padding: 1.25rem 2rem 2rem; }
+  #employee-grid .system-card.hero-card .sc-cta {
+    max-width: 26rem; margin-inline: auto;
+    padding-block: .65rem;
+    font-size: 1.05rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .system-card, .sc-cta, .sc-cta-arrow { transition: none; }
+    .system-card:hover, .system-card:active { transform: none; }
   }
 
   /* ===== شبكة بطاقات الموظف الديناميكية ===== */
   #employee-grid {
     display: grid;
-    gap: 1.25rem;
+    gap: 1.5rem;
     align-items: stretch;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   }
   #employee-grid.grid-count-1 {
     grid-template-columns: 1fr;
@@ -301,31 +516,11 @@ create trigger on_auth_user_created
   #employee-grid.fill-height {
     min-height: calc(100dvh - var(--header-h, 64px) - 5.5rem);
   }
+  /* امتداد كامل العرض — يعمل في الاتجاهين (RTL/LTR) بدل left/margin-left الذي ينكسر في RTL */
   #employee-grid-wrap.full-bleed {
-    width: 100vw;
-    position: relative;
-    left: 50%;
-    margin-left: -50vw;
-    padding-left: clamp(1rem, 4vw, 3.5rem);
-    padding-right: clamp(1rem, 4vw, 3.5rem);
+    margin-inline: calc(50% - 50vw);
+    padding-inline: clamp(1rem, 4vw, 3.5rem);
   }
-
-  /* البطاقة الفاخرة عند وجود نظام واحد فقط */
-  .system-card.hero-card {
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    padding: 3rem 2rem;
-    gap: 1.5rem;
-  }
-  .system-card.hero-card .icon-chip {
-    width: 6.5rem; height: 6.5rem;
-    font-size: 3rem;
-    border-radius: 1.75rem;
-  }
-  .system-card.hero-card h3 { font-size: clamp(1.5rem, 3vw, 2.5rem); }
-  .system-card.hero-card p { font-size: clamp(.95rem, 1.4vw, 1.15rem); max-width: 40ch; }
-  .system-card.hero-card .system-card-arrow { font-size: 1.1rem; }
 
   .icon-chip {
     width: 3rem; height: 3rem;
@@ -957,8 +1152,74 @@ async function loadAdminData() {
 }
 
 /* ============================================================
-   عرض شبكة الأنظمة (الموظف) — شبكة ديناميكية تملأ المساحة المتاحة
+   عرض شبكة الأنظمة (الموظف) — هوية بصرية ذكية حسب عنوان النظام
    ============================================================ */
+
+/* توحيد النص العربي (إزالة التشكيل وتوحيد الألف والياء والتاء المربوطة) لمطابقة أدق */
+function normalizeArabic(str) {
+  return String(str || '')
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه');
+}
+
+/* الثيمات المعرّفة: تُفحص بالترتيب، وأول تطابق يحسم الهوية */
+const CARD_THEMES = [
+  { key: 'warehouse', icon: '🏭', cta: 'إدارة المخزون',
+    match: /مستودع|مخزن|مخازن|مخزون|جرد|warehouse|inventory|stock/ },
+  { key: 'quran', icon: '📖', cta: 'متابعة الخطة',
+    match: /قران|تحفيظ|حفظ|تلاو|quran|tilawa/ },
+  { key: 'points', icon: '🌟', cta: 'استعراض النقاط',
+    match: /نقاط|نقطه|مكاف|انجاز|points|rewards|achievement/ }
+];
+
+const DEFAULT_CARD_ICON = '🗂️';
+const DEFAULT_CARD_COLOR = '#5C4033';
+
+/* تحديد هوية البطاقة من عنوانها: الثيم + الأيقونة + نص الزر */
+function resolveCardIdentity(card) {
+  const title = normalizeArabic(card.title);
+  const theme = CARD_THEMES.find(t => t.match.test(title)) || null;
+
+  const savedIcon = (card.icon || '').trim();
+  const hasCustomIcon = savedIcon && savedIcon !== DEFAULT_CARD_ICON;
+
+  let icon = '';
+  let isLetter = false;
+  if (hasCustomIcon) {
+    icon = savedIcon;                     // الأيقونة التي اختارها الأدمن لها الأولوية
+  } else if (theme) {
+    icon = theme.icon;                    // أيقونة الثيم
+  } else {
+    const bare = (card.title || '').trim().replace(/^ال(?=\S)/, '');   // نتجاوز "ال" التعريف
+    icon = Array.from(bare)[0] || '•';                                // حرف العنوان بدل أيقونة المجلد الموحدة
+    isLetter = true;
+  }
+
+  return {
+    themeKey: theme ? theme.key : null,
+    icon,
+    isLetter,
+    cta: theme ? theme.cta : 'دخول النظام',
+    color: card.color || DEFAULT_CARD_COLOR
+  };
+}
+
+/* اختيار لون نص مقروء فوق لون معيّن (للألوان المخصصة القادمة من Supabase) */
+function readableTextOn(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return '#fff';
+  const n = parseInt(m[1], 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => {
+    v /= 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum > 0.19 ? '#1F1612' : '#fff';
+}
+
 function renderEmployeeGrid() {
   const grid = el('employee-grid');
   const wrap = el('employee-grid-wrap');
@@ -991,26 +1252,39 @@ function renderEmployeeGrid() {
   if (count <= 4) grid.classList.add('fill-height');
   if (count <= 2) wrap.classList.add('full-bleed');
 
-  myCards.forEach(card => {
+  myCards.forEach((card, i) => {
     const tags = Array.isArray(card.tags) ? card.tags : [];
-    const color = card.color || '#5C4033';
+    const id = resolveCardIdentity(card);
+
     const a = document.createElement('a');
     a.href = card.url;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
-    a.className = 'system-card fade-in' + (count === 1 ? ' hero-card' : '');
-    a.style.setProperty('--card-color', color);
+    a.className = 'system-card fade-in'
+      + (id.themeKey ? ` theme-${id.themeKey}` : ' theme-custom')
+      + (count === 1 ? ' hero-card' : '');
+    a.style.animationDelay = (i * 60) + 'ms';
+
+    // الثيمات المعرّفة تأخذ ألوانها من CSS؛ البطاقات الأخرى تستخدم لون Supabase
+    if (!id.themeKey) {
+      a.style.setProperty('--c1', id.color);
+      a.style.setProperty('--on-c1', readableTextOn(id.color));
+    }
+
     a.innerHTML = `
-      <div class="flex items-start gap-3 ${count === 1 ? 'flex-col items-center' : ''}">
-        <div class="icon-chip" style="background:${color}22; color:${color};">${card.icon || '🗂️'}</div>
-        <div class="min-w-0 ${count === 1 ? 'text-center' : ''}">
-          <h3 class="font-display font-bold ${count === 1 ? '' : 'text-[15px] truncate'}">${escapeHtml(card.title)}</h3>
-          ${card.description ? `<p class="muted ${count === 1 ? 'mt-1.5' : 'text-xs mt-0.5 line-clamp-2'}">${escapeHtml(card.description)}</p>` : ''}
+      <div class="sc-head">
+        <div class="sc-icon${id.isLetter ? ' is-letter' : ''}" aria-hidden="true">${escapeHtml(id.icon)}</div>
+        <div class="sc-titles">
+          <h3 class="sc-title">${escapeHtml(card.title)}</h3>
+          ${card.description ? `<p class="sc-desc">${escapeHtml(card.description)}</p>` : ''}
         </div>
       </div>
-      ${tags.length ? `<div class="flex flex-wrap gap-1.5 ${count === 1 ? 'justify-center' : 'mt-auto'}">${tags.map(t => `<span class="text-[11px] px-2 py-0.5 rounded-full" style="background:var(--surface-2); color:var(--muted);">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
-      <div class="system-card-arrow flex items-center gap-1.5 text-sm ${count === 1 ? 'justify-center' : ''}" style="color:${color}; margin-top:auto;">
-        <span>دخول النظام</span><span>↗</span>
+      ${tags.length ? `<div class="sc-tags">${tags.map(t => `<span class="sc-tag">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+      <div class="sc-foot">
+        <div class="sc-cta">
+          <span>${id.cta}</span>
+          <span class="sc-cta-arrow" aria-hidden="true">↗</span>
+        </div>
       </div>
     `;
     grid.appendChild(a);
