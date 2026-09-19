@@ -117,9 +117,9 @@
   })();
 </script>
 
-<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.tailwindcss.com" onerror="window.__tailwindFailed = true; console.error('فشل تحميل Tailwind CDN');"></script>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="window.__supabaseLibFailed = true; console.error('فشل تحميل مكتبة Supabase من الـ CDN');"></script>
 
 <style>
   :root{
@@ -415,8 +415,8 @@ const SUPABASE_ANON_KEY = 'sb_publishable_d4hjVJmSfdHU6ahko7Krfg_anODG69X';
 // بل نعرض للمستخدم رسالة خطأ واضحة بدل بقاء دائرة التحميل تدور للأبد.
 let sb = null;
 try {
-  if (typeof supabase === 'undefined') {
-    throw new Error('مكتبة Supabase لم تُحمّل (تحقق من اتصال الإنترنت أو حجب الإعلانات).');
+  if (window.__supabaseLibFailed || typeof supabase === 'undefined') {
+    throw new Error('مكتبة Supabase لم تُحمّل (تحقق من اتصال الإنترنت أو حجب الإعلانات/CDN).');
   }
   sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
@@ -424,6 +424,29 @@ try {
 } catch (err) {
   console.warn('Supabase Init Error:', err);
 }
+
+// حارس عام يلتقط أي خطأ غير متوقع (وحتى الوعود المرفوضة بدون معالجة) في أي
+// مكان بالصفحة. إذا صار هذا أثناء المستخدم عالق على شاشة التحميل، نخرجه منها
+// فوراً بدل ترك الدائرة تدور للأبد.
+function forceOutOfLoadingScreen(message){
+  const loadingView = document.getElementById('view-loading');
+  if(loadingView && !loadingView.classList.contains('hidden')){
+    showView('view-login');
+    const errBox = document.getElementById('login-error');
+    if(errBox){
+      errBox.textContent = message;
+      errBox.classList.remove('hidden');
+    }
+  }
+}
+window.addEventListener('error', (e) => {
+  console.error('Global error:', e.error || e.message);
+  forceOutOfLoadingScreen('حدث خطأ غير متوقع أثناء تحميل الصفحة. حدّث الصفحة وحاول مجدداً.');
+});
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('Unhandled promise rejection:', e.reason);
+  forceOutOfLoadingScreen('حدث خطأ غير متوقع أثناء تحميل الصفحة. حدّث الصفحة وحاول مجدداً.');
+});
 
 /* ══════════════════════════════════════════════════════════════
    1) أيقونات جاهزة (SVG) — يختار الأدمن منها عند إنشاء بطاقة
