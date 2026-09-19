@@ -409,9 +409,21 @@
    ══════════════════════════════════════════════════════════════ */
 const SUPABASE_URL = 'https://fyavaxwknvfqlqwkkvko.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_d4hjVJmSfdHU6ahko7Krfg_anODG69X';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-});
+
+// نحمي إنشاء عميل Supabase بـ try/catch: لو فشلت (مثلاً مكتبة supabase-js
+// لم تُحمّل من الـ CDN لأي سبب)، لا نريد إيقاف تنفيذ باقي السكربت بالكامل —
+// بل نعرض للمستخدم رسالة خطأ واضحة بدل بقاء دائرة التحميل تدور للأبد.
+let sb = null;
+try {
+  if (typeof supabase === 'undefined') {
+    throw new Error('مكتبة Supabase لم تُحمّل (تحقق من اتصال الإنترنت أو حجب الإعلانات).');
+  }
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
+} catch (err) {
+  console.warn('Supabase Init Error:', err);
+}
 
 /* ══════════════════════════════════════════════════════════════
    1) أيقونات جاهزة (SVG) — يختار الأدمن منها عند إنشاء بطاقة
@@ -453,6 +465,16 @@ function showView(id){
 }
 
 async function boot(){
+  // إذا فشل إنشاء عميل Supabase من الأساس (مثلاً المكتبة لم تُحمّل)، لا فائدة
+  // من محاولة استخدامه — نعرض رسالة خطأ واضحة في شاشة الدخول بدل ترك دائرة
+  // التحميل تدور للأبد.
+  if(!sb){
+    showView('view-login');
+    const errBox = document.getElementById('login-error');
+    errBox.textContent = 'تعذّر الاتصال بالخادم. حدّث الصفحة أو تحقق من اتصال الإنترنت وحاول مجدداً.';
+    errBox.classList.remove('hidden');
+    return;
+  }
   try{
     // مهلة أمان: لو تعليقت مكتبة Supabase (نادراً ما يصير بسبب قفل داخلي بين
     // التبويبات) لا نخلي المستخدم عالق على شاشة التحميل للأبد — بعد 6 ثوانٍ
@@ -488,6 +510,13 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   const errBox = document.getElementById('login-error');
   const btn = document.getElementById('login-submit');
   errBox.classList.add('hidden'); btn.disabled = true; btn.textContent = 'جارٍ الدخول...';
+
+  if(!sb){
+    btn.disabled = false; btn.textContent = 'دخول';
+    errBox.textContent = 'تعذّر الاتصال بالخادم. حدّث الصفحة وحاول مجدداً.';
+    errBox.classList.remove('hidden');
+    return;
+  }
 
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
