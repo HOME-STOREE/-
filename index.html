@@ -226,6 +226,43 @@ revoke all on function public.admin_update_user(uuid, text, text, text) from pub
 grant execute on function public.set_my_username(text) to authenticated;
 grant execute on function public.admin_update_user(uuid, text, text, text) to authenticated;
 
+-- =====================================================================
+-- 7) (جديد) ترتيب عرض البطاقات — يتحكم به الأدمن (تحريك لأعلى/أسفل)
+-- نفّذ هذا القسم مرة واحدة فقط إن كنت أنشأت جدول cards سابقاً بدون هذا العمود.
+-- =====================================================================
+alter table public.cards add column if not exists sort_order integer;
+
+-- تعبئة أولية للبطاقات الحالية بترتيب حسب تاريخ الإنشاء (الأقدم أولاً)
+with ranked as (
+  select id, row_number() over (order by created_at asc) as rn
+  from public.cards
+  where sort_order is null
+)
+update public.cards c
+   set sort_order = ranked.rn
+  from ranked
+ where c.id = ranked.id;
+
+-- كل بطاقة جديدة تُضاف تلقائياً في آخر الترتيب إن لم يُحدَّد ترتيب لها
+create or replace function public.cards_default_sort_order()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.sort_order is null then
+    select coalesce(max(sort_order), 0) + 1 into new.sort_order from public.cards;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_cards_default_sort_order on public.cards;
+create trigger trg_cards_default_sort_order
+  before insert on public.cards
+  for each row execute procedure public.cards_default_sort_order();
+
 ================================================================================
 -->
 <meta charset="UTF-8">
@@ -712,6 +749,20 @@ grant execute on function public.admin_update_user(uuid, text, text, text) to au
   .seg-btn.active { background: var(--surface-solid); color: var(--text); box-shadow: var(--shadow-sm); }
   .input-field:disabled { opacity: .45; cursor: not-allowed; }
 
+  /* ---- أزرار تحريك البطاقة (ترتيب العرض) ---- */
+  .card-move-btn {
+    width: 1.9rem; height: 1.55rem;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: .5rem;
+    font-size: .65rem;
+    color: var(--muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .card-move-btn:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); background: var(--surface-solid); }
+  .card-move-btn:disabled { opacity: .3; cursor: not-allowed; }
+
   /* ---- حوارات الحساب وتعديل الموظف ---- */
   .modal-card { max-height: calc(100dvh - 2rem); overflow-y: auto; }
   .form-error {
@@ -1082,6 +1133,10 @@ grant execute on function public.admin_update_user(uuid, text, text, text) to au
     #employee-grid.grid-count-many .system-card.is-featured .sc-desc { max-width: 60ch; }
   }
   #employee-grid.fill-height { min-height: calc(100dvh - var(--header-h, 64px) - 5.5rem); }
+  /* على الجوال: لا نُجبر البطاقات على تمدد ارتفاعها لملء الشاشة — يترك فراغات داخلية غير متناسقة */
+  @media (max-width: 720px) {
+    #employee-grid.fill-height { min-height: 0; }
+  }
   /* امتداد كامل العرض — يعمل في الاتجاهين (RTL/LTR) */
   #employee-grid-wrap.full-bleed {
     margin-inline: calc(50% - 50vw);
@@ -1793,7 +1848,9 @@ async function loadEmployeeData() {
   }
 
   const { data: cards, error: cardsErr } = await sb
-    .from('cards').select('*').in('id', cardIds).order('created_at', { ascending: true });
+    .from('cards').select('*').in('id', cardIds)
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true });
   if (cardsErr) throw cardsErr;
 
   state.cards = cards || [];
@@ -1802,7 +1859,9 @@ async function loadEmployeeData() {
 
 async function loadAdminData() {
   const [cardsRes, profilesRes, permsRes] = await Promise.all([
-    sb.from('cards').select('*').order('created_at', { ascending: true }),
+    sb.from('cards').select('*')
+      .order('sort_order', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true }),
     sb.from('profiles').select('*').order('created_at', { ascending: true }),
     sb.from('user_permissions').select('user_id, card_id'),
   ]);
@@ -2154,13 +2213,19 @@ function renderCardsList() {
   }
   emptyMsg.classList.add('hidden');
 
-  state.cards.forEach(card => {
+  state.cards.forEach((card, idx) => {
     const permCount = state.allPermissions.filter(p => p.card_id === card.id).length;
     const row = document.createElement('div');
     row.className = 'card-surface list-row p-4 flex items-center gap-4';
     const cid = resolveCardIdentity(card);
     const chipColor = card.color || DEFAULT_CARD_COLOR;
+    const isFirst = idx === 0;
+    const isLast = idx === state.cards.length - 1;
     row.innerHTML = `
+      <div class="flex flex-col gap-1 flex-shrink-0" role="group" aria-label="ترتيب البطاقة">
+        <button type="button" class="card-move-btn" data-move-up="${card.id}" title="تحريك لأعلى" aria-label="تحريك «${escapeHtml(card.title)}» لأعلى"${isFirst ? ' disabled' : ''}>▲</button>
+        <button type="button" class="card-move-btn" data-move-down="${card.id}" title="تحريك لأسفل" aria-label="تحريك «${escapeHtml(card.title)}» لأسفل"${isLast ? ' disabled' : ''}>▼</button>
+      </div>
       <div class="icon-chip${cid.isLetter ? ' font-display font-extrabold' : ''}${cid.isImage ? ' has-img' : ''}" style="${cid.isImage ? 'background:var(--surface-solid); border:1px solid var(--border);' : `background:${chipColor}22; color:${chipColor}; border:1px solid ${chipColor}33;`}">${iconInner(cid)}</div>
       <div class="min-w-0 flex-1">
         <h4 class="font-bold text-sm truncate">${escapeHtml(card.title)}</h4>
@@ -2172,12 +2237,51 @@ function renderCardsList() {
         <button class="btn-danger px-3 py-1.5 text-xs font-bold whitespace-nowrap" data-delete="${card.id}">حذف</button>
       </div>
     `;
+    row.querySelector('[data-move-up]').addEventListener('click', () => moveCard(card.id, 'up'));
+    row.querySelector('[data-move-down]').addEventListener('click', () => moveCard(card.id, 'down'));
     row.querySelector('[data-edit-card]').addEventListener('click', () => openCardEditModal(card.id));
     row.querySelector('[data-delete]').addEventListener('click', () => {
       openConfirm(`سيتم حذف بطاقة «${card.title}» وكل الصلاحيات المرتبطة بها نهائياً. هل تريد المتابعة؟`, () => deleteCard(card.id));
     });
     list.appendChild(row);
   });
+}
+
+/* ============================================================
+   ترتيب البطاقات (الأدمن) — تحريك لأعلى/أسفل، ينعكس فوراً عند الموظفين
+   ============================================================ */
+let cardOrderSaveToken = 0;
+
+async function persistCardOrder() {
+  const myToken = ++cardOrderSaveToken;
+  const snapshot = state.cards.map((c, i) => ({ id: c.id, sort_order: i + 1 }));
+  try {
+    await Promise.all(snapshot.map(({ id, sort_order }) =>
+      sb.from('cards').update({ sort_order }).eq('id', id)
+    ));
+    if (myToken === cardOrderSaveToken) {
+      snapshot.forEach(({ id, sort_order }) => {
+        const c = state.cards.find(x => x.id === id);
+        if (c) c.sort_order = sort_order;
+      });
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('تعذّر حفظ الترتيب الجديد، أعد المحاولة', 'error');
+  }
+}
+
+function moveCard(cardId, direction) {
+  const idx = state.cards.findIndex(c => c.id === cardId);
+  if (idx < 0) return;
+  const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= state.cards.length) return;
+
+  [state.cards[idx], state.cards[swapIdx]] = [state.cards[swapIdx], state.cards[idx]];
+  renderCardsList();
+  renderEmployeeGrid();
+  renderPermissionsMatrix(el('perm-search').value);
+  persistCardOrder();
 }
 
 /* ============================================================
@@ -2334,6 +2438,7 @@ el('card-form').addEventListener('submit', async (e) => {
       icon: addIconPicker.resolveIcon(),
       color: el('card-color').value || DEFAULT_CARD_COLOR,
       tags,
+      sort_order: state.cards.reduce((max, c) => Math.max(max, c.sort_order || 0), 0) + 1,
     };
 
     const { data, error } = await sb.from('cards').insert(payload).select().single();
