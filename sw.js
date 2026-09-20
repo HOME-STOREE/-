@@ -1,4 +1,4 @@
-const CACHE_NAME = "gateway-cache-v3"; // 🔴 غيّر الرقم (v3, v4, ...) كل ما تعمل تحديث مهم مستقبلاً
+const CACHE_NAME = "gateway-cache-v4"; // 🔴 غيّر الرقم (v4, v5, ...) كل ما تعمل تحديث مهم مستقبلاً
 const STATIC_ASSETS = [
   "./manifest.json",
   "./icon-192.png",
