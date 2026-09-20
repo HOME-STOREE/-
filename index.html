@@ -1832,6 +1832,23 @@ async function loadProfileAndData() {
   }
 }
 
+/* ============================================================
+   جلب البطاقات بترتيب sort_order مع تراجع تلقائي وآمن
+   إن كان عمود sort_order غير موجود بعد في قاعدة البيانات (قبل تنفيذ سكربت
+   الترحيل)، نُعيد المحاولة بالترتيب القديم حسب تاريخ الإنشاء تلقائياً
+   دون أي كسر — الميزة تُفعَّل من نفسها فور تنفيذ سكربت الترحيل لاحقاً.
+   ============================================================ */
+function isMissingSortOrderColumn(error) {
+  return !!error && /sort_order/i.test(error.message || error.details || '');
+}
+async function fetchCardsOrdered(buildQuery) {
+  let res = await buildQuery().order('sort_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: true });
+  if (isMissingSortOrderColumn(res.error)) {
+    res = await buildQuery().order('created_at', { ascending: true });
+  }
+  return res;
+}
+
 async function loadEmployeeData() {
   const userId = state.session.user.id;
   const { data: perms, error: permErr } = await sb
@@ -1847,10 +1864,9 @@ async function loadEmployeeData() {
     return;
   }
 
-  const { data: cards, error: cardsErr } = await sb
-    .from('cards').select('*').in('id', cardIds)
-    .order('sort_order', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: true });
+  const { data: cards, error: cardsErr } = await fetchCardsOrdered(() =>
+    sb.from('cards').select('*').in('id', cardIds)
+  );
   if (cardsErr) throw cardsErr;
 
   state.cards = cards || [];
@@ -1859,9 +1875,7 @@ async function loadEmployeeData() {
 
 async function loadAdminData() {
   const [cardsRes, profilesRes, permsRes] = await Promise.all([
-    sb.from('cards').select('*')
-      .order('sort_order', { ascending: true, nullsFirst: false })
-      .order('created_at', { ascending: true }),
+    fetchCardsOrdered(() => sb.from('cards').select('*')),
     sb.from('profiles').select('*').order('created_at', { ascending: true }),
     sb.from('user_permissions').select('user_id, card_id'),
   ]);
@@ -2441,7 +2455,12 @@ el('card-form').addEventListener('submit', async (e) => {
       sort_order: state.cards.reduce((max, c) => Math.max(max, c.sort_order || 0), 0) + 1,
     };
 
-    const { data, error } = await sb.from('cards').insert(payload).select().single();
+    let { data, error } = await sb.from('cards').insert(payload).select().single();
+    if (isMissingSortOrderColumn(error)) {
+      // عمود sort_order غير موجود بعد في قاعدة البيانات — نضيف البطاقة بدونه دون كسر شيء
+      const { sort_order, ...payloadWithoutOrder } = payload;
+      ({ data, error } = await sb.from('cards').insert(payloadWithoutOrder).select().single());
+    }
     if (error) throw error;
 
     state.cards.push(data);
