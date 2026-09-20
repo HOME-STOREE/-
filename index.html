@@ -584,6 +584,35 @@ grant execute on function public.admin_update_user(uuid, text, text, text) to au
   .fade-in { animation: fadeIn .35s ease both; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
+  /* ---- بطل الصفحة الرئيسية (البوابة) — لحظة ظهور واحدة مقصودة ---- */
+  .portal-hero {
+    text-align: center;
+    max-width: 42rem;
+    margin: .25rem auto clamp(1.75rem, 4vw, 2.75rem);
+    animation: heroFadeUp .6s cubic-bezier(.16,.8,.3,1) both;
+  }
+  .portal-hero-title {
+    font-family: 'Cairo', sans-serif;
+    font-weight: 800;
+    font-size: clamp(1.75rem, 4.2vw, 2.6rem);
+    line-height: 1.25;
+    letter-spacing: -.01em;
+    color: var(--text);
+  }
+  .portal-hero-sub {
+    margin-top: .6rem;
+    color: var(--muted);
+    font-size: clamp(.9rem, 1.6vw, 1.05rem);
+    line-height: 1.7;
+  }
+  @keyframes heroFadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .portal-hero { animation: none; }
+  }
+
   /* ---- النوافذ والتنبيهات ---- */
   .modal-backdrop {
     background: color-mix(in srgb, #17120e 48%, transparent);
@@ -1016,6 +1045,9 @@ grant execute on function public.admin_update_user(uuid, text, text, text) to au
     grid-auto-flow: dense;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
   }
+  @media (max-width: 480px) {
+    #employee-grid { gap: 1rem; }
+  }
   #employee-grid.grid-count-1 { grid-template-columns: 1fr; }
   #employee-grid.grid-count-2 { grid-template-columns: repeat(2, 1fr); }
   @media (max-width: 720px) {
@@ -1170,11 +1202,11 @@ grant execute on function public.admin_update_user(uuid, text, text, text) to au
 
   <main id="app-main" class="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-7">
 
-    <!-- ===== لوحة الموظف: عرض الأنظمة المتاحة ===== -->
+    <!-- ===== لوحة الموظف: عرض الأنظمة المتاحة (بوابة رئيسية) ===== -->
     <section id="panel-employee" class="fade-in">
-      <div class="mb-5">
-        <h2 class="page-title">أنظمتك</h2>
-        <p class="muted text-sm mt-0.5">الأنظمة والأدوات المتاحة لحسابك</p>
+      <div class="portal-hero">
+        <h1 class="portal-hero-title">أنظمتك</h1>
+        <p class="portal-hero-sub">كل الأنظمة والأدوات المتاحة لحسابك، في مكان واحد</p>
       </div>
 
       <div id="employee-grid-wrap">
