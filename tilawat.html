@@ -99,7 +99,8 @@ tailwind.config = {
 </style>
 <script>
 /* يمكنك وضع بيانات الاتصال هنا مباشرة بدل شاشة الإعداد:
-   window.TILAWAT_CONFIG = { url: 'https://xxxx.supabase.co', key: 'ANON_PUBLIC_KEY' } */
+   window.TILAWAT_CONFIG = { url: 'https://xxxx.supabase.co', key: 'ANON_PUBLIC_KEY' }
+   (اختياري) fakeDomain: 'tilawat.local' — نطاق البريد الداخلي الوهمي للمستخدمين */
 </script>
 </head>
 <body>
@@ -166,12 +167,14 @@ function Setup() {
                         React.createElement("b", { dir: "ltr" }, "schema.sql"),
                         " \u062B\u0645 ",
                         React.createElement("b", { dir: "ltr" }, "seed.sql"),
-                        "."),
-                    React.createElement("li", null, "\u0645\u0646 Authentication \u2190 Users \u0623\u0636\u0641 \u0645\u0633\u062A\u062E\u062F\u0645\u0627\u064B\u060C \u062B\u0645 \u0627\u062C\u0639\u0644\u0647 \u0645\u062F\u064A\u0631\u0627\u064B \u0628\u062A\u0646\u0641\u064A\u0630 \u0627\u0644\u0627\u0633\u062A\u0639\u0644\u0627\u0645 \u0627\u0644\u0645\u0630\u0643\u0648\u0631 \u0641\u064A README."),
+                        " (\u0625\u0646 \u0643\u0627\u0646\u062A \u0644\u062F\u064A\u0643 \u0642\u0627\u0639\u062F\u0629 \u0642\u062F\u064A\u0645\u0629 \u0646\u0641\u0651\u0630 ",
+                        React.createElement("b", { dir: "ltr" }, "migration.sql"),
+                        " \u0628\u062F\u0644\u0627\u064B \u0645\u0646 schema)."),
                     React.createElement("li", null,
-                        "\u0627\u0646\u0634\u0631 \u062F\u0627\u0644\u0629 ",
-                        React.createElement("b", { dir: "ltr" }, "admin-users"),
-                        " \u0644\u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0645\u0634\u0631\u0641\u064A\u0646 \u0645\u0646 \u062F\u0627\u062E\u0644 \u0627\u0644\u0646\u0638\u0627\u0645."))))));
+                        "\u0645\u0646 Authentication \u2190 Providers \u2190 Email: \u0639\u0637\u0651\u0644 ",
+                        React.createElement("b", { dir: "ltr" }, "Confirm email"),
+                        " \u0648\u0623\u0628\u0642\u0650 \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0645\u0641\u0639\u0651\u0644\u0627\u064B."),
+                    React.createElement("li", null, "\u0627\u0641\u062A\u062D \u0627\u0644\u0646\u0638\u0627\u0645 \u2190 \u00AB\u0623\u0648\u0644 \u062A\u0634\u063A\u064A\u0644\u061F \u0625\u0646\u0634\u0627\u0621 \u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u062F\u064A\u0631\u00BB\u060C \u062B\u0645 \u0623\u0636\u0641 \u0628\u0642\u064A\u0629 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646 \u0645\u0646 \u0635\u0641\u062D\u0629 \u00AB\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646\u00BB."))))));
 }
 function Blocked({ title, message }) {
     const { signOut } = (0, AuthContext_jsx_1.useAuth)();
@@ -245,7 +248,8 @@ function Layout() {
     const [open, setOpen] = (0, react_1.useState)(false);
     const loc = (0, react_router_dom_1.useLocation)();
     const items = NAV.filter((n) => !n.admin || isAdmin);
-    const mosque = profile?.mosque_id ? mosqueById[profile.mosque_id] : null;
+    const mine = (profile?.mosque_ids || []).map((id) => mosqueById[id]).filter(Boolean);
+    const mosqueLabel = mine.length === 1 ? mine[0].name : mine.length > 1 ? `${mine.length} مساجد` : '';
     const sidebar = (React.createElement("div", { className: "flex h-full flex-col" },
         React.createElement("div", { className: "border-b border-cardline px-5 py-5" },
             React.createElement(Logo, null)),
@@ -256,7 +260,7 @@ function Layout() {
             React.createElement("p", { className: "truncate text-sm font-bold" }, profile?.full_name),
             React.createElement("p", { className: "mt-0.5 truncate text-xs text-ink-soft" },
                 constants_js_1.ROLES[profile?.role],
-                mosque ? ` — ${mosque.name}` : ''),
+                mosqueLabel ? ` — ${mosqueLabel}` : ''),
             React.createElement("button", { onClick: signOut, className: "btn-outline btn-sm mt-3 w-full" },
                 React.createElement(lucide_react_1.LogOut, { className: "h-4 w-4" }),
                 " \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062E\u0631\u0648\u062C"))));
@@ -435,6 +439,7 @@ exports.ConfirmDialog = ConfirmDialog;
 exports.SyncBadge = SyncBadge;
 exports.StatCard = StatCard;
 exports.Bar = Bar;
+exports.MultiSelect = MultiSelect;
 const react_1 = require("react");
 const react_dom_1 = require("react-dom");
 const lucide_react_1 = require("lucide-react");
@@ -537,6 +542,24 @@ function Bar({ value, max, color = '#75685A' }) {
     return (React.createElement("div", { className: "h-2.5 w-full overflow-hidden rounded-full bg-page" },
         React.createElement("div", { className: "h-full rounded-full", style: { width: `${value ? pct : 0}%`, background: color } })));
 }
+/** قائمة اختيار متعدد بمربعات اختيار (تفتح داخل النموذج دون أن تُقصّ) */
+function MultiSelect({ options, value, onChange, emptyLabel = 'لم يتم اختيار أي مسجد' }) {
+    const [open, setOpen] = (0, react_1.useState)(false);
+    const all = options.length > 0 && value.length === options.length;
+    const toggle = (v) => onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v]);
+    const chosen = options.filter((o) => value.includes(o.value));
+    return (React.createElement("div", null,
+        React.createElement("button", { type: "button", className: "input flex items-center justify-between gap-2 text-start", "aria-expanded": open, onClick: () => setOpen((o) => !o) },
+            React.createElement("span", { className: "flex flex-wrap gap-1.5" }, chosen.length ? chosen.map((o) => React.createElement("span", { key: o.value, className: "badge-neutral" }, o.label)) : React.createElement("span", { className: "text-ink-soft" }, emptyLabel)),
+            React.createElement(lucide_react_1.ChevronDown, { className: `h-4 w-4 shrink-0 text-ink-soft transition-transform ${open ? 'rotate-180' : ''}` })),
+        open && (React.createElement("div", { className: "mt-2 space-y-0.5 rounded-xl border border-cardline bg-white p-2" },
+            React.createElement("label", { className: "flex cursor-pointer items-center gap-2.5 rounded-lg border-b border-cardline px-2 py-2 text-sm font-bold hover:bg-hover" },
+                React.createElement("input", { type: "checkbox", className: "h-4 w-4 accent-line", checked: all, onChange: () => onChange(all ? [] : options.map((o) => o.value)) }),
+                "\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0643\u0644"),
+            options.map((o) => (React.createElement("label", { key: o.value, className: "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-hover" },
+                React.createElement("input", { type: "checkbox", className: "h-4 w-4 accent-line", checked: value.includes(o.value), onChange: () => toggle(o.value) }),
+                o.label)))))));
+}
 
 };
 defs["src/context/AuthContext.jsx"] = function(exports, require, module, React){
@@ -600,8 +623,18 @@ function AuthProvider({ children }) {
             supabase_js_1.supabase.removeChannel(ch);
         };
     }, [uid]);
-    const signIn = (0, react_1.useCallback)(async (email, password) => {
-        const { error } = await supabase_js_1.supabase.auth.signInWithPassword({ email: email.trim(), password });
+    // الدخول باسم المستخدم (يُحوَّل إلى البريد الداخلي عبر دالة قاعدة البيانات) أو ببريد مباشرة
+    const signIn = (0, react_1.useCallback)(async (identifier, password) => {
+        let email = identifier.trim();
+        if (!email.includes('@')) {
+            const { data, error } = await supabase_js_1.supabase.rpc('login_email', { p_username: email });
+            if (error)
+                return error;
+            if (!data)
+                return { message: 'Invalid login credentials' };
+            email = data;
+        }
+        const { error } = await supabase_js_1.supabase.auth.signInWithPassword({ email, password });
         return error;
     }, []);
     const signOut = (0, react_1.useCallback)(() => supabase_js_1.supabase.auth.signOut(), []);
@@ -1261,15 +1294,16 @@ function DailyLog() {
     const { profile, isAdmin } = (0, AuthContext_jsx_1.useAuth)();
     const { mosques, mosqueById, approvedBySlot, reciters, recitation_logs, profileById, upsertLocal, removeLocal } = (0, DataContext_jsx_1.useData)();
     const toast = (0, ToastContext_jsx_1.useToast)();
-    // ----- المسجد ونطاق المسؤولية -----
-    const activeMosques = (0, react_1.useMemo)(() => mosques.filter((m) => m.is_active), [mosques]);
-    const [adminMosqueId, setAdminMosqueId] = (0, react_1.useState)('');
-    (0, react_1.useEffect)(() => {
-        if (isAdmin && !adminMosqueId && activeMosques[0])
-            setAdminMosqueId(activeMosques[0].id);
-    }, [isAdmin, activeMosques, adminMosqueId]);
-    const mosque = isAdmin ? mosqueById[adminMosqueId] : mosqueById[profile.mosque_id];
+    // ----- المساجد المسندة ونطاق المسؤولية -----
+    const myIds = profile.mosque_ids || [];
+    const activeMosques = (0, react_1.useMemo)(() => mosques.filter((m) => m.is_active && (isAdmin || myIds.includes(m.id))), 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mosques, isAdmin, myIds.join(',')]);
+    const [pickedId, setMosqueId] = (0, react_1.useState)('');
+    const mosqueId = activeMosques.some((m) => m.id === pickedId) ? pickedId : activeMosques[0]?.id || '';
+    const mosque = mosqueById[mosqueId];
     const scope = isAdmin ? 'both' : profile.scope;
+    const dutyPlace = !isAdmin && activeMosques.length > 1 ? `${activeMosques.length} مساجد` : mosque?.name;
     const allowedSlots = (0, react_1.useMemo)(() => {
         if (!mosque)
             return [];
@@ -1427,13 +1461,13 @@ function DailyLog() {
     // ----- عرض التسجيلات -----
     const sameSlot = (0, react_1.useMemo)(() => (mosque ? recitation_logs.filter((l) => l.mosque_id === mosque.id && l.log_date === date && l.slot_key === slot && l.id !== editing?.id) : []), [recitation_logs, mosque, date, slot, editing]);
     const recent = (0, react_1.useMemo)(() => (mosque ? recitation_logs.filter((l) => l.mosque_id === mosque.id).slice(0, 25) : []), [recitation_logs, mosque]);
-    if (!isAdmin && !mosque) {
+    if (activeMosques.length === 0) {
         return (React.createElement(React.Fragment, null,
             React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A" }),
             React.createElement("div", { className: "card" },
-                React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0645 \u064A\u062A\u0645 \u0631\u0628\u0637\u0643 \u0628\u0645\u0633\u062C\u062F \u0628\u0639\u062F", hint: "\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u064A\u0631\u0628\u0637 \u062D\u0633\u0627\u0628\u0643 \u0628\u0645\u0633\u062C\u062F \u0648\u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u0629." }))));
+                React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0645 \u064A\u062A\u0645 \u0631\u0628\u0637\u0643 \u0628\u0623\u064A \u0645\u0633\u062C\u062F \u0628\u0639\u062F", hint: "\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u064A\u0633\u0646\u062F \u0625\u0644\u064A\u0643 \u0645\u0633\u062C\u062F\u0627\u064B \u0623\u0648 \u0623\u0643\u062B\u0631 \u0648\u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u0629." }))));
     }
-    const editable = (l) => isAdmin || (l.mosque_id === profile.mosque_id && (scope === 'both' || (scope === 'friday') === (l.slot_key === 'fri')));
+    const editable = (l) => isAdmin || (myIds.includes(l.mosque_id) && (scope === 'both' || (scope === 'friday') === (l.slot_key === 'fri')));
     return (React.createElement(React.Fragment, null,
         React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A", subtitle: "\u0633\u062C\u0651\u0644 \u0627\u0644\u0642\u0627\u0631\u0626 \u0623\u0648 \u0633\u0628\u0628 \u0639\u062F\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u0644\u0643\u0644 \u062E\u0627\u0646\u0629 \u062A\u0644\u0627\u0648\u0629." }),
         React.createElement("div", { className: "mb-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-line p-5 text-white" },
@@ -1443,10 +1477,10 @@ function DailyLog() {
                     profile.full_name),
                 React.createElement("p", { className: "mt-1 text-xl font-extrabold" },
                     constants_js_1.SCOPE_DUTY[scope],
-                    mosque ? ` - ${mosque.name}` : '')),
-            isAdmin && (React.createElement("div", { className: "w-full sm:w-72" },
-                React.createElement("label", { className: "mb-1.5 block text-xs font-semibold text-white/80" }, "\u0627\u0644\u0645\u0633\u062C\u062F (\u0628\u0635\u0641\u062A\u0643 \u0645\u062F\u064A\u0631\u0627\u064B)"),
-                React.createElement("select", { className: "input !border-white/30", value: adminMosqueId, onChange: (e) => { setAdminMosqueId(e.target.value); resetEntry(); } }, activeMosques.map((m) => React.createElement("option", { key: m.id, value: m.id }, m.name)))))),
+                    dutyPlace ? ` - ${dutyPlace}` : '')),
+            activeMosques.length > 1 && (React.createElement("div", { className: "w-full sm:w-72" },
+                React.createElement("label", { className: "mb-1.5 block text-xs font-semibold text-white/80" }, "\u0627\u0644\u0645\u0633\u062C\u062F \u0627\u0644\u0630\u064A \u062A\u0633\u062C\u0651\u0644 \u0644\u0647 \u0627\u0644\u0622\u0646"),
+                React.createElement("select", { className: "input !border-white/30", value: mosqueId, onChange: (e) => { setMosqueId(e.target.value); resetEntry(); } }, activeMosques.map((m) => React.createElement("option", { key: m.id, value: m.id }, m.name)))))),
         !allowedSlots.length ? (React.createElement("div", { className: "card" },
             React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062E\u0627\u0646\u0627\u062A \u062A\u0644\u0627\u0648\u0629 \u0645\u0641\u0639\u0651\u0644\u0629", hint: "\u0644\u0627 \u064A\u0648\u062C\u062F \u062A\u0637\u0627\u0628\u0642 \u0628\u064A\u0646 \u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u062A\u0643 \u0648\u0627\u0644\u062E\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0641\u0639\u0651\u0644\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u062C\u062F. \u0631\u0627\u062C\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645." }))) : (React.createElement("div", { className: "card card-pad space-y-5" },
             editing && (React.createElement("div", { className: "flex items-center justify-between rounded-xl border border-warn/30 bg-warn/10 px-4 py-2.5 text-sm font-semibold text-warn" },
@@ -1658,10 +1692,21 @@ exports.default = Login;
 const react_1 = require("react");
 const lucide_react_1 = require("lucide-react");
 const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
+const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
+const supabase_js_1 = require("src/lib/supabase.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
+const authMessage = (m = '') => {
+    if (/invalid login/i.test(m))
+        return 'اسم المستخدم أو كلمة المرور غير صحيحة';
+    if (/function .*login_email|login_email/i.test(m))
+        return 'قاعدة البيانات تحتاج تحديثاً: شغّل ملف migration.sql (أو schema.sql للتركيب الجديد).';
+    return m;
+};
 function Login() {
     const { signIn } = (0, AuthContext_jsx_1.useAuth)();
-    const [email, setEmail] = (0, react_1.useState)('');
+    const toast = (0, ToastContext_jsx_1.useToast)();
+    const [mode, setMode] = (0, react_1.useState)('login'); // login | first
+    const [name, setName] = (0, react_1.useState)('');
     const [password, setPassword] = (0, react_1.useState)('');
     const [busy, setBusy] = (0, react_1.useState)(false);
     const [error, setError] = (0, react_1.useState)('');
@@ -1669,11 +1714,41 @@ function Login() {
         e.preventDefault();
         setBusy(true);
         setError('');
-        const err = await signIn(email, password);
+        const err = await signIn(name, password);
         if (err)
-            setError(err.message?.includes('Invalid login') ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : err.message);
+            setError(authMessage(err.message));
         setBusy(false);
     };
+    // إنشاء أول مدير: يعمل فقط ما دام لا يوجد أي مدير في قاعدة البيانات
+    const createFirstAdmin = async (e) => {
+        e.preventDefault();
+        setError('');
+        if (!name.trim())
+            return setError('اكتب اسم المدير');
+        if (password.length < 6)
+            return setError('كلمة المرور 6 خانات على الأقل');
+        setBusy(true);
+        const email = (0, supabase_js_1.makeFakeEmail)();
+        const { data, error: e1 } = await supabase_js_1.supabase.auth.signUp({ email, password, options: { data: { full_name: name.trim() } } });
+        if (e1) {
+            setBusy(false);
+            return setError(e1.message);
+        }
+        if (!data.session) {
+            setBusy(false);
+            return setError('عطّل خيار «Confirm email» من Supabase ← Authentication ← Providers ← Email ثم أعد المحاولة.');
+        }
+        const { error: e2 } = await supabase_js_1.supabase.rpc('bootstrap_admin', { p_name: name.trim(), p_email: email });
+        if (e2) {
+            await supabase_js_1.supabase.auth.signOut();
+            setBusy(false);
+            return setError(/already exists/.test(e2.message) ? 'يوجد مدير بالفعل — سجّل الدخول باسمك.' : e2.message);
+        }
+        await supabase_js_1.supabase.from('profile_secrets').upsert({ user_id: data.user.id, password_plain: password });
+        toast.success('تم إنشاء حساب المدير');
+        window.location.reload();
+    };
+    const first = mode === 'first';
     return (React.createElement("div", { className: "flex min-h-screen items-center justify-center bg-page p-4" },
         React.createElement("div", { className: "w-full max-w-sm" },
             React.createElement("div", { className: "mb-6 flex flex-col items-center gap-3 text-center" },
@@ -1682,16 +1757,19 @@ function Login() {
                 React.createElement("div", null,
                     React.createElement("h1", { className: "text-3xl font-extrabold" }, "\u062A\u0644\u0627\u0648\u0627\u062A"),
                     React.createElement("p", { className: "mt-1 text-sm text-ink-soft" }, "\u0646\u0638\u0627\u0645 \u0625\u062F\u0627\u0631\u0629 \u0648\u062A\u0646\u0638\u064A\u0645 \u0642\u0631\u0627\u0621 \u0648\u062A\u0644\u0627\u0648\u0627\u062A \u0627\u0644\u0645\u0633\u0627\u062C\u062F"))),
-            React.createElement("form", { onSubmit: submit, className: "card card-pad space-y-4" },
-                React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A" },
-                    React.createElement("input", { className: "input", type: "email", dir: "ltr", autoComplete: "username", required: true, value: email, onChange: (e) => setEmail(e.target.value) })),
+            React.createElement("form", { onSubmit: first ? createFirstAdmin : submit, className: "card card-pad space-y-4" },
+                first && React.createElement("p", { className: "rounded-xl bg-hover px-3 py-2 text-xs leading-6" }, "\u0623\u0648\u0644 \u062A\u0634\u063A\u064A\u0644: \u0623\u0646\u0634\u0626 \u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u062F\u064A\u0631. \u064A\u0639\u0645\u0644 \u0647\u0630\u0627 \u0627\u0644\u062E\u064A\u0627\u0631 \u0641\u0642\u0637 \u0625\u0646 \u0644\u0645 \u064A\u0643\u0646 \u0647\u0646\u0627\u0643 \u0645\u062F\u064A\u0631 \u0641\u064A \u0627\u0644\u0646\u0638\u0627\u0645."),
+                React.createElement(ui_jsx_1.Field, { label: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645" },
+                    React.createElement("input", { className: "input", autoComplete: "username", required: true, value: name, onChange: (e) => setName(e.target.value) })),
                 React.createElement(ui_jsx_1.Field, { label: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631" },
-                    React.createElement("input", { className: "input", type: "password", dir: "ltr", autoComplete: "current-password", required: true, value: password, onChange: (e) => setPassword(e.target.value) })),
+                    React.createElement("input", { className: "input", type: "password", dir: "ltr", autoComplete: first ? 'new-password' : 'current-password', required: true, value: password, onChange: (e) => setPassword(e.target.value) })),
                 error && React.createElement("p", { className: "rounded-lg bg-bad/10 px-3 py-2 text-sm font-semibold text-bad", role: "alert" }, error),
                 React.createElement("button", { className: "btn-primary w-full", disabled: busy },
                     busy ? React.createElement(ui_jsx_1.Spinner, { className: "!text-white h-4 w-4" }) : React.createElement(lucide_react_1.LogIn, { className: "h-4 w-4" }),
-                    " \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644"),
-                React.createElement("p", { className: "text-center text-xs text-ink-soft" }, "\u062A\u0628\u0642\u0649 \u0645\u0633\u062C\u0651\u0644\u0627\u064B \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u062D\u062A\u0649 \u062A\u0636\u063A\u0637 \u00AB\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062E\u0631\u0648\u062C\u00BB.")))));
+                    " ",
+                    first ? 'إنشاء حساب المدير' : 'تسجيل الدخول'),
+                React.createElement("p", { className: "text-center text-xs text-ink-soft" }, "\u062A\u0628\u0642\u0649 \u0645\u0633\u062C\u0651\u0644\u0627\u064B \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u062D\u062A\u0649 \u062A\u0636\u063A\u0637 \u00AB\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062E\u0631\u0648\u062C\u00BB."),
+                React.createElement("button", { type: "button", className: "mx-auto block text-xs font-semibold text-ink underline", onClick: () => { setMode(first ? 'login' : 'first'); setError(''); } }, first ? 'العودة لتسجيل الدخول' : 'أول تشغيل؟ إنشاء حساب المدير')))));
 }
 
 };
@@ -1964,129 +2042,214 @@ const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
 const DataContext_jsx_1 = require("src/context/DataContext.jsx");
 const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
 const constants_js_1 = require("src/lib/constants.js");
+const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
-const blank = { full_name: '', email: '', password: '', role: 'supervisor', mosque_id: '', scope: 'both', is_active: true };
+const blank = { full_name: '', password: '', role: 'supervisor', mosque_ids: [], scope: 'both', is_active: true };
+const MIN_PASSWORD = 6;
+const authHint = (m = '') => {
+    if (/already registered|already been registered/i.test(m))
+        return 'هذا الحساب موجود مسبقاً.';
+    if (/signups? (are )?(not allowed|disabled)/i.test(m))
+        return 'فعّل «Allow new users to sign up» من Supabase ← Authentication ← Providers ← Email.';
+    if (/email.*invalid|invalid.*email/i.test(m))
+        return 'رفض Supabase البريد الداخلي المولّد. غيّر النطاق: window.TILAWAT_CONFIG.fakeDomain في أعلى الملف إلى نطاق مقبول.';
+    if (/password/i.test(m))
+        return 'كلمة المرور غير مقبولة (6 خانات على الأقل).';
+    if (/should be different/i.test(m))
+        return 'كلمة المرور الجديدة مطابقة للحالية.';
+    return m;
+};
 function UsersPage() {
     const { session } = (0, AuthContext_jsx_1.useAuth)();
     const { profiles, mosques, mosqueById, upsertLocal, removeLocal } = (0, DataContext_jsx_1.useData)();
     const toast = (0, ToastContext_jsx_1.useToast)();
     const [form, setForm] = (0, react_1.useState)(null);
-    const [pw, setPw] = (0, react_1.useState)(null); // { user, password }
+    const [pw, setPw] = (0, react_1.useState)(null); // { user, password, old }
     const [del, setDel] = (0, react_1.useState)(null);
     const [busy, setBusy] = (0, react_1.useState)(false);
+    const [secrets, setSecrets] = (0, react_1.useState)({});
+    const [reveal, setReveal] = (0, react_1.useState)({});
+    const me = session.user.id;
+    (0, react_1.useEffect)(() => {
+        supabase_js_1.supabase.from('profile_secrets').select('user_id,password_plain').then(({ data }) => {
+            if (data)
+                setSecrets(Object.fromEntries(data.map((r) => [r.user_id, r.password_plain])));
+        });
+    }, []);
+    const saveSecret = async (id, password) => {
+        const { error } = await supabase_js_1.supabase.from('profile_secrets').upsert({ user_id: id, password_plain: password, updated_at: new Date().toISOString() });
+        if (!error)
+            setSecrets((s) => ({ ...s, [id]: password }));
+    };
     const set = (patch) => setForm((f) => ({ ...f, ...patch }));
     const isNew = form && !form.id;
+    const mosqueOptions = mosques.map((m) => ({ value: m.id, label: m.name }));
+    // ---------- إنشاء / تعديل ----------
     const save = async () => {
-        if (!form.full_name.trim())
+        const name = form.full_name.trim().replace(/\s+/g, ' ');
+        if (!name)
             return toast.warn('الاسم مطلوب');
-        if (form.role === 'supervisor' && !form.mosque_id)
-            return toast.warn('اربط المشرف بمسجد');
-        setBusy(true);
-        if (isNew) {
-            if (!form.email.trim() || form.password.length < 8) {
-                setBusy(false);
-                return toast.warn('بيانات ناقصة', 'البريد مطلوب، وكلمة المرور 8 أحرف على الأقل.');
-            }
-            const { data, error } = await supabase_js_1.supabase.functions.invoke('admin-users', {
-                body: { action: 'create', email: form.email.trim(), password: form.password, full_name: form.full_name.trim(), role: form.role, mosque_id: form.mosque_id || null, scope: form.scope },
-            });
-            setBusy(false);
-            if (error)
-                return toast.error('تعذّر إنشاء المستخدم', await (0, supabase_js_1.functionError)(error));
-            upsertLocal('profiles', data.profile);
-            toast.success('تم إنشاء المستخدم', form.full_name);
-        }
-        else {
+        if (profiles.some((p) => p.id !== form.id && (0, util_js_1.normalizeAr)(p.full_name) === (0, util_js_1.normalizeAr)(name)))
+            return toast.warn('الاسم مستخدم', 'يوجد مستخدم بنفس الاسم.');
+        if (form.role === 'supervisor' && form.mosque_ids.length === 0)
+            return toast.warn('اختر مسجداً واحداً على الأقل');
+        if (!isNew) {
+            setBusy(true);
             const { data, error } = await supabase_js_1.supabase.from('profiles')
-                .update({ full_name: form.full_name.trim(), role: form.role, mosque_id: form.mosque_id || null, scope: form.scope, is_active: form.is_active })
+                .update({ full_name: name, role: form.role, mosque_ids: form.mosque_ids, scope: form.scope, is_active: form.is_active })
                 .eq('id', form.id).select().single();
             setBusy(false);
             if (error)
-                return toast.error('تعذّر الحفظ', error.message);
+                return toast.error('تعذّر الحفظ', error.code === '23505' ? 'الاسم مستخدم مسبقاً.' : error.message);
             upsertLocal('profiles', data);
             toast.success('تم تحديث المستخدم');
+            return setForm(null);
         }
+        if (form.password.length < MIN_PASSWORD)
+            return toast.warn('كلمة المرور قصيرة', `${MIN_PASSWORD} خانات على الأقل (حروف أو أرقام أو رموز).`);
+        setBusy(true);
+        const email = (0, supabase_js_1.makeFakeEmail)(); // بريد داخلي وهمي: لا يراه المستخدم ولا يحتاجه
+        const { data: su, error: e1 } = await (0, supabase_js_1.tempClient)().auth.signUp({ email, password: form.password, options: { data: { full_name: name } } });
+        if (e1) {
+            setBusy(false);
+            return toast.error('تعذّر إنشاء الحساب', authHint(e1.message));
+        }
+        if (!su.session) {
+            setBusy(false);
+            return toast.error('فعّل الدخول المباشر', 'عطّل «Confirm email» من Supabase ← Authentication ← Providers ← Email ثم أعد المحاولة.');
+        }
+        const { data: prof, error: e2 } = await supabase_js_1.supabase.from('profiles')
+            .insert({ id: su.user.id, full_name: name, email, role: form.role, mosque_ids: form.mosque_ids, scope: form.scope })
+            .select().single();
+        if (e2) {
+            setBusy(false);
+            return toast.error('تعذّر حفظ المستخدم', e2.code === '23505' ? 'الاسم مستخدم مسبقاً.' : e2.message);
+        }
+        upsertLocal('profiles', prof);
+        await saveSecret(prof.id, form.password);
+        setBusy(false);
+        toast.success('تم إنشاء المستخدم', `${name} — يدخل باسم المستخدم وكلمة المرور.`);
         setForm(null);
     };
+    // ---------- إعادة تعيين كلمة المرور ----------
+    const needOld = pw && pw.user.id !== me && !secrets[pw.user.id];
     const resetPassword = async () => {
-        if (pw.password.length < 8)
-            return toast.warn('كلمة المرور قصيرة', '8 أحرف على الأقل.');
+        const { user, password, old } = pw;
+        if (password.length < MIN_PASSWORD)
+            return toast.warn('كلمة المرور قصيرة', `${MIN_PASSWORD} خانات على الأقل.`);
         setBusy(true);
-        const { error } = await supabase_js_1.supabase.functions.invoke('admin-users', { body: { action: 'reset_password', user_id: pw.user.id, password: pw.password } });
+        try {
+            if (user.id === me) {
+                const { error } = await supabase_js_1.supabase.auth.updateUser({ password });
+                if (error)
+                    throw new Error(authHint(error.message));
+            }
+            else {
+                const current = secrets[user.id] || old;
+                if (current) {
+                    // نسجّل الدخول مؤقتاً بالحساب المستهدف (بكلمة المرور المحفوظة) ونغيّرها
+                    const tmp = (0, supabase_js_1.tempClient)();
+                    const { error: e1 } = await tmp.auth.signInWithPassword({ email: user.email, password: current });
+                    if (e1)
+                        throw new Error('كلمة المرور الحالية غير صحيحة — أدخل الحالية الصحيحة في الحقل أدناه.');
+                    const { error: e2 } = await tmp.auth.updateUser({ password });
+                    if (e2)
+                        throw new Error(authHint(e2.message));
+                }
+                else {
+                    // بدون كلمة حالية: نحاول دالة الخادم الاختيارية admin-users
+                    const { error } = await supabase_js_1.supabase.functions.invoke('admin-users', { body: { action: 'reset_password', user_id: user.id, password } });
+                    if (error)
+                        throw new Error('لا يمكن التغيير دون كلمة المرور الحالية. أدخلها في الحقل أدناه، أو انشر دالة admin-users.');
+                }
+            }
+            await saveSecret(user.id, password);
+            toast.success('تم تغيير كلمة المرور', user.full_name);
+            setPw(null);
+        }
+        catch (e) {
+            toast.error('تعذّر تغيير كلمة المرور', e.message);
+        }
         setBusy(false);
-        if (error)
-            return toast.error('تعذّر تغيير كلمة المرور', await (0, supabase_js_1.functionError)(error));
-        toast.success('تم تغيير كلمة المرور', pw.user.full_name);
-        setPw(null);
     };
+    // ---------- حذف ----------
     const remove = async () => {
         setBusy(true);
-        const { error } = await supabase_js_1.supabase.functions.invoke('admin-users', { body: { action: 'delete', user_id: del.id } });
+        const { data, error } = await supabase_js_1.supabase.from('profiles').delete().eq('id', del.id).select();
         setBusy(false);
-        if (error)
-            return toast.error('تعذّر الحذف', await (0, supabase_js_1.functionError)(error));
+        if (error || !data?.length)
+            return toast.error('تعذّر الحذف', error?.message);
         removeLocal('profiles', del.id);
+        setSecrets((s) => { const n = { ...s }; delete n[del.id]; return n; });
         setDel(null);
-        toast.success('تم حذف المستخدم');
+        toast.success('تم حذف المستخدم', 'لم يعد قادراً على استخدام النظام. تبقى تسجيلاته محفوظة.');
     };
+    const mosquesOf = (p) => (p.mosque_ids || []).map((id) => mosqueById[id]).filter(Boolean);
     return (React.createElement(React.Fragment, null,
-        React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646 \u0648\u0627\u0644\u0631\u0628\u0637", subtitle: "\u0623\u0646\u0634\u0626 \u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0645\u0634\u0631\u0641\u064A\u0646 \u0648\u0627\u0631\u0628\u0637 \u0643\u0644 \u0645\u0634\u0631\u0641 \u0628\u0645\u0633\u062C\u062F \u0648\u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u0629.", actions: React.createElement("button", { className: "btn-primary", onClick: () => setForm({ ...blank }) },
+        React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646 \u0648\u0627\u0644\u0631\u0628\u0637", subtitle: "\u0623\u0636\u0641 \u0627\u0644\u0645\u0634\u0631\u0641\u064A\u0646 \u0628\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0648\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631\u060C \u0648\u0623\u0633\u0646\u062F \u0644\u0643\u0644 \u0645\u0634\u0631\u0641 \u0645\u0633\u062C\u062F\u0627\u064B \u0623\u0648 \u0623\u0643\u062B\u0631.", actions: React.createElement("button", { className: "btn-primary", onClick: () => setForm({ ...blank }) },
                 React.createElement(lucide_react_1.Plus, { className: "h-4 w-4" }),
                 " \u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062A\u062E\u062F\u0645") }),
         React.createElement("div", { className: "card overflow-hidden" }, profiles.length === 0 ? React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u064A\u0648\u062C\u062F \u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646" }) : (React.createElement("div", { className: "overflow-x-auto" },
-            React.createElement("table", { className: "w-full min-w-[820px]" },
+            React.createElement("table", { className: "w-full min-w-[900px]" },
                 React.createElement("thead", null,
                     React.createElement("tr", null,
-                        React.createElement("th", { className: "th" }, "\u0627\u0644\u0627\u0633\u0645"),
-                        React.createElement("th", { className: "th" }, "\u0627\u0644\u0628\u0631\u064A\u062F"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645"),
                         React.createElement("th", { className: "th" }, "\u0627\u0644\u062F\u0648\u0631"),
-                        React.createElement("th", { className: "th" }, "\u0627\u0644\u0645\u0633\u062C\u062F"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u0645\u0633\u0627\u062C\u062F \u0627\u0644\u0645\u0633\u0646\u062F\u0629"),
                         React.createElement("th", { className: "th" }, "\u0646\u0637\u0627\u0642 \u0627\u0644\u0645\u0633\u0624\u0648\u0644\u064A\u0629"),
+                        React.createElement("th", { className: "th" }, "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631"),
                         React.createElement("th", { className: "th" }, "\u0627\u0644\u062D\u0627\u0644\u0629"),
                         React.createElement("th", { className: "th w-32" }))),
-                React.createElement("tbody", null, profiles.map((p) => (React.createElement("tr", { key: p.id, className: "tr-hover" },
-                    React.createElement("td", { className: "td font-bold" }, p.full_name),
-                    React.createElement("td", { className: "td text-xs", dir: "ltr" }, p.email || '—'),
-                    React.createElement("td", { className: "td" }, p.role === 'admin' ? React.createElement("span", { className: "badge-brand" }, constants_js_1.ROLES.admin) : React.createElement("span", { className: "badge-neutral" }, constants_js_1.ROLES.supervisor)),
-                    React.createElement("td", { className: "td text-sm" }, mosqueById[p.mosque_id]?.name ?? React.createElement("span", { className: "text-ink-soft" }, "\u2014")),
-                    React.createElement("td", { className: "td text-sm" }, p.role === 'admin' ? 'كل التلاوات' : constants_js_1.SCOPES[p.scope]),
-                    React.createElement("td", { className: "td" }, p.is_active ? React.createElement("span", { className: "badge-ok" }, "\u0645\u0641\u0639\u0651\u0644") : React.createElement("span", { className: "badge-bad" }, "\u0645\u0639\u0637\u0651\u0644")),
-                    React.createElement("td", { className: "td" },
-                        React.createElement("div", { className: "flex gap-1" },
-                            React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => setForm({ ...p, mosque_id: p.mosque_id || '' }), "aria-label": "\u062A\u0639\u062F\u064A\u0644" },
-                                React.createElement(lucide_react_1.Pencil, { className: "h-4 w-4" })),
-                            React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => setPw({ user: p, password: '' }), "aria-label": "\u062A\u063A\u064A\u064A\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631" },
-                                React.createElement(lucide_react_1.KeyRound, { className: "h-4 w-4" })),
-                            p.id !== session.user.id && React.createElement("button", { className: "btn-ghost btn-sm !px-2 text-bad", onClick: () => setDel(p), "aria-label": "\u062D\u0630\u0641" },
-                                React.createElement(lucide_react_1.Trash2, { className: "h-4 w-4" })))))))))))),
+                React.createElement("tbody", null, profiles.map((p) => {
+                    const ms = mosquesOf(p);
+                    return (React.createElement("tr", { key: p.id, className: "tr-hover" },
+                        React.createElement("td", { className: "td font-bold" },
+                            p.full_name,
+                            p.id === me && React.createElement("span", { className: "badge-neutral ms-2" }, "\u0623\u0646\u062A")),
+                        React.createElement("td", { className: "td" }, p.role === 'admin' ? React.createElement("span", { className: "badge-brand" }, constants_js_1.ROLES.admin) : React.createElement("span", { className: "badge-neutral" }, constants_js_1.ROLES.supervisor)),
+                        React.createElement("td", { className: "td" }, p.role === 'admin' && ms.length === 0 ? React.createElement("span", { className: "text-xs text-ink-soft" }, "\u0643\u0644 \u0627\u0644\u0645\u0633\u0627\u062C\u062F")
+                            : ms.length === 0 ? React.createElement("span", { className: "badge-warn" }, "\u0628\u0644\u0627 \u0645\u0633\u062C\u062F")
+                                : React.createElement("div", { className: "flex flex-wrap gap-1" }, ms.map((m) => React.createElement("span", { key: m.id, className: "badge-neutral" }, m.name)))),
+                        React.createElement("td", { className: "td text-sm" }, p.role === 'admin' ? 'كل التلاوات' : constants_js_1.SCOPES[p.scope]),
+                        React.createElement("td", { className: "td" }, secrets[p.id] ? (React.createElement("span", { className: "flex items-center gap-2" },
+                            React.createElement("code", { dir: "ltr", className: "rounded bg-hover px-2 py-0.5 text-xs" }, reveal[p.id] ? secrets[p.id] : '••••••••'),
+                            React.createElement("button", { className: "text-ink-soft hover:text-ink", onClick: () => setReveal((r) => ({ ...r, [p.id]: !r[p.id] })), "aria-label": reveal[p.id] ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور' }, reveal[p.id] ? React.createElement(lucide_react_1.EyeOff, { className: "h-4 w-4" }) : React.createElement(lucide_react_1.Eye, { className: "h-4 w-4" })))) : React.createElement("span", { className: "text-xs text-ink-soft" }, "\u063A\u064A\u0631 \u0645\u062D\u0641\u0648\u0638\u0629")),
+                        React.createElement("td", { className: "td" }, p.is_active ? React.createElement("span", { className: "badge-ok" }, "\u0645\u0641\u0639\u0651\u0644") : React.createElement("span", { className: "badge-bad" }, "\u0645\u0639\u0637\u0651\u0644")),
+                        React.createElement("td", { className: "td" },
+                            React.createElement("div", { className: "flex gap-1" },
+                                React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => setForm({ ...p, mosque_ids: p.mosque_ids || [] }), "aria-label": "\u062A\u0639\u062F\u064A\u0644" },
+                                    React.createElement(lucide_react_1.Pencil, { className: "h-4 w-4" })),
+                                React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => setPw({ user: p, password: '', old: '' }), "aria-label": "\u062A\u063A\u064A\u064A\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631" },
+                                    React.createElement(lucide_react_1.KeyRound, { className: "h-4 w-4" })),
+                                p.id !== me && React.createElement("button", { className: "btn-ghost btn-sm !px-2 text-bad", onClick: () => setDel(p), "aria-label": "\u062D\u0630\u0641" },
+                                    React.createElement(lucide_react_1.Trash2, { className: "h-4 w-4" }))))));
+                })))))),
         React.createElement(ui_jsx_1.Modal, { drawer: true, open: Boolean(form), onClose: () => setForm(null), title: isNew ? 'إضافة مستخدم' : 'تعديل المستخدم', footer: React.createElement(React.Fragment, null,
                 React.createElement("button", { className: "btn-outline", onClick: () => setForm(null) }, "\u0625\u0644\u063A\u0627\u0621"),
                 React.createElement("button", { className: "btn-primary", onClick: save, disabled: busy },
                     busy && React.createElement(ui_jsx_1.Spinner, { className: "!text-white h-4 w-4" }),
                     " \u062D\u0641\u0638")) }, form && (React.createElement("div", { className: "space-y-4" },
-            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0643\u0627\u0645\u0644" },
+            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 / \u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0643\u0627\u0645\u0644 (\u0628\u0627\u0644\u0639\u0631\u0628\u064A\u0629)", hint: "\u064A\u0633\u062A\u062E\u062F\u0645\u0647 \u0644\u0644\u062F\u062E\u0648\u0644 \u0625\u0644\u0649 \u0627\u0644\u0646\u0638\u0627\u0645." },
                 React.createElement("input", { className: "input", value: form.full_name, onChange: (e) => set({ full_name: e.target.value }), autoFocus: true })),
-            isNew && (React.createElement(React.Fragment, null,
-                React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A" },
-                    React.createElement("input", { className: "input", dir: "ltr", type: "email", value: form.email, onChange: (e) => set({ email: e.target.value }) })),
-                React.createElement(ui_jsx_1.Field, { label: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0645\u0624\u0642\u062A\u0629", hint: "8 \u0623\u062D\u0631\u0641 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644. \u0634\u0627\u0631\u0643\u0647\u0627 \u0645\u0639 \u0627\u0644\u0645\u0634\u0631\u0641 \u0628\u0637\u0631\u064A\u0642\u0629 \u0622\u0645\u0646\u0629." },
-                    React.createElement("input", { className: "input", dir: "ltr", type: "text", value: form.password, onChange: (e) => set({ password: e.target.value }) })))),
-            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u062F\u0648\u0631" },
-                React.createElement("select", { className: "input", value: form.role, onChange: (e) => set({ role: e.target.value }) }, Object.entries(constants_js_1.ROLES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v)))),
-            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0645\u0633\u062C\u062F \u0627\u0644\u0645\u0631\u062A\u0628\u0637", hint: form.role === 'admin' ? 'اختياري للمدير.' : undefined },
-                React.createElement("select", { className: "input", value: form.mosque_id, onChange: (e) => set({ mosque_id: e.target.value }) },
-                    React.createElement("option", { value: "" }, "\u2014 \u0627\u062E\u062A\u0631 \u2014"),
-                    mosques.map((m) => React.createElement("option", { key: m.id, value: m.id }, m.name)))),
+            isNew && (React.createElement(ui_jsx_1.Field, { label: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631", hint: `${MIN_PASSWORD} خانات على الأقل — حروف أو أرقام أو رموز.` },
+                React.createElement("input", { className: "input", dir: "ltr", value: form.password, onChange: (e) => set({ password: e.target.value }), autoComplete: "off" }))),
+            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u062F\u0648\u0631", hint: form.id === me ? 'لا يمكنك تغيير دورك أو تعطيل حسابك بنفسك.' : undefined },
+                React.createElement("select", { className: "input", value: form.role, disabled: form.id === me, onChange: (e) => set({ role: e.target.value }) }, Object.entries(constants_js_1.ROLES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v)))),
+            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0645\u0633\u0627\u062C\u062F \u0627\u0644\u0645\u0633\u0646\u062F\u0629", hint: form.role === 'admin' ? 'المدير يرى كل المساجد؛ الاختيار هنا اختياري.' : 'يمكن اختيار مسجد واحد أو عدة مساجد.' },
+                React.createElement(ui_jsx_1.MultiSelect, { options: mosqueOptions, value: form.mosque_ids, onChange: (v) => set({ mosque_ids: v }) })),
             React.createElement(ui_jsx_1.Field, { label: "\u0646\u0637\u0627\u0642 \u0627\u0644\u0645\u0633\u0624\u0648\u0644\u064A\u0629" },
                 React.createElement("select", { className: "input", value: form.scope, onChange: (e) => set({ scope: e.target.value }) }, Object.entries(constants_js_1.SCOPES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v)))),
-            !isNew && React.createElement(ui_jsx_1.Switch, { checked: form.is_active, onChange: (v) => set({ is_active: v }), label: "\u0627\u0644\u062D\u0633\u0627\u0628 \u0645\u0641\u0639\u0651\u0644" })))),
+            !isNew && form.id !== me && React.createElement(ui_jsx_1.Switch, { checked: form.is_active, onChange: (v) => set({ is_active: v }), label: "\u0627\u0644\u062D\u0633\u0627\u0628 \u0645\u0641\u0639\u0651\u0644" })))),
         React.createElement(ui_jsx_1.Modal, { open: Boolean(pw), onClose: () => setPw(null), title: `تغيير كلمة مرور: ${pw?.user.full_name ?? ''}`, size: "sm", footer: React.createElement(React.Fragment, null,
                 React.createElement("button", { className: "btn-outline", onClick: () => setPw(null) }, "\u0625\u0644\u063A\u0627\u0621"),
                 React.createElement("button", { className: "btn-primary", onClick: resetPassword, disabled: busy },
                     busy && React.createElement(ui_jsx_1.Spinner, { className: "!text-white h-4 w-4" }),
-                    " \u062A\u063A\u064A\u064A\u0631")) }, pw && React.createElement(ui_jsx_1.Field, { label: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u062C\u062F\u064A\u062F\u0629", hint: "8 \u0623\u062D\u0631\u0641 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644." },
-            React.createElement("input", { className: "input", dir: "ltr", value: pw.password, onChange: (e) => setPw({ ...pw, password: e.target.value }), autoFocus: true }))),
-        React.createElement(ui_jsx_1.ConfirmDialog, { open: Boolean(del), danger: true, busy: busy, onClose: () => setDel(null), onConfirm: remove, title: "\u062D\u0630\u0641 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645", confirmLabel: "\u062D\u0630\u0641", message: `سيُحذف حساب «${del?.full_name}» نهائياً. التسجيلات التي أنشأها تبقى محفوظة. هل أنت متأكد؟` })));
+                    " \u062A\u063A\u064A\u064A\u0631")) }, pw && (React.createElement("div", { className: "space-y-4" },
+            React.createElement(ui_jsx_1.Field, { label: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u062C\u062F\u064A\u062F\u0629", hint: `${MIN_PASSWORD} خانات على الأقل.` },
+                React.createElement("input", { className: "input", dir: "ltr", value: pw.password, onChange: (e) => setPw({ ...pw, password: e.target.value }), autoFocus: true })),
+            needOld && (React.createElement(ui_jsx_1.Field, { label: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u0644\u0644\u0645\u0633\u062A\u062E\u062F\u0645", hint: "\u0644\u0627 \u062A\u0648\u062C\u062F \u0643\u0644\u0645\u0629 \u0645\u062D\u0641\u0648\u0638\u0629 \u0644\u0647. \u0623\u062F\u062E\u0644 \u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u0644\u064A\u062A\u0645\u0643\u0646 \u0627\u0644\u0646\u0638\u0627\u0645 \u0645\u0646 \u062A\u063A\u064A\u064A\u0631\u0647\u0627." },
+                React.createElement("input", { className: "input", dir: "ltr", value: pw.old, onChange: (e) => setPw({ ...pw, old: e.target.value }) })))))),
+        React.createElement(ui_jsx_1.ConfirmDialog, { open: Boolean(del), danger: true, busy: busy, onClose: () => setDel(null), onConfirm: remove, title: "\u062D\u0630\u0641 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645", confirmLabel: "\u062D\u0630\u0641", message: `سيُحذف «${del?.full_name}» من النظام ولن يستطيع استخدامه. التسجيلات التي أنشأها تبقى محفوظة. هل أنت متأكد؟` })));
 }
 
 };
@@ -2098,6 +2261,9 @@ exports.supabase = window.supabase.createClient(cfg.url || 'http://localhost', c
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.localStorage, storageKey: 'tilawat-auth' },
   realtime: { params: { eventsPerSecond: 10 } },
 })
+exports.FAKE_EMAIL_DOMAIN = cfg.fakeDomain || 'tilawat.local'
+exports.makeFakeEmail = () => 'user_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8) + '@' + exports.FAKE_EMAIL_DOMAIN
+exports.tempClient = () => window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'tilawat-temp-' + Math.random().toString(36).slice(2) } })
 exports.saveConfig = (url, key) => { localStorage.setItem('tilawat-config', JSON.stringify({ url: url.trim().replace(/\/$/, ''), key: key.trim() })); window.location.reload() }
 exports.clearConfig = () => { localStorage.removeItem('tilawat-config'); window.location.reload() }
 exports.functionError = async function functionError(error) {
@@ -2108,7 +2274,7 @@ exports.functionError = async function functionError(error) {
 };
 defs["lucide-react"] = function(exports, require, module, React){
 
-const ICONS = {"BarChart3":"<path d=\"M3 3v16a2 2 0 0 0 2 2h16\"></path><path d=\"M18 17V9\"></path><path d=\"M13 17V5\"></path><path d=\"M8 17v-3\"></path>","BookOpen":"<path d=\"M12 7v14\"></path><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\"></path>","Building2":"<path d=\"M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z\"></path><path d=\"M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2\"></path><path d=\"M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2\"></path><path d=\"M10 6h4\"></path><path d=\"M10 10h4\"></path><path d=\"M10 14h4\"></path><path d=\"M10 18h4\"></path>","ClipboardList":"<rect width=\"8\" height=\"4\" x=\"8\" y=\"2\" rx=\"1\" ry=\"1\"></rect><path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\"></path><path d=\"M12 11h4\"></path><path d=\"M12 16h4\"></path><path d=\"M8 11h.01\"></path><path d=\"M8 16h.01\"></path>","LayoutDashboard":"<rect width=\"7\" height=\"9\" x=\"3\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"14\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"9\" x=\"14\" y=\"12\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"></rect>","LogOut":"<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"></path><polyline points=\"16 17 21 12 16 7\"></polyline><line x1=\"21\" x2=\"9\" y1=\"12\" y2=\"12\"></line>","Menu":"<line x1=\"4\" x2=\"20\" y1=\"12\" y2=\"12\"></line><line x1=\"4\" x2=\"20\" y1=\"6\" y2=\"6\"></line><line x1=\"4\" x2=\"20\" y1=\"18\" y2=\"18\"></line>","Users":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"></path><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"></path>","UserRound":"<circle cx=\"12\" cy=\"8\" r=\"5\"></circle><path d=\"M20 21a8 8 0 0 0-16 0\"></path>","X":"<path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path>","ChevronDown":"<path d=\"m6 9 6 6 6-6\"></path>","Search":"<circle cx=\"11\" cy=\"11\" r=\"8\"></circle><path d=\"m21 21-4.3-4.3\"></path>","UserPlus":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><line x1=\"19\" x2=\"19\" y1=\"8\" y2=\"14\"></line><line x1=\"22\" x2=\"16\" y1=\"11\" y2=\"11\"></line>","Loader2":"<path d=\"M21 12a9 9 0 1 1-6.219-8.56\"></path>","Wifi":"<path d=\"M12 20h.01\"></path><path d=\"M2 8.82a15 15 0 0 1 20 0\"></path><path d=\"M5 12.859a10 10 0 0 1 14 0\"></path><path d=\"M8.5 16.429a5 5 0 0 1 7 0\"></path>","WifiOff":"<path d=\"M12 20h.01\"></path><path d=\"M8.5 16.429a5 5 0 0 1 7 0\"></path><path d=\"M5 12.859a10 10 0 0 1 5.17-2.69\"></path><path d=\"M19 12.859a10 10 0 0 0-2.007-1.523\"></path><path d=\"M2 8.82a15 15 0 0 1 4.177-2.643\"></path><path d=\"M22 8.82a15 15 0 0 0-11.288-3.764\"></path><path d=\"m2 2 20 20\"></path>","Inbox":"<polyline points=\"22 12 16 12 14 15 10 15 8 12 2 12\"></polyline><path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path>","AlertTriangle":"<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"></path><path d=\"M12 9v4\"></path><path d=\"M12 17h.01\"></path>","CheckCircle2":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"m9 12 2 2 4-4\"></path>","Info":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M12 16v-4\"></path><path d=\"M12 8h.01\"></path>","XCircle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"m15 9-6 6\"></path><path d=\"m9 9 6 6\"></path>","Printer":"<path d=\"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2\"></path><path d=\"M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6\"></path><rect x=\"6\" y=\"14\" width=\"12\" height=\"8\" rx=\"1\"></rect>","Pencil":"<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"></path><path d=\"m15 5 4 4\"></path>","Save":"<path d=\"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\"></path><path d=\"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7\"></path><path d=\"M7 3v4a1 1 0 0 0 1 1h7\"></path>","Trash2":"<path d=\"M3 6h18\"></path><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"></path><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"></path><line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\"></line><line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\"></line>","LogIn":"<path d=\"M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4\"></path><polyline points=\"10 17 15 12 10 7\"></polyline><line x1=\"15\" x2=\"3\" y1=\"12\" y2=\"12\"></line>","Plus":"<path d=\"M5 12h14\"></path><path d=\"M12 5v14\"></path>","KeyRound":"<path d=\"M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z\"></path><circle cx=\"16.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"></circle>"}
+const ICONS = {"BarChart3":"<path d=\"M3 3v16a2 2 0 0 0 2 2h16\"></path><path d=\"M18 17V9\"></path><path d=\"M13 17V5\"></path><path d=\"M8 17v-3\"></path>","BookOpen":"<path d=\"M12 7v14\"></path><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\"></path>","Building2":"<path d=\"M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z\"></path><path d=\"M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2\"></path><path d=\"M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2\"></path><path d=\"M10 6h4\"></path><path d=\"M10 10h4\"></path><path d=\"M10 14h4\"></path><path d=\"M10 18h4\"></path>","ClipboardList":"<rect width=\"8\" height=\"4\" x=\"8\" y=\"2\" rx=\"1\" ry=\"1\"></rect><path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\"></path><path d=\"M12 11h4\"></path><path d=\"M12 16h4\"></path><path d=\"M8 11h.01\"></path><path d=\"M8 16h.01\"></path>","LayoutDashboard":"<rect width=\"7\" height=\"9\" x=\"3\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"14\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"9\" x=\"14\" y=\"12\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"></rect>","LogOut":"<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"></path><polyline points=\"16 17 21 12 16 7\"></polyline><line x1=\"21\" x2=\"9\" y1=\"12\" y2=\"12\"></line>","Menu":"<line x1=\"4\" x2=\"20\" y1=\"12\" y2=\"12\"></line><line x1=\"4\" x2=\"20\" y1=\"6\" y2=\"6\"></line><line x1=\"4\" x2=\"20\" y1=\"18\" y2=\"18\"></line>","Users":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"></path><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"></path>","UserRound":"<circle cx=\"12\" cy=\"8\" r=\"5\"></circle><path d=\"M20 21a8 8 0 0 0-16 0\"></path>","X":"<path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path>","ChevronDown":"<path d=\"m6 9 6 6 6-6\"></path>","Search":"<circle cx=\"11\" cy=\"11\" r=\"8\"></circle><path d=\"m21 21-4.3-4.3\"></path>","UserPlus":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><line x1=\"19\" x2=\"19\" y1=\"8\" y2=\"14\"></line><line x1=\"22\" x2=\"16\" y1=\"11\" y2=\"11\"></line>","Loader2":"<path d=\"M21 12a9 9 0 1 1-6.219-8.56\"></path>","Wifi":"<path d=\"M12 20h.01\"></path><path d=\"M2 8.82a15 15 0 0 1 20 0\"></path><path d=\"M5 12.859a10 10 0 0 1 14 0\"></path><path d=\"M8.5 16.429a5 5 0 0 1 7 0\"></path>","WifiOff":"<path d=\"M12 20h.01\"></path><path d=\"M8.5 16.429a5 5 0 0 1 7 0\"></path><path d=\"M5 12.859a10 10 0 0 1 5.17-2.69\"></path><path d=\"M19 12.859a10 10 0 0 0-2.007-1.523\"></path><path d=\"M2 8.82a15 15 0 0 1 4.177-2.643\"></path><path d=\"M22 8.82a15 15 0 0 0-11.288-3.764\"></path><path d=\"m2 2 20 20\"></path>","Inbox":"<polyline points=\"22 12 16 12 14 15 10 15 8 12 2 12\"></polyline><path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path>","AlertTriangle":"<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"></path><path d=\"M12 9v4\"></path><path d=\"M12 17h.01\"></path>","CheckCircle2":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"m9 12 2 2 4-4\"></path>","Info":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M12 16v-4\"></path><path d=\"M12 8h.01\"></path>","XCircle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"m15 9-6 6\"></path><path d=\"m9 9 6 6\"></path>","Printer":"<path d=\"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2\"></path><path d=\"M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6\"></path><rect x=\"6\" y=\"14\" width=\"12\" height=\"8\" rx=\"1\"></rect>","Pencil":"<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"></path><path d=\"m15 5 4 4\"></path>","Save":"<path d=\"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\"></path><path d=\"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7\"></path><path d=\"M7 3v4a1 1 0 0 0 1 1h7\"></path>","Trash2":"<path d=\"M3 6h18\"></path><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"></path><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"></path><line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\"></line><line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\"></line>","LogIn":"<path d=\"M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4\"></path><polyline points=\"10 17 15 12 10 7\"></polyline><line x1=\"15\" x2=\"3\" y1=\"12\" y2=\"12\"></line>","Plus":"<path d=\"M5 12h14\"></path><path d=\"M12 5v14\"></path>","Eye":"<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>","EyeOff":"<path d=\"M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143\"></path><path d=\"m2 2 20 20\"></path>","KeyRound":"<path d=\"M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z\"></path><circle cx=\"16.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"></circle>"}
 function make(name) {
   const inner = ICONS[name]
   return function Icon(props) {
@@ -2143,6 +2309,8 @@ exports.Save = make('Save')
 exports.Trash2 = make('Trash2')
 exports.LogIn = make('LogIn')
 exports.Plus = make('Plus')
+exports.Eye = make('Eye')
+exports.EyeOff = make('EyeOff')
 exports.KeyRound = make('KeyRound')
 
 };
