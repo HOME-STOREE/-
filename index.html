@@ -274,6 +274,7 @@ create trigger trg_cards_default_sort_order
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#FAF9F6">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="الأنظمة">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -383,6 +384,8 @@ create trigger trg_cards_default_sort_order
     background: var(--bg);
     -webkit-text-size-adjust: 100%;
     transition: background-color .25s ease;
+    overflow-x: hidden;
+    width: 100%;
   }
   html, body { height: 100%; color: var(--text); }
   body {
@@ -390,9 +393,11 @@ create trigger trg_cards_default_sort_order
     line-height: 1.7;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
-    padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
     transition: color .25s ease;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
   }
   /* خلفية متدرجة عاجية → بنية مع توهجات ناعمة تعطي الزجاج ما ينعكس عليه، فوق نسيج نقطي دقيق */
   body::before {
@@ -572,15 +577,44 @@ create trigger trg_cards_default_sort_order
   }
   html.dark .glass-header { box-shadow: 0 12px 30px -22px rgba(0,0,0,.8); }
 
+  /* ---- تحسينات الجوال: الهيدر، التبويبات، وبنر تثبيت التطبيق ---- */
+  @media (max-width: 480px) {
+    header .h-16 { gap: .5rem; }
+    header .h-16 .leading-tight p:first-child { font-size: .8rem; }
+    #admin-tabs { gap: 1.1rem; }
+    .tab-btn { font-size: .82rem; }
+    #app-main { padding-top: 1.15rem; padding-bottom: 1.15rem; }
+
+    #pwa-install-banner { padding-left: .5rem; padding-right: .5rem; }
+    #pwa-install-banner > div {
+      gap: .5rem;
+      padding-left: .75rem;
+      padding-right: .75rem;
+    }
+    #pwa-install-banner .icon-chip { width: 2.2rem; height: 2.2rem; font-size: 1.05rem; }
+    #pwa-install-banner p.font-bold { font-size: .78rem; }
+    #pwa-install-banner p.muted { font-size: .68rem; }
+    #pwa-install-btn { padding-left: .6rem; padding-right: .6rem; font-size: .72rem; }
+    #pwa-dismiss-btn { width: 1.75rem; height: 1.75rem; }
+  }
+
   .tab-btn {
     color: var(--muted);
     position: relative;
     font-weight: 500;
     transition: color .2s ease;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   .tab-btn:hover { color: var(--text); }
   .tab-btn.active { color: var(--text); font-weight: 700; }
-  #admin-tabs { position: relative; }
+  #admin-tabs {
+    position: relative;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  #admin-tabs::-webkit-scrollbar { display: none; }
   .tab-indicator {
     position: absolute;
     bottom: -1px;
