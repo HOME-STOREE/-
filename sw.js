@@ -1,8 +1,10 @@
-const CACHE_NAME = "gateway-cache-v2"; // 🔴 غيّر الرقم (v2, v3, ...) كل ما تعمل تحديث مهم مستقبلاً
+const CACHE_NAME = "gateway-cache-v3"; // 🔴 غيّر الرقم (v3, v4, ...) كل ما تعمل تحديث مهم مستقبلاً
 const STATIC_ASSETS = [
   "./manifest.json",
   "./icon-192.png",
-  "./icon-512.png"
+  "./icon-512.png",
+  "./icon-512-maskable.png",
+  "./apple-touch-icon.png"
 ];
 
 self.addEventListener("install", (event) => {
