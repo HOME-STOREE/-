@@ -1,0 +1,2199 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>تلاوات — نظام إدارة وتنظيم قراء وتلاوات المساجد</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+
+tailwind.config = {
+    theme: {
+    extend: {
+      colors: {
+        ink: { DEFAULT: '#7A5C4F', soft: '#968374' },   // النصوص والعناوين
+        line: '#75685A',                                 // الحدود والعناصر الداكنة
+        page: { DEFAULT: '#F1EFE9', alt: '#DFDFDF' },    // خلفية الصفحة
+        card: '#FDFDFD',                                 // خلفية البطاقات
+        cardline: '#EFECE6',                             // حدود البطاقات
+        hover: '#FAF9F6',                                // التمرير / التمييز الخفيف
+        ok: '#4F7A56',
+        warn: '#B7791F',
+        bad: '#A4483F',
+      },
+      fontFamily: {
+        sans: ['Cairo', 'Tajawal', '"IBM Plex Sans Arabic"', 'system-ui', 'sans-serif'],
+      },
+      keyframes: {
+        drawerIn: { '0%': { transform: 'translateX(-28px)', opacity: 0 }, '100%': { transform: 'translateX(0)', opacity: 1 } },
+        popIn: { '0%': { transform: 'scale(.97)', opacity: 0 }, '100%': { transform: 'scale(1)', opacity: 1 } },
+        toastIn: { '0%': { transform: 'translateY(8px)', opacity: 0 }, '100%': { transform: 'translateY(0)', opacity: 1 } },
+      },
+      animation: {
+        drawer: 'drawerIn .22s ease-out',
+        pop: 'popIn .16s ease-out',
+        toast: 'toastIn .2s ease-out',
+      },
+    },
+  },
+  plugins: [],
+}
+
+</script>
+<style type="text/tailwindcss">
+
+@layer base {
+  html { font-family: 'Cairo', 'Tajawal', 'IBM Plex Sans Arabic', system-ui, sans-serif; }
+  body { @apply bg-page text-ink antialiased; }
+  h1, h2, h3, h4 { @apply text-ink font-bold; }
+  :focus-visible { outline: 2px solid #75685A; outline-offset: 2px; }
+  ::selection { background: #DFD3C6; }
+}
+
+@layer components {
+  .card { @apply bg-card border border-cardline rounded-2xl; }
+  .card-pad { @apply p-4 sm:p-5; }
+
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed select-none; }
+  .btn-primary { @apply btn bg-line text-white hover:bg-ink; }
+  .btn-outline { @apply btn border border-line/50 text-ink bg-card hover:bg-hover; }
+  .btn-ghost { @apply btn text-ink hover:bg-hover; }
+  .btn-danger { @apply btn bg-bad text-white hover:opacity-90; }
+  .btn-sm { @apply px-3 py-1.5 text-xs; }
+
+  .input { @apply w-full rounded-xl border border-cardline bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-soft/70 focus:border-line focus:ring-0 outline-none transition-colors disabled:bg-hover disabled:text-ink-soft; }
+  .label { @apply block text-xs font-semibold text-ink mb-1.5; }
+
+  .badge { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold border; }
+  .badge-neutral { @apply badge bg-hover text-ink border-cardline; }
+  .badge-brand { @apply badge bg-line text-white border-line; }
+  .badge-ok { @apply badge bg-ok/10 text-ok border-ok/25; }
+  .badge-warn { @apply badge bg-warn/10 text-warn border-warn/30; }
+  .badge-bad { @apply badge bg-bad/10 text-bad border-bad/25; }
+
+  .th { @apply px-3 py-2.5 text-start text-xs font-bold text-ink-soft bg-hover border-b border-cardline whitespace-nowrap; }
+  .td { @apply px-3 py-2.5 text-sm text-ink border-b border-cardline align-middle; }
+  .tr-hover { @apply hover:bg-hover transition-colors; }
+}
+
+
+</style>
+<style>
+.print-only { display: none; }
+
+@page { size: A4; margin: 14mm; }
+
+@media print {
+  html, body { background: #fff !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  .print-flat { padding: 0 !important; margin: 0 !important; }
+  .print-card { break-inside: avoid; box-shadow: none !important; }
+  tr { break-inside: avoid; }
+}
+
+</style>
+<script>
+/* يمكنك وضع بيانات الاتصال هنا مباشرة بدل شاشة الإعداد:
+   window.TILAWAT_CONFIG = { url: 'https://xxxx.supabase.co', key: 'ANON_PUBLIC_KEY' } */
+</script>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(function(){
+var React = window.React;
+var ext = { 'react': React, 'react-dom': window.ReactDOM, 'react-dom/client': window.ReactDOM };
+var defs = {}, cache = {};
+function require(id){
+  if (ext[id]) return ext[id];
+  if (cache[id]) return cache[id].exports;
+  var d = defs[id]; if (!d) throw new Error('module not found: ' + id);
+  var m = cache[id] = { exports: {} };
+  d(m.exports, require, m, React);
+  return m.exports;
+}
+defs["src/App.jsx"] = function(exports, require, module, React){
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = App;
+const react_router_dom_1 = require("react-router-dom");
+const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
+const DataContext_jsx_1 = require("src/context/DataContext.jsx");
+const Layout_jsx_1 = __importDefault(require("src/components/Layout.jsx"));
+const ui_jsx_1 = require("src/components/ui.jsx");
+const supabase_js_1 = require("src/lib/supabase.js");
+const react_1 = require("react");
+const Login_jsx_1 = __importDefault(require("src/pages/Login.jsx"));
+const Dashboard_jsx_1 = __importDefault(require("src/pages/Dashboard.jsx"));
+const Mosques_jsx_1 = __importDefault(require("src/pages/Mosques.jsx"));
+const Users_jsx_1 = __importDefault(require("src/pages/Users.jsx"));
+const DailyLog_jsx_1 = __importDefault(require("src/pages/DailyLog.jsx"));
+const Analytics_jsx_1 = __importDefault(require("src/pages/Analytics.jsx"));
+const Reciters_jsx_1 = __importDefault(require("src/pages/Reciters.jsx"));
+function Setup() {
+    const [url, setUrl] = (0, react_1.useState)('');
+    const [key, setKey] = (0, react_1.useState)('');
+    const ok = /^https?:\/\/.+/.test(url.trim()) && key.trim().length > 20;
+    return (React.createElement("div", { className: "flex min-h-screen items-center justify-center bg-page p-4" },
+        React.createElement("div", { className: "card card-pad w-full max-w-lg space-y-4" },
+            React.createElement("div", null,
+                React.createElement("h1", { className: "text-xl font-extrabold" }, "\u0631\u0628\u0637 \u0627\u0644\u0646\u0638\u0627\u0645 \u0628\u0640 Supabase"),
+                React.createElement("p", { className: "mt-1 text-sm leading-7 text-ink-soft" }, "\u0623\u062F\u062E\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0645\u0634\u0631\u0648\u0639\u0643 \u0645\u0646 Supabase \u2190 Settings \u2190 API. \u062A\u064F\u062D\u0641\u0638 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u0641\u0642\u0637.")),
+            React.createElement("div", null,
+                React.createElement("label", { className: "label" }, "Project URL"),
+                React.createElement("input", { className: "input", dir: "ltr", placeholder: "https://xxxx.supabase.co", value: url, onChange: (e) => setUrl(e.target.value) })),
+            React.createElement("div", null,
+                React.createElement("label", { className: "label" }, "anon public key"),
+                React.createElement("input", { className: "input", dir: "ltr", placeholder: "eyJ...", value: key, onChange: (e) => setKey(e.target.value) })),
+            React.createElement("button", { className: "btn-primary w-full", disabled: !ok, onClick: () => (0, supabase_js_1.saveConfig)(url, key) }, "\u062D\u0641\u0638 \u0648\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629"),
+            React.createElement("details", { className: "rounded-xl border border-cardline bg-hover p-3 text-sm leading-7" },
+                React.createElement("summary", { className: "cursor-pointer font-bold" }, "\u062E\u0637\u0648\u0627\u062A \u062A\u062C\u0647\u064A\u0632 \u0642\u0627\u0639\u062F\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A (\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629)"),
+                React.createElement("ol", { className: "mt-2 list-decimal space-y-1 ps-5" },
+                    React.createElement("li", null, "\u0623\u0646\u0634\u0626 \u0645\u0634\u0631\u0648\u0639\u0627\u064B \u0641\u064A supabase.com."),
+                    React.createElement("li", null,
+                        "\u0645\u0646 SQL Editor \u0646\u0641\u0651\u0630 \u0645\u0644\u0641 ",
+                        React.createElement("b", { dir: "ltr" }, "schema.sql"),
+                        " \u062B\u0645 ",
+                        React.createElement("b", { dir: "ltr" }, "seed.sql"),
+                        "."),
+                    React.createElement("li", null, "\u0645\u0646 Authentication \u2190 Users \u0623\u0636\u0641 \u0645\u0633\u062A\u062E\u062F\u0645\u0627\u064B\u060C \u062B\u0645 \u0627\u062C\u0639\u0644\u0647 \u0645\u062F\u064A\u0631\u0627\u064B \u0628\u062A\u0646\u0641\u064A\u0630 \u0627\u0644\u0627\u0633\u062A\u0639\u0644\u0627\u0645 \u0627\u0644\u0645\u0630\u0643\u0648\u0631 \u0641\u064A README."),
+                    React.createElement("li", null,
+                        "\u0627\u0646\u0634\u0631 \u062F\u0627\u0644\u0629 ",
+                        React.createElement("b", { dir: "ltr" }, "admin-users"),
+                        " \u0644\u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0645\u0634\u0631\u0641\u064A\u0646 \u0645\u0646 \u062F\u0627\u062E\u0644 \u0627\u0644\u0646\u0638\u0627\u0645."))))));
+}
+function Blocked({ title, message }) {
+    const { signOut } = (0, AuthContext_jsx_1.useAuth)();
+    return (React.createElement("div", { className: "flex min-h-screen items-center justify-center bg-page p-4" },
+        React.createElement("div", { className: "card card-pad max-w-md text-center" },
+            React.createElement("h1", { className: "text-xl font-extrabold" }, title),
+            React.createElement("p", { className: "mt-2 text-sm leading-7 text-ink-soft" }, message),
+            React.createElement("button", { className: "btn-primary mt-5", onClick: signOut }, "\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062E\u0631\u0648\u062C"))));
+}
+function AdminOnly({ children }) {
+    const { isAdmin } = (0, AuthContext_jsx_1.useAuth)();
+    return isAdmin ? children : React.createElement(react_router_dom_1.Navigate, { to: "/", replace: true });
+}
+function App() {
+    const { session, profile, loading } = (0, AuthContext_jsx_1.useAuth)();
+    if (!supabase_js_1.isConfigured)
+        return React.createElement(Setup, null);
+    if (loading)
+        return React.createElement(ui_jsx_1.FullPageLoader, null);
+    if (!session)
+        return React.createElement(Login_jsx_1.default, null);
+    if (!profile)
+        return React.createElement(Blocked, { title: "\u062D\u0633\u0627\u0628\u0643 \u063A\u064A\u0631 \u0645\u0631\u062A\u0628\u0637 \u0628\u0639\u062F", message: "\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u062F\u062E\u0648\u0644\u0643\u060C \u0644\u0643\u0646 \u0644\u0627 \u064A\u0648\u062C\u062F \u0645\u0644\u0641 \u0645\u0633\u062A\u062E\u062F\u0645 \u0645\u0631\u062A\u0628\u0637 \u0628\u062D\u0633\u0627\u0628\u0643. \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u0625\u0636\u0627\u0641\u062A\u0643." });
+    if (!profile.is_active)
+        return React.createElement(Blocked, { title: "\u0627\u0644\u062D\u0633\u0627\u0628 \u0645\u0639\u0637\u0651\u0644", message: "\u062A\u0645 \u062A\u0639\u0637\u064A\u0644 \u062D\u0633\u0627\u0628\u0643. \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u0625\u0639\u0627\u062F\u0629 \u062A\u0641\u0639\u064A\u0644\u0647." });
+    return (React.createElement(DataContext_jsx_1.DataProvider, null,
+        React.createElement(react_router_dom_1.Routes, null,
+            React.createElement(react_router_dom_1.Route, { element: React.createElement(Layout_jsx_1.default, null) },
+                React.createElement(react_router_dom_1.Route, { index: true, element: React.createElement(Dashboard_jsx_1.default, null) }),
+                React.createElement(react_router_dom_1.Route, { path: "mosques", element: React.createElement(AdminOnly, null,
+                        React.createElement(Mosques_jsx_1.default, null)) }),
+                React.createElement(react_router_dom_1.Route, { path: "users", element: React.createElement(AdminOnly, null,
+                        React.createElement(Users_jsx_1.default, null)) }),
+                React.createElement(react_router_dom_1.Route, { path: "log", element: React.createElement(DailyLog_jsx_1.default, null) }),
+                React.createElement(react_router_dom_1.Route, { path: "analytics", element: React.createElement(Analytics_jsx_1.default, null) }),
+                React.createElement(react_router_dom_1.Route, { path: "reciters", element: React.createElement(Reciters_jsx_1.default, null) }),
+                React.createElement(react_router_dom_1.Route, { path: "*", element: React.createElement(react_router_dom_1.Navigate, { to: "/", replace: true }) })))));
+}
+
+};
+defs["src/components/Layout.jsx"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = Layout;
+const react_1 = require("react");
+const react_router_dom_1 = require("react-router-dom");
+const lucide_react_1 = require("lucide-react");
+const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
+const DataContext_jsx_1 = require("src/context/DataContext.jsx");
+const constants_js_1 = require("src/lib/constants.js");
+const ui_jsx_1 = require("src/components/ui.jsx");
+const NAV = [
+    { to: '/', label: 'لوحة التحكم', icon: lucide_react_1.LayoutDashboard, end: true },
+    { to: '/mosques', label: 'إدارة المساجد', icon: lucide_react_1.Building2, admin: true },
+    { to: '/users', label: 'المستخدمون والربط', icon: lucide_react_1.Users, admin: true },
+    { to: '/log', label: 'التسجيل اليومي', icon: lucide_react_1.ClipboardList },
+    { to: '/analytics', label: 'الإحصائيات والتقارير', icon: lucide_react_1.BarChart3 },
+    { to: '/reciters', label: 'دليل القراء', icon: lucide_react_1.UserRound },
+];
+function Logo() {
+    return (React.createElement("div", { className: "flex items-center gap-3" },
+        React.createElement("span", { className: "grid h-10 w-10 place-items-center rounded-xl bg-line text-white" },
+            React.createElement(lucide_react_1.BookOpen, { className: "h-5 w-5" })),
+        React.createElement("div", { className: "leading-tight" },
+            React.createElement("p", { className: "text-xl font-extrabold text-ink" }, "\u062A\u0644\u0627\u0648\u0627\u062A"),
+            React.createElement("p", { className: "text-[11px] font-semibold text-ink-soft" }, "\u0625\u062F\u0627\u0631\u0629 \u0642\u0631\u0627\u0621 \u0627\u0644\u0645\u0633\u0627\u062C\u062F"))));
+}
+function Layout() {
+    const { profile, signOut, isAdmin } = (0, AuthContext_jsx_1.useAuth)();
+    const { sync, ready, loadError, refresh, mosqueById } = (0, DataContext_jsx_1.useData)();
+    const [open, setOpen] = (0, react_1.useState)(false);
+    const loc = (0, react_router_dom_1.useLocation)();
+    const items = NAV.filter((n) => !n.admin || isAdmin);
+    const mosque = profile?.mosque_id ? mosqueById[profile.mosque_id] : null;
+    const sidebar = (React.createElement("div", { className: "flex h-full flex-col" },
+        React.createElement("div", { className: "border-b border-cardline px-5 py-5" },
+            React.createElement(Logo, null)),
+        React.createElement("nav", { className: "flex-1 space-y-1 overflow-y-auto p-3" }, items.map(({ to, label, icon: Icon, end }) => (React.createElement(react_router_dom_1.NavLink, { key: to, to: to, end: end, onClick: () => setOpen(false), className: ({ isActive }) => `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-colors ${isActive ? 'bg-line text-white' : 'text-ink hover:bg-hover'}` },
+            React.createElement(Icon, { className: "h-[18px] w-[18px]" }),
+            label)))),
+        React.createElement("div", { className: "border-t border-cardline p-4" },
+            React.createElement("p", { className: "truncate text-sm font-bold" }, profile?.full_name),
+            React.createElement("p", { className: "mt-0.5 truncate text-xs text-ink-soft" },
+                constants_js_1.ROLES[profile?.role],
+                mosque ? ` — ${mosque.name}` : ''),
+            React.createElement("button", { onClick: signOut, className: "btn-outline btn-sm mt-3 w-full" },
+                React.createElement(lucide_react_1.LogOut, { className: "h-4 w-4" }),
+                " \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062E\u0631\u0648\u062C"))));
+    return (React.createElement("div", { className: "min-h-screen bg-page lg:flex" },
+        React.createElement("aside", { className: "no-print sticky top-0 hidden h-screen w-64 shrink-0 border-e border-cardline bg-card lg:block" }, sidebar),
+        open && (React.createElement("div", { className: "no-print fixed inset-0 z-40 lg:hidden" },
+            React.createElement("div", { className: "absolute inset-0 bg-ink/30", onClick: () => setOpen(false) }),
+            React.createElement("aside", { className: "animate-drawer absolute inset-y-0 start-0 w-72 max-w-[85%] bg-card shadow-2xl" },
+                React.createElement("button", { className: "absolute end-3 top-4 text-ink-soft", onClick: () => setOpen(false), "aria-label": "\u0625\u063A\u0644\u0627\u0642 \u0627\u0644\u0642\u0627\u0626\u0645\u0629" },
+                    React.createElement(lucide_react_1.X, { className: "h-5 w-5" })),
+                sidebar))),
+        React.createElement("div", { className: "min-w-0 flex-1" },
+            React.createElement("header", { className: "no-print sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-cardline bg-page/90 px-4 py-3 backdrop-blur sm:px-6" },
+                React.createElement("button", { className: "btn-outline btn-sm lg:hidden", onClick: () => setOpen(true), "aria-label": "\u0641\u062A\u062D \u0627\u0644\u0642\u0627\u0626\u0645\u0629" },
+                    React.createElement(lucide_react_1.Menu, { className: "h-4 w-4" })),
+                React.createElement("div", { className: "hidden lg:block" }),
+                React.createElement(ui_jsx_1.SyncBadge, { status: sync })),
+            React.createElement("main", { key: loc.pathname, className: "print-flat mx-auto max-w-7xl p-4 sm:p-6" }, loadError ? (React.createElement("div", { className: "card card-pad text-center" },
+                React.createElement("p", { className: "font-bold text-bad" }, "\u062A\u0639\u0630\u0651\u0631 \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A"),
+                React.createElement("p", { className: "mt-1 text-sm text-ink-soft" }, loadError),
+                React.createElement("button", { className: "btn-primary mt-4", onClick: refresh }, "\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629"))) : !ready ? (React.createElement("div", { className: "flex items-center justify-center gap-3 py-24 text-sm font-semibold" },
+                React.createElement(ui_jsx_1.Spinner, null),
+                " \u062C\u0627\u0631\u064D \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A\u2026")) : (React.createElement(react_router_dom_1.Outlet, null))))));
+}
+
+};
+defs["src/components/ReciterCombobox.jsx"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = ReciterCombobox;
+const react_1 = require("react");
+const lucide_react_1 = require("lucide-react");
+const util_js_1 = require("src/lib/util.js");
+/**
+ * صندوق القارئ الذكي
+ * approved: قراء الخانة المعتمدون  |  others: بقية القراء المسجلين
+ * onPick(item): item = { id, name, approved, kind }
+ * onEdit(): يُستدعى عند تعديل النص بعد اختيار سابق (لإلغاء الاختيار)
+ */
+function ReciterCombobox({ approved, others, initial = '', onPick, onEdit, placeholder = 'ابحث أو اكتب اسم القارئ…', disabled }) {
+    const [open, setOpen] = (0, react_1.useState)(false);
+    const [q, setQ] = (0, react_1.useState)(initial);
+    const [hi, setHi] = (0, react_1.useState)(0);
+    const box = (0, react_1.useRef)(null);
+    (0, react_1.useEffect)(() => {
+        const close = (e) => box.current && !box.current.contains(e.target) && setOpen(false);
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, []);
+    const items = (0, react_1.useMemo)(() => {
+        const t = q.trim();
+        const a = approved.filter((r) => !t || (0, util_js_1.matchesQuery)(r.name, t)).map((r) => ({ id: r.id, name: r.name, approved: true, kind: 'approved' }));
+        const o = (t ? others.filter((r) => (0, util_js_1.matchesQuery)(r.name, t)).slice(0, 8) : []).map((r) => ({ id: r.id, name: r.name, approved: false, kind: 'other' }));
+        const exact = [...approved, ...others].some((r) => (0, util_js_1.normalizeAr)(r.name) === (0, util_js_1.normalizeAr)(t));
+        const manual = t && !exact ? [{ id: null, name: t, approved: false, kind: 'manual' }] : [];
+        return [...a, ...o, ...manual];
+    }, [approved, others, q]);
+    (0, react_1.useEffect)(() => setHi(0), [q, open]);
+    const pick = (item) => {
+        setQ(item.name);
+        setOpen(false);
+        onPick(item);
+    };
+    const onKeyDown = (e) => {
+        if (!open && (e.key === 'ArrowDown' || e.key === 'Enter'))
+            return setOpen(true);
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHi((h) => Math.min(h + 1, items.length - 1));
+        }
+        else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHi((h) => Math.max(h - 1, 0));
+        }
+        else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (items[hi])
+                pick(items[hi]);
+        }
+        else if (e.key === 'Escape')
+            setOpen(false);
+    };
+    const heading = (kind) => kind === 'approved' ? `القراء المعتمدون لهذه الخانة (${approved.length})`
+        : kind === 'other' ? 'قراء آخرون (غير معتمدين لهذه الخانة)'
+            : 'إدخال يدوي';
+    return (React.createElement("div", { ref: box, className: "relative" },
+        React.createElement("div", { className: "relative" },
+            React.createElement(lucide_react_1.Search, { className: "pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" }),
+            React.createElement("input", { className: "input ps-9 pe-9", value: q, disabled: disabled, placeholder: placeholder, role: "combobox", "aria-expanded": open, "aria-autocomplete": "list", onFocus: () => setOpen(true), onChange: (e) => { setQ(e.target.value); setOpen(true); onEdit?.(); }, onKeyDown: onKeyDown }),
+            React.createElement(lucide_react_1.ChevronDown, { className: "pointer-events-none absolute end-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" })),
+        open && (React.createElement("ul", { className: "absolute z-30 mt-1.5 max-h-72 w-full overflow-y-auto rounded-xl border border-cardline bg-card py-1 shadow-xl", role: "listbox" },
+            items.length === 0 && React.createElement("li", { className: "px-3 py-3 text-sm text-ink-soft" }, "\u0644\u0627 \u062A\u0648\u062C\u062F \u0646\u062A\u0627\u0626\u062C \u2014 \u0627\u0643\u062A\u0628 \u0627\u0644\u0627\u0633\u0645 \u0644\u0625\u062F\u062E\u0627\u0644\u0647 \u064A\u062F\u0648\u064A\u0627\u064B."),
+            items.map((it, i) => (React.createElement("li", { key: `${it.kind}-${it.id ?? it.name}` },
+                (i === 0 || items[i - 1].kind !== it.kind) && (React.createElement("div", { className: "bg-hover px-3 py-1.5 text-[11px] font-bold text-ink-soft" }, heading(it.kind))),
+                React.createElement("button", { type: "button", role: "option", "aria-selected": hi === i, onMouseEnter: () => setHi(i), onClick: () => pick(it), className: `flex w-full items-center justify-between gap-2 px-3 py-2 text-start text-sm ${hi === i ? 'bg-hover' : ''}` },
+                    React.createElement("span", { className: "flex items-center gap-2" },
+                        it.kind === 'manual' && React.createElement(lucide_react_1.UserPlus, { className: "h-4 w-4 text-warn" }),
+                        it.kind === 'manual' ? React.createElement(React.Fragment, null,
+                            "\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u00AB",
+                            it.name,
+                            "\u00BB \u0643\u0627\u0633\u0645 \u064A\u062F\u0648\u064A") : it.name),
+                    it.kind === 'approved' && React.createElement("span", { className: "badge-ok" }, "\u0645\u0639\u062A\u0645\u062F"),
+                    it.kind === 'other' && React.createElement("span", { className: "badge-warn" }, "\u062E\u0627\u0631\u062C \u0627\u0644\u062C\u062F\u0648\u0644")))))))));
+}
+
+};
+defs["src/components/ReciterHistoryModal.jsx"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = ReciterHistoryModal;
+const react_1 = require("react");
+const ui_jsx_1 = require("src/components/ui.jsx");
+const DataContext_jsx_1 = require("src/context/DataContext.jsx");
+const constants_js_1 = require("src/lib/constants.js");
+const util_js_1 = require("src/lib/util.js");
+/** سجل تتبّع كامل لقارئ: التاريخ، المسجد، الخانة، السورة، الملاحظات */
+function ReciterHistoryModal({ open, onClose, reciterKeyValue, name, periodFrom = '', periodTo = '' }) {
+    const { recitation_logs, mosqueById } = (0, DataContext_jsx_1.useData)();
+    const rows = (0, react_1.useMemo)(() => (open ? recitation_logs.filter((l) => l.status === 'read' && (0, util_js_1.reciterKey)(l) === reciterKeyValue) : []), [open, recitation_logs, reciterKeyValue]);
+    const inPeriod = rows.filter((l) => (!periodFrom || l.log_date >= periodFrom) && (!periodTo || l.log_date <= periodTo)).length;
+    const pages = rows.reduce((s, l) => s + (l.pages || 0), 0);
+    return (React.createElement(ui_jsx_1.Modal, { open: open, onClose: onClose, title: `سجل تلاوات: ${name}`, size: "xl" },
+        React.createElement("div", { className: "mb-4 flex flex-wrap gap-2" },
+            React.createElement("span", { className: "badge-brand" },
+                "\u0627\u0644\u0625\u062C\u0645\u0627\u0644\u064A: ",
+                rows.length,
+                " \u062A\u0644\u0627\u0648\u0629"),
+            React.createElement("span", { className: "badge-neutral" },
+                "\u0636\u0645\u0646 \u0627\u0644\u0641\u062A\u0631\u0629 \u0627\u0644\u0645\u062D\u062F\u062F\u0629: ",
+                inPeriod),
+            pages > 0 && React.createElement("span", { className: "badge-neutral" },
+                "\u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0645\u0642\u0631\u0648\u0621\u0629: ",
+                pages),
+            React.createElement("span", { className: "badge-warn" },
+                "\u0627\u0633\u062A\u062B\u0646\u0627\u0621\u0627\u062A: ",
+                rows.filter((r) => r.is_exception).length)),
+        rows.length === 0 ? (React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062A\u0644\u0627\u0648\u0627\u062A \u0645\u0633\u062C\u0644\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u0642\u0627\u0631\u0626" })) : (React.createElement("div", { className: "overflow-x-auto rounded-xl border border-cardline" },
+            React.createElement("table", { className: "w-full min-w-[640px]" },
+                React.createElement("thead", null,
+                    React.createElement("tr", null,
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u062A\u0627\u0631\u064A\u062E"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u0645\u0633\u062C\u062F"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u062E\u0627\u0646\u0629"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u0633\u0648\u0631\u0629"),
+                        React.createElement("th", { className: "th" }, "\u0645\u0644\u0627\u062D\u0638\u0627\u062A"))),
+                React.createElement("tbody", null, rows.map((l) => (React.createElement("tr", { key: l.id, className: "tr-hover" },
+                    React.createElement("td", { className: "td whitespace-nowrap" },
+                        (0, util_js_1.fmtDate)(l.log_date),
+                        l.hijri_day && React.createElement("div", { className: "text-xs text-ink-soft" },
+                            l.hijri_day,
+                            " ",
+                            constants_js_1.HIJRI_MONTHS[(l.hijri_month || 1) - 1],
+                            " ",
+                            l.hijri_year)),
+                    React.createElement("td", { className: "td" }, mosqueById[l.mosque_id]?.name ?? '—'),
+                    React.createElement("td", { className: "td whitespace-nowrap" },
+                        constants_js_1.SLOTS[l.slot_key]?.short,
+                        l.is_exception && React.createElement("span", { className: "badge-warn ms-2" }, "\u0627\u0633\u062A\u062B\u0646\u0627\u0621")),
+                    React.createElement("td", { className: "td" }, l.surah || '—'),
+                    React.createElement("td", { className: "td" }, l.notes || '—'))))))))));
+}
+
+};
+defs["src/components/ui.jsx"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.PageHeader = PageHeader;
+exports.Spinner = Spinner;
+exports.FullPageLoader = FullPageLoader;
+exports.EmptyState = EmptyState;
+exports.Field = Field;
+exports.Segmented = Segmented;
+exports.Switch = Switch;
+exports.Modal = Modal;
+exports.ConfirmDialog = ConfirmDialog;
+exports.SyncBadge = SyncBadge;
+exports.StatCard = StatCard;
+exports.Bar = Bar;
+const react_1 = require("react");
+const react_dom_1 = require("react-dom");
+const lucide_react_1 = require("lucide-react");
+function PageHeader({ title, subtitle, actions }) {
+    return (React.createElement("div", { className: "no-print mb-5 flex flex-wrap items-end justify-between gap-3" },
+        React.createElement("div", null,
+            React.createElement("h1", { className: "text-2xl font-extrabold" }, title),
+            subtitle && React.createElement("p", { className: "mt-1 text-sm text-ink-soft" }, subtitle)),
+        actions && React.createElement("div", { className: "flex flex-wrap items-center gap-2" }, actions)));
+}
+function Spinner({ className = '' }) {
+    return React.createElement(lucide_react_1.Loader2, { className: `h-5 w-5 animate-spin text-line ${className}` });
+}
+function FullPageLoader({ label = 'جارٍ التحميل…' }) {
+    return (React.createElement("div", { className: "flex min-h-screen items-center justify-center bg-page" },
+        React.createElement("div", { className: "flex items-center gap-3 text-ink" },
+            React.createElement(Spinner, null),
+            " ",
+            React.createElement("span", { className: "text-sm font-semibold" }, label))));
+}
+function EmptyState({ title, hint, action }) {
+    return (React.createElement("div", { className: "flex flex-col items-center gap-2 px-4 py-10 text-center" },
+        React.createElement(lucide_react_1.Inbox, { className: "h-9 w-9 text-ink-soft" }),
+        React.createElement("p", { className: "font-bold" }, title),
+        hint && React.createElement("p", { className: "max-w-sm text-sm text-ink-soft" }, hint),
+        action));
+}
+function Field({ label, hint, children, className = '' }) {
+    return (React.createElement("div", { className: className },
+        label && React.createElement("label", { className: "label" }, label),
+        children,
+        hint && React.createElement("p", { className: "mt-1 text-xs text-ink-soft" }, hint)));
+}
+function Segmented({ options, value, onChange, className = '' }) {
+    return (React.createElement("div", { className: `inline-flex rounded-xl border border-cardline bg-hover p-1 ${className}`, role: "tablist" }, options.map((o) => (React.createElement("button", { key: o.value, type: "button", role: "tab", "aria-selected": value === o.value, onClick: () => onChange(o.value), className: `rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-colors ${value === o.value ? 'bg-line text-white shadow-sm' : 'text-ink hover:bg-white'}` }, o.label)))));
+}
+function Switch({ checked, onChange, label }) {
+    return (React.createElement("button", { type: "button", role: "switch", "aria-checked": checked, onClick: () => onChange(!checked), className: "flex items-center gap-2 text-sm font-semibold text-ink" },
+        React.createElement("span", { className: `relative h-6 w-11 rounded-full transition-colors ${checked ? 'bg-line' : 'bg-page-alt'}` },
+            React.createElement("span", { className: `absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${checked ? 'end-0.5' : 'end-[1.375rem]'}` })),
+        label));
+}
+function Modal({ open, onClose, title, children, footer, size = 'md', drawer = false }) {
+    (0, react_1.useEffect)(() => {
+        if (!open)
+            return undefined;
+        const onKey = (e) => e.key === 'Escape' && onClose?.();
+        document.addEventListener('keydown', onKey);
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.removeEventListener('keydown', onKey);
+            document.body.style.overflow = prev;
+        };
+    }, [open, onClose]);
+    if (!open)
+        return null;
+    const widths = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl' };
+    return (0, react_dom_1.createPortal)(React.createElement("div", { className: "no-print fixed inset-0 z-50", role: "dialog", "aria-modal": "true", "aria-label": title, dir: "rtl" },
+        React.createElement("div", { className: "absolute inset-0 bg-ink/30 backdrop-blur-[1px]", onClick: onClose }),
+        React.createElement("div", { className: drawer
+                ? 'animate-drawer absolute inset-y-0 end-0 flex w-full max-w-md flex-col border-s border-cardline bg-card shadow-2xl'
+                : `animate-pop absolute left-1/2 top-1/2 flex max-h-[90vh] w-[calc(100%-1.5rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border border-cardline bg-card shadow-2xl ${widths[size]}` },
+            React.createElement("div", { className: "flex items-center justify-between gap-3 border-b border-cardline px-5 py-4" },
+                React.createElement("h2", { className: "text-lg font-extrabold" }, title),
+                React.createElement("button", { onClick: onClose, className: "rounded-lg p-1 text-ink-soft hover:bg-hover hover:text-ink", "aria-label": "\u0625\u063A\u0644\u0627\u0642" },
+                    React.createElement(lucide_react_1.X, { className: "h-5 w-5" }))),
+            React.createElement("div", { className: "flex-1 overflow-y-auto px-5 py-4" }, children),
+            footer && React.createElement("div", { className: "flex flex-wrap justify-end gap-2 border-t border-cardline bg-hover/60 px-5 py-3.5" }, footer))), document.body);
+}
+function ConfirmDialog({ open, title, message, confirmLabel = 'تأكيد', danger, onConfirm, onClose, busy }) {
+    return (React.createElement(Modal, { open: open, onClose: onClose, title: title, size: "sm", footer: React.createElement(React.Fragment, null,
+            React.createElement("button", { className: "btn-outline", onClick: onClose }, "\u0625\u0644\u063A\u0627\u0621"),
+            React.createElement("button", { className: danger ? 'btn-danger' : 'btn-primary', onClick: onConfirm, disabled: busy },
+                busy && React.createElement(Spinner, { className: "!text-white h-4 w-4" }),
+                " ",
+                confirmLabel)) },
+        React.createElement("p", { className: "text-sm leading-7" }, message)));
+}
+function SyncBadge({ status }) {
+    const map = {
+        live: { cls: 'text-ok', label: 'مزامنة لحظية نشطة', dot: 'bg-ok animate-pulse', Icon: lucide_react_1.Wifi },
+        connecting: { cls: 'text-warn', label: 'جارٍ الاتصال…', dot: 'bg-warn animate-pulse', Icon: lucide_react_1.Wifi },
+        offline: { cls: 'text-bad', label: 'غير متصل — إعادة المحاولة', dot: 'bg-bad', Icon: lucide_react_1.WifiOff },
+    };
+    const s = map[status] || map.connecting;
+    return (React.createElement("span", { className: `inline-flex items-center gap-2 rounded-full border border-cardline bg-card px-3 py-1 text-xs font-semibold ${s.cls}`, title: "\u062D\u0627\u0644\u0629 \u0627\u0644\u0645\u0632\u0627\u0645\u0646\u0629 \u0645\u0639 \u0627\u0644\u062E\u0627\u062F\u0645" },
+        React.createElement("span", { className: `h-2 w-2 rounded-full ${s.dot}` }),
+        React.createElement(s.Icon, { className: "h-3.5 w-3.5" }),
+        s.label));
+}
+function StatCard({ label, value, hint, tone }) {
+    return (React.createElement("div", { className: "card card-pad print-card" },
+        React.createElement("p", { className: "text-xs font-semibold text-ink-soft" }, label),
+        React.createElement("p", { className: `mt-1 text-3xl font-extrabold ${tone === 'bad' ? 'text-bad' : tone === 'warn' ? 'text-warn' : 'text-ink'}` }, value),
+        hint && React.createElement("p", { className: "mt-1 text-xs text-ink-soft" }, hint)));
+}
+function Bar({ value, max, color = '#75685A' }) {
+    const pct = max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
+    return (React.createElement("div", { className: "h-2.5 w-full overflow-hidden rounded-full bg-page" },
+        React.createElement("div", { className: "h-full rounded-full", style: { width: `${value ? pct : 0}%`, background: color } })));
+}
+
+};
+defs["src/context/AuthContext.jsx"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.useAuth = void 0;
+exports.AuthProvider = AuthProvider;
+const react_1 = require("react");
+const supabase_js_1 = require("src/lib/supabase.js");
+const AuthCtx = (0, react_1.createContext)(null);
+const useAuth = () => (0, react_1.useContext)(AuthCtx);
+exports.useAuth = useAuth;
+function AuthProvider({ children }) {
+    const [session, setSession] = (0, react_1.useState)(null);
+    const [profile, setProfile] = (0, react_1.useState)(null);
+    const [loading, setLoading] = (0, react_1.useState)(true);
+    // 1) الجلسة: تُستعاد من التخزين المحلي، وتُتابَع عبر onAuthStateChange
+    (0, react_1.useEffect)(() => {
+        let alive = true;
+        supabase_js_1.supabase.auth.getSession().then(({ data }) => {
+            if (!alive)
+                return;
+            setSession(data.session);
+            if (!data.session)
+                setLoading(false);
+        });
+        // ملاحظة: لا نستدعي Supabase داخل هذه الدالة (تجنباً للتعليق)، فقط نحدّث الحالة
+        const { data: sub } = supabase_js_1.supabase.auth.onAuthStateChange((_event, s) => {
+            setSession(s);
+            if (!s) {
+                setProfile(null);
+                setLoading(false);
+            }
+        });
+        return () => {
+            alive = false;
+            sub.subscription.unsubscribe();
+        };
+    }, []);
+    // 2) الملف الشخصي + مزامنة لحظية لتغييرات صلاحياتي (نطاق المسؤولية، المسجد، التفعيل)
+    const uid = session?.user?.id;
+    (0, react_1.useEffect)(() => {
+        if (!uid)
+            return undefined;
+        let alive = true;
+        setLoading(true);
+        const load = async () => {
+            const { data } = await supabase_js_1.supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
+            if (!alive)
+                return;
+            setProfile(data || null);
+            setLoading(false);
+        };
+        load();
+        const ch = supabase_js_1.supabase
+            .channel(`profile-${uid}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${uid}` }, load)
+            .subscribe();
+        return () => {
+            alive = false;
+            supabase_js_1.supabase.removeChannel(ch);
+        };
+    }, [uid]);
+    const signIn = (0, react_1.useCallback)(async (email, password) => {
+        const { error } = await supabase_js_1.supabase.auth.signInWithPassword({ email: email.trim(), password });
+        return error;
+    }, []);
+    const signOut = (0, react_1.useCallback)(() => supabase_js_1.supabase.auth.signOut(), []);
+    const value = (0, react_1.useMemo)(() => ({ session, profile, loading, signIn, signOut, isAdmin: profile?.role === 'admin' }), [session, profile, loading, signIn, signOut]);
+    return React.createElement(AuthCtx.Provider, { value: value }, children);
+}
+
+};
+defs["src/context/DataContext.jsx"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.useData = void 0;
+exports.DataProvider = DataProvider;
+const react_1 = require("react");
+const supabase_js_1 = require("src/lib/supabase.js");
+const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
+const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
+const util_js_1 = require("src/lib/util.js");
+const constants_js_1 = require("src/lib/constants.js");
+const DataCtx = (0, react_1.createContext)(null);
+const useData = () => (0, react_1.useContext)(DataCtx);
+exports.useData = useData;
+const TABLES = ['mosques', 'reciters', 'reciter_slots', 'profiles', 'recitation_logs'];
+const sorters = {
+    mosques: (a, b) => (0, util_js_1.byArabic)(a.name, b.name),
+    reciters: (a, b) => (0, util_js_1.byArabic)(a.name, b.name),
+    profiles: (a, b) => (0, util_js_1.byArabic)(a.full_name, b.full_name),
+    reciter_slots: () => 0,
+    recitation_logs: (a, b) => b.log_date.localeCompare(a.log_date) || String(b.created_at).localeCompare(String(a.created_at)),
+};
+// Supabase يُرجع 1000 صف كحد أقصى، لذا نقرأ على دفعات
+async function fetchAll(table) {
+    const size = 1000;
+    let from = 0;
+    let out = [];
+    for (;;) {
+        let q = supabase_js_1.supabase.from(table).select('*');
+        if (table === 'recitation_logs')
+            q = q.order('log_date', { ascending: false }).order('id');
+        else
+            q = q.order('id');
+        const { data, error } = await q.range(from, from + size - 1);
+        if (error)
+            throw error;
+        out = out.concat(data);
+        if (data.length < size)
+            break;
+        from += size;
+    }
+    return out.sort(sorters[table]);
+}
+function applyChange(list, table, payload) {
+    if (payload.eventType === 'DELETE')
+        return list.filter((r) => r.id !== payload.old.id);
+    const row = payload.new;
+    const i = list.findIndex((r) => r.id === row.id);
+    const next = i >= 0 ? list.map((r) => (r.id === row.id ? row : r)) : [row, ...list];
+    return next.sort(sorters[table]);
+}
+function DataProvider({ children }) {
+    const { session } = (0, AuthContext_jsx_1.useAuth)();
+    const toast = (0, ToastContext_jsx_1.useToast)();
+    const [data, setData] = (0, react_1.useState)({ mosques: [], reciters: [], reciter_slots: [], profiles: [], recitation_logs: [] });
+    const [ready, setReady] = (0, react_1.useState)(false);
+    const [loadError, setLoadError] = (0, react_1.useState)(null);
+    const [sync, setSync] = (0, react_1.useState)('connecting'); // connecting | live | offline
+    const ref = (0, react_1.useRef)(data);
+    ref.current = data;
+    const uid = session?.user?.id;
+    const refresh = (0, react_1.useCallback)(async () => {
+        try {
+            const results = await Promise.all(TABLES.map(fetchAll));
+            setData(Object.fromEntries(TABLES.map((t, i) => [t, results[i]])));
+            setLoadError(null);
+            setReady(true);
+        }
+        catch (e) {
+            setLoadError(e.message || 'تعذّر تحميل البيانات');
+        }
+    }, []);
+    const upsertLocal = (0, react_1.useCallback)((table, row) => {
+        setData((d) => {
+            const list = d[table];
+            const i = list.findIndex((r) => r.id === row.id);
+            const next = i >= 0 ? list.map((r) => (r.id === row.id ? row : r)) : [row, ...list];
+            return { ...d, [table]: next.sort(sorters[table]) };
+        });
+    }, []);
+    const removeLocal = (0, react_1.useCallback)((table, id) => {
+        setData((d) => ({ ...d, [table]: d[table].filter((r) => r.id !== id) }));
+    }, []);
+    // التحميل الأولي + الاشتراك في القناة اللحظية
+    (0, react_1.useEffect)(() => {
+        if (!uid)
+            return undefined;
+        let wasOffline = false;
+        refresh();
+        let ch = supabase_js_1.supabase.channel(`tilawat-sync-${uid}`);
+        TABLES.forEach((table) => {
+            ch = ch.on('postgres_changes', { event: '*', schema: 'public', table }, (payload) => {
+                setData((d) => ({ ...d, [table]: applyChange(d[table], table, payload) }));
+                // إشعار عند تسجيل مشرف آخر لتلاوة جديدة
+                if (table === 'recitation_logs' && payload.eventType === 'INSERT' && payload.new.created_by !== uid) {
+                    const cur = ref.current;
+                    const m = cur.mosques.find((x) => x.id === payload.new.mosque_id);
+                    const who = cur.profiles.find((p) => p.id === payload.new.created_by);
+                    const what = payload.new.status === 'read' ? payload.new.reciter_name : 'لم تتم القراءة';
+                    toast.info(`تسجيل جديد${who ? ` من ${who.full_name}` : ''}`, `${m?.name ?? ''} — ${constants_js_1.SLOTS[payload.new.slot_key]?.short ?? ''} — ${what}`);
+                }
+            });
+        });
+        ch.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                setSync('live');
+                if (wasOffline)
+                    refresh(); // استرجاع ما فات أثناء الانقطاع
+                wasOffline = false;
+            }
+            else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+                wasOffline = true;
+                setSync('offline');
+            }
+        });
+        return () => {
+            supabase_js_1.supabase.removeChannel(ch);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [uid]);
+    const derived = (0, react_1.useMemo)(() => {
+        const mosqueById = Object.fromEntries(data.mosques.map((m) => [m.id, m]));
+        const reciterById = Object.fromEntries(data.reciters.map((r) => [r.id, r]));
+        const profileById = Object.fromEntries(data.profiles.map((p) => [p.id, p]));
+        const slotsByReciter = {};
+        const approvedBySlot = {};
+        data.reciter_slots.forEach((s) => {
+            var _a, _b;
+            ;
+            (slotsByReciter[_a = s.reciter_id] || (slotsByReciter[_a] = [])).push(s);
+            const r = reciterById[s.reciter_id];
+            if (r && r.is_active)
+                (approvedBySlot[_b = s.slot_key] || (approvedBySlot[_b] = [])).push(r);
+        });
+        Object.values(approvedBySlot).forEach((a) => a.sort((x, y) => (0, util_js_1.byArabic)(x.name, y.name)));
+        return { mosqueById, reciterById, profileById, slotsByReciter, approvedBySlot };
+    }, [data]);
+    const value = (0, react_1.useMemo)(() => ({ ...data, ...derived, ready, loadError, sync, refresh, upsertLocal, removeLocal }), [data, derived, ready, loadError, sync, refresh, upsertLocal, removeLocal]);
+    return React.createElement(DataCtx.Provider, { value: value }, children);
+}
+
+};
+defs["src/context/ToastContext.jsx"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.useToast = void 0;
+exports.ToastProvider = ToastProvider;
+const react_1 = require("react");
+const lucide_react_1 = require("lucide-react");
+const ToastCtx = (0, react_1.createContext)(null);
+const useToast = () => (0, react_1.useContext)(ToastCtx);
+exports.useToast = useToast;
+const ICONS = {
+    success: React.createElement(lucide_react_1.CheckCircle2, { className: "h-5 w-5 text-ok shrink-0" }),
+    error: React.createElement(lucide_react_1.XCircle, { className: "h-5 w-5 text-bad shrink-0" }),
+    warn: React.createElement(lucide_react_1.AlertTriangle, { className: "h-5 w-5 text-warn shrink-0" }),
+    info: React.createElement(lucide_react_1.Info, { className: "h-5 w-5 text-line shrink-0" }),
+};
+function ToastProvider({ children }) {
+    const [items, setItems] = (0, react_1.useState)([]);
+    const dismiss = (0, react_1.useCallback)((id) => setItems((p) => p.filter((x) => x.id !== id)), []);
+    const push = (0, react_1.useCallback)((t) => {
+        const id = Math.random().toString(36).slice(2);
+        setItems((p) => [...p.slice(-3), { id, type: 'info', ...t }]);
+        setTimeout(() => dismiss(id), t.duration || 4500);
+    }, [dismiss]);
+    const api = (0, react_1.useMemo)(() => ({
+        push,
+        success: (title, message) => push({ type: 'success', title, message }),
+        error: (title, message) => push({ type: 'error', title, message, duration: 7000 }),
+        warn: (title, message) => push({ type: 'warn', title, message }),
+        info: (title, message) => push({ type: 'info', title, message }),
+    }), [push]);
+    return (React.createElement(ToastCtx.Provider, { value: api },
+        children,
+        React.createElement("div", { className: "no-print fixed bottom-4 start-4 z-[100] flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2", "aria-live": "polite" }, items.map((t) => (React.createElement("div", { key: t.id, className: "animate-toast flex items-start gap-3 rounded-xl border border-cardline bg-card p-3.5 shadow-lg" },
+            ICONS[t.type],
+            React.createElement("div", { className: "min-w-0 flex-1" },
+                React.createElement("p", { className: "text-sm font-bold text-ink" }, t.title),
+                t.message && React.createElement("p", { className: "mt-0.5 text-xs text-ink-soft" }, t.message)),
+            React.createElement("button", { onClick: () => dismiss(t.id), className: "text-ink-soft hover:text-ink", "aria-label": "\u0625\u063A\u0644\u0627\u0642" },
+                React.createElement(lucide_react_1.X, { className: "h-4 w-4" }))))))));
+}
+
+};
+defs["src/lib/constants.js"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.HIJRI_MONTHS = exports.REASON_BY_CODE = exports.REASONS = exports.ROLES = exports.SCOPE_DUTY = exports.SCOPES = exports.SLOT_BY_WEEKDAY = exports.SLOTS = exports.SLOT_KEYS = exports.NIGHT_KEYS = void 0;
+exports.NIGHT_KEYS = ['sat', 'sun', 'mon', 'tue', 'thu'];
+exports.SLOT_KEYS = ['fri', ...exports.NIGHT_KEYS];
+exports.SLOTS = {
+    fri: { label: 'تلاوة الجمعة (نهارية)', short: 'الجمعة', kind: 'friday' },
+    sat: { label: 'ليلة السبت', short: 'السبت', kind: 'night' },
+    sun: { label: 'ليلة الأحد', short: 'الأحد', kind: 'night' },
+    mon: { label: 'ليلة الاثنين', short: 'الاثنين', kind: 'night' },
+    tue: { label: 'ليلة الثلاثاء', short: 'الثلاثاء', kind: 'night' },
+    thu: { label: 'ليلة الخميس', short: 'الخميس', kind: 'night' },
+};
+// يوم الأسبوع (JS: الأحد = 0) → مفتاح الخانة المقترحة
+exports.SLOT_BY_WEEKDAY = { 5: 'fri', 6: 'sat', 0: 'sun', 1: 'mon', 2: 'tue', 4: 'thu' };
+exports.SCOPES = {
+    friday: 'تلاوة نهارية (قراء الجمعة)',
+    night: 'تلاوة ليلية (قراء الليالي)',
+    both: 'كلاهما (جميع التلاوات)',
+};
+exports.SCOPE_DUTY = {
+    friday: 'مسؤول التلاوة النهارية (قراء الجمعة)',
+    night: 'مسؤول التلاوة الليلية',
+    both: 'مسؤول جميع التلاوات',
+};
+exports.ROLES = { admin: 'مدير النظام', supervisor: 'مشرف مسجد' };
+exports.REASONS = [
+    { code: 'no_jamaa', label: 'عدم القراءة بسبب عدم وجود صلاة جماعة', short: 'بدون صلاة جماعة', color: '#7A5C4F' },
+    { code: 'mawlid', label: 'عدم وجود قراءة بسبب إحياء المولد', short: 'إحياء مولد', color: '#B58F5B' },
+    { code: 'funeral', label: 'عدم وجود قراءة بسبب قراءة مأتم', short: 'قراءة مأتم', color: '#8FA08A' },
+    { code: 'other', label: 'سبب آخر', short: 'أسباب أخرى', color: '#C4B5A2' },
+];
+exports.REASON_BY_CODE = Object.fromEntries(exports.REASONS.map((r) => [r.code, r]));
+exports.HIJRI_MONTHS = [
+    'محرم', 'صفر', 'ربيع الأول', 'ربيع الآخر', 'جمادى الأولى', 'جمادى الآخرة',
+    'رجب', 'شعبان', 'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة',
+];
+
+};
+defs["src/lib/hijri.js"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.toHijri = toHijri;
+const fmt = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura-nu-latn', {
+    day: 'numeric', month: 'numeric', year: 'numeric',
+});
+// تحويل تاريخ ميلادي (YYYY-MM-DD) إلى هجري تقريبي (أم القرى).
+// قد يختلف يوماً عن رؤية الهلال المحلية، لذلك حقول التاريخ الهجري قابلة للتعديل يدوياً.
+function toHijri(dateStr) {
+    try {
+        const parts = fmt.formatToParts(new Date(`${dateStr}T12:00:00`));
+        const get = (t) => Number(parts.find((p) => p.type === t)?.value);
+        return { day: get('day'), month: get('month'), year: get('year') };
+    }
+    catch {
+        return { day: '', month: '', year: '' };
+    }
+}
+
+};
+defs["src/lib/util.js"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.byArabic = exports.reciterKey = exports.lastFriday = exports.monthStart = exports.fmtDate = exports.weekdayOf = exports.addDays = exports.todayStr = void 0;
+exports.normalizeAr = normalizeAr;
+exports.matchesQuery = matchesQuery;
+const pad = (n) => String(n).padStart(2, '0');
+const todayStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+exports.todayStr = todayStr;
+const toDate = (s) => new Date(`${s}T12:00:00`);
+const toStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const addDays = (s, n) => {
+    const d = toDate(s);
+    d.setDate(d.getDate() + n);
+    return toStr(d);
+};
+exports.addDays = addDays;
+const weekdayOf = (s) => toDate(s).getDay();
+exports.weekdayOf = weekdayOf;
+const fmtDate = (s) => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '—');
+exports.fmtDate = fmtDate;
+const monthStart = (s = (0, exports.todayStr)()) => `${s.slice(0, 8)}01`;
+exports.monthStart = monthStart;
+// آخر جمعة حتى تاريخ معيّن (يشمل اليوم نفسه إن كان جمعة)
+const lastFriday = (s = (0, exports.todayStr)()) => {
+    const diff = ((0, exports.weekdayOf)(s) - 5 + 7) % 7;
+    return (0, exports.addDays)(s, -diff);
+};
+exports.lastFriday = lastFriday;
+// توحيد النص العربي للبحث والمطابقة
+function normalizeAr(s) {
+    return String(s ?? '')
+        .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+        .replace(/[أإآٱ]/g, 'ا')
+        .replace(/ى/g, 'ي')
+        .replace(/ة/g, 'ه')
+        .replace(/ؤ/g, 'و')
+        .replace(/ئ/g, 'ي')
+        .replace(/[().،,\-_/]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+function matchesQuery(name, q) {
+    const n = normalizeAr(name);
+    return normalizeAr(q).split(' ').filter(Boolean).every((t) => n.includes(t));
+}
+// مفتاح تجميع القارئ: المعرّف إن وُجد، وإلا الاسم المُوحَّد (للأسماء المدخلة يدوياً)
+const reciterKey = (l) => l.reciter_id || `n:${normalizeAr(l.reciter_name)}`;
+exports.reciterKey = reciterKey;
+const byArabic = (a, b) => String(a).localeCompare(String(b), 'ar');
+exports.byArabic = byArabic;
+
+};
+defs["src/main.jsx"] = function(exports, require, module, React){
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const react_1 = __importDefault(require("react"));
+const client_1 = __importDefault(require("react-dom/client"));
+const react_router_dom_1 = require("react-router-dom");
+const App_jsx_1 = __importDefault(require("src/App.jsx"));
+const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
+const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
+client_1.default.createRoot(document.getElementById('root')).render(react_1.default.createElement(react_1.default.StrictMode, null,
+    react_1.default.createElement(react_router_dom_1.HashRouter, null,
+        react_1.default.createElement(ToastContext_jsx_1.ToastProvider, null,
+            react_1.default.createElement(AuthContext_jsx_1.AuthProvider, null,
+                react_1.default.createElement(App_jsx_1.default, null))))));
+
+};
+defs["src/pages/Analytics.jsx"] = function(exports, require, module, React){
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = Analytics;
+const react_1 = require("react");
+const react_dom_1 = require("react-dom");
+const lucide_react_1 = require("lucide-react");
+const DataContext_jsx_1 = require("src/context/DataContext.jsx");
+const constants_js_1 = require("src/lib/constants.js");
+const util_js_1 = require("src/lib/util.js");
+const ui_jsx_1 = require("src/components/ui.jsx");
+const ReciterHistoryModal_jsx_1 = __importDefault(require("src/components/ReciterHistoryModal.jsx"));
+const RANGES = [
+    { value: 'week', label: 'أسبوع' },
+    { value: 'month', label: 'شهر' },
+    { value: 'all', label: 'الكل' },
+    { value: 'custom', label: 'فترة مخصصة' },
+];
+function Analytics() {
+    const { mosques, recitation_logs: logs, mosqueById } = (0, DataContext_jsx_1.useData)();
+    // ----- الفلاتر -----
+    const [q, setQ] = (0, react_1.useState)('');
+    const [mosqueId, setMosqueId] = (0, react_1.useState)('all');
+    const [slot, setSlot] = (0, react_1.useState)('all');
+    const [night, setNight] = (0, react_1.useState)('all');
+    const [range, setRange] = (0, react_1.useState)('month');
+    const [from, setFrom] = (0, react_1.useState)('');
+    const [to, setTo] = (0, react_1.useState)('');
+    const [hist, setHist] = (0, react_1.useState)(null);
+    const [showAll, setShowAll] = (0, react_1.useState)(false);
+    const [printAll, setPrintAll] = (0, react_1.useState)(false);
+    // عند الطباعة نعرض كل صفوف لوحة القراء
+    (0, react_1.useEffect)(() => {
+        const before = () => (0, react_dom_1.flushSync)(() => setPrintAll(true));
+        const after = () => setPrintAll(false);
+        window.addEventListener('beforeprint', before);
+        window.addEventListener('afterprint', after);
+        return () => {
+            window.removeEventListener('beforeprint', before);
+            window.removeEventListener('afterprint', after);
+        };
+    }, []);
+    const period = (0, react_1.useMemo)(() => {
+        const t = (0, util_js_1.todayStr)();
+        if (range === 'week')
+            return { from: (0, util_js_1.addDays)(t, -6), to: t };
+        if (range === 'month')
+            return { from: (0, util_js_1.addDays)(t, -29), to: t };
+        if (range === 'custom')
+            return { from, to };
+        return { from: '', to: '' };
+    }, [range, from, to]);
+    const filtered = (0, react_1.useMemo)(() => logs.filter((l) => {
+        if (mosqueId !== 'all' && l.mosque_id !== mosqueId)
+            return false;
+        if (slot === 'nights' ? l.slot_key === 'fri' : slot !== 'all' && l.slot_key !== slot)
+            return false;
+        if (night !== 'all' && l.hijri_day !== Number(night))
+            return false;
+        if (period.from && l.log_date < period.from)
+            return false;
+        if (period.to && l.log_date > period.to)
+            return false;
+        if (q.trim() && !(l.status === 'read' && (0, util_js_1.matchesQuery)(l.reciter_name, q)))
+            return false;
+        return true;
+    }), [logs, mosqueId, slot, night, period, q]);
+    const reads = (0, react_1.useMemo)(() => filtered.filter((l) => l.status === 'read'), [filtered]);
+    const misses = (0, react_1.useMemo)(() => filtered.filter((l) => l.status === 'not_read'), [filtered]);
+    // ----- لوحة مشاركة القراء -----
+    const board = (0, react_1.useMemo)(() => {
+        const m = new Map();
+        reads.forEach((l) => {
+            const k = (0, util_js_1.reciterKey)(l);
+            let e = m.get(k);
+            if (!e) {
+                e = { key: k, name: l.reciter_name, count: 0, last: '', mosques: new Set(), exceptions: 0 };
+                m.set(k, e);
+            }
+            e.count++;
+            e.mosques.add(l.mosque_id);
+            if (l.is_exception)
+                e.exceptions++;
+            if (l.log_date > e.last)
+                e.last = l.log_date;
+        });
+        return [...m.values()].sort((a, b) => b.count - a.count || (0, util_js_1.byArabic)(a.name, b.name));
+    }, [reads]);
+    const byMosque = (0, react_1.useMemo)(() => mosques
+        .filter((m) => mosqueId === 'all' || m.id === mosqueId)
+        .map((m) => ({ m, r: reads.filter((l) => l.mosque_id === m.id).length, x: misses.filter((l) => l.mosque_id === m.id).length }))
+        .filter((e) => e.r || e.x), [mosques, mosqueId, reads, misses]);
+    const bySlot = (0, react_1.useMemo)(() => constants_js_1.SLOT_KEYS.map((k) => ({ k, r: reads.filter((l) => l.slot_key === k).length, x: misses.filter((l) => l.slot_key === k).length })).filter((e) => e.r || e.x), [reads, misses]);
+    // ----- تحليل عدم القراءة: مسجد × سبب -----
+    const reasonRows = (0, react_1.useMemo)(() => mosques
+        .map((m) => {
+        const mine = misses.filter((l) => l.mosque_id === m.id);
+        const counts = Object.fromEntries(constants_js_1.REASONS.map((r) => [r.code, mine.filter((l) => l.reason_code === r.code).length]));
+        return { m, counts, total: mine.length };
+    })
+        .filter((r) => r.total > 0), [mosques, misses]);
+    const reasonTotals = Object.fromEntries(constants_js_1.REASONS.map((r) => [r.code, misses.filter((l) => l.reason_code === r.code).length]));
+    const otherTexts = (0, react_1.useMemo)(() => {
+        const c = {};
+        misses.filter((l) => l.reason_code === 'other' && l.reason_text).forEach((l) => { c[l.reason_text] = (c[l.reason_text] || 0) + 1; });
+        return Object.entries(c).sort((a, b) => b[1] - a[1]);
+    }, [misses]);
+    const totalPages = reads.reduce((s, l) => s + (l.pages || 0), 0);
+    const maxBoard = board[0]?.count || 1;
+    const shown = showAll || printAll ? board : board.slice(0, 15);
+    const single = q.trim() && board.length === 1 ? board[0] : null;
+    const summary = [
+        ['المسجد', mosqueId === 'all' ? 'جميع المساجد' : mosqueById[mosqueId]?.name],
+        ['الخانة', slot === 'all' ? 'الكل' : slot === 'nights' ? 'كل الليالي' : constants_js_1.SLOTS[slot].label],
+        ['رقم الليلة (هجري)', night === 'all' ? 'الكل' : night],
+        ['الفترة', period.from || period.to ? `${(0, util_js_1.fmtDate)(period.from) === '—' ? 'البداية' : (0, util_js_1.fmtDate)(period.from)} ← ${(0, util_js_1.fmtDate)(period.to) === '—' ? 'اليوم' : (0, util_js_1.fmtDate)(period.to)}` : 'كل الفترات'],
+        ...(q.trim() ? [['القارئ', q.trim()]] : []),
+    ];
+    const doPrint = () => { (0, react_dom_1.flushSync)(() => setPrintAll(true)); window.print(); };
+    const clear = () => { setQ(''); setMosqueId('all'); setSlot('all'); setNight('all'); setRange('month'); setFrom(''); setTo(''); };
+    return (React.createElement(React.Fragment, null,
+        React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u0625\u062D\u0635\u0627\u0626\u064A\u0627\u062A \u0648\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631", subtitle: "\u0627\u0628\u062D\u062B \u0648\u0635\u0641\u0650\u0651 \u0644\u062A\u062D\u0635\u0644 \u0639\u0644\u0649 \u0623\u0631\u0642\u0627\u0645 \u062F\u0642\u064A\u0642\u0629\u060C \u062B\u0645 \u0635\u062F\u0651\u0631 \u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u0643\u0645\u0644\u0641 PDF.", actions: React.createElement("button", { className: "btn-primary", onClick: doPrint },
+                React.createElement(lucide_react_1.Printer, { className: "h-4 w-4" }),
+                " \u062A\u0635\u062F\u064A\u0631 / \u0637\u0628\u0627\u0639\u0629 \u0627\u0644\u062A\u0642\u0631\u064A\u0631 (PDF)") }),
+        React.createElement("div", { className: "print-only mb-5 border-b-2 border-line pb-4" },
+            React.createElement("div", { className: "flex items-end justify-between" },
+                React.createElement("div", null,
+                    React.createElement("h1", { className: "text-2xl font-extrabold" }, "\u062A\u0642\u0631\u064A\u0631 \u0627\u0644\u062A\u0644\u0627\u0648\u0627\u062A"),
+                    React.createElement("p", { className: "mt-1 text-sm" }, "\u0646\u0638\u0627\u0645 \u062A\u0644\u0627\u0648\u0627\u062A \u2014 \u0625\u062F\u0627\u0631\u0629 \u0648\u062A\u0646\u0638\u064A\u0645 \u0642\u0631\u0627\u0621 \u0648\u062A\u0644\u0627\u0648\u0627\u062A \u0627\u0644\u0645\u0633\u0627\u062C\u062F")),
+                React.createElement("p", { className: "text-xs" },
+                    "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0635\u062F\u0627\u0631: ",
+                    (0, util_js_1.fmtDate)((0, util_js_1.todayStr)()))),
+            React.createElement("dl", { className: "mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm" }, summary.map(([k, v]) => (React.createElement("div", { key: k, className: "flex gap-2" },
+                React.createElement("dt", { className: "font-bold" },
+                    k,
+                    ":"),
+                React.createElement("dd", null, v)))))),
+        React.createElement("div", { className: "no-print card card-pad mb-5 space-y-4" },
+            React.createElement("div", { className: "relative" },
+                React.createElement(lucide_react_1.Search, { className: "pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" }),
+                React.createElement("input", { className: "input ps-9 pe-9", placeholder: "\u0627\u0644\u0628\u062D\u062B \u0628\u0627\u0633\u0645 \u0627\u0644\u0642\u0627\u0631\u0626 \u2014 \u062A\u064F\u0635\u0641\u0651\u0649 \u0643\u0644 \u0627\u0644\u0625\u062D\u0635\u0627\u0626\u064A\u0627\u062A \u0641\u0648\u0631\u0627\u064B\u2026", value: q, onChange: (e) => setQ(e.target.value) }),
+                q && React.createElement("button", { className: "absolute end-3 top-1/2 -translate-y-1/2 text-ink-soft hover:text-ink", onClick: () => setQ(''), "aria-label": "\u0645\u0633\u062D \u0627\u0644\u0628\u062D\u062B" },
+                    React.createElement(lucide_react_1.X, { className: "h-4 w-4" }))),
+            React.createElement("div", { className: "grid gap-3 sm:grid-cols-2 lg:grid-cols-3" },
+                React.createElement("div", null,
+                    React.createElement("label", { className: "label" }, "\u0627\u0644\u0645\u0633\u062C\u062F"),
+                    React.createElement("select", { className: "input", value: mosqueId, onChange: (e) => setMosqueId(e.target.value) },
+                        React.createElement("option", { value: "all" }, "\u062C\u0645\u064A\u0639 \u0627\u0644\u0645\u0633\u0627\u062C\u062F"),
+                        mosques.map((m) => React.createElement("option", { key: m.id, value: m.id }, m.name)))),
+                React.createElement("div", null,
+                    React.createElement("label", { className: "label" }, "\u0627\u0644\u062E\u0627\u0646\u0629"),
+                    React.createElement("select", { className: "input", value: slot, onChange: (e) => setSlot(e.target.value) },
+                        React.createElement("option", { value: "all" }, "\u0627\u0644\u062C\u0645\u0639\u0629 \u0648\u0627\u0644\u0644\u064A\u0627\u0644\u064A"),
+                        React.createElement("option", { value: "fri" }, "\u0627\u0644\u062C\u0645\u0639\u0629 \u0641\u0642\u0637"),
+                        React.createElement("option", { value: "nights" }, "\u0643\u0644 \u0627\u0644\u0644\u064A\u0627\u0644\u064A"),
+                        constants_js_1.SLOT_KEYS.filter((k) => k !== 'fri').map((k) => React.createElement("option", { key: k, value: k }, constants_js_1.SLOTS[k].label)))),
+                React.createElement("div", null,
+                    React.createElement("label", { className: "label" }, "\u0631\u0642\u0645 \u0627\u0644\u0644\u064A\u0644\u0629 (\u0627\u0644\u064A\u0648\u0645 \u0627\u0644\u0647\u062C\u0631\u064A)"),
+                    React.createElement("select", { className: "input", value: night, onChange: (e) => setNight(e.target.value) },
+                        React.createElement("option", { value: "all" }, "\u0643\u0644 \u0627\u0644\u0644\u064A\u0627\u0644\u064A"),
+                        Array.from({ length: 30 }, (_, i) => i + 1).map((n) => React.createElement("option", { key: n, value: n },
+                            "\u0644\u064A\u0644\u0629 ",
+                            n))))),
+            React.createElement("div", { className: "flex flex-wrap items-end gap-3" },
+                React.createElement("div", null,
+                    React.createElement("label", { className: "label" }, "\u0627\u0644\u0641\u062A\u0631\u0629 \u0627\u0644\u0632\u0645\u0646\u064A\u0629"),
+                    React.createElement(ui_jsx_1.Segmented, { options: RANGES, value: range, onChange: setRange })),
+                range === 'custom' && (React.createElement(React.Fragment, null,
+                    React.createElement("div", null,
+                        React.createElement("label", { className: "label" }, "\u0645\u0646 \u062A\u0627\u0631\u064A\u062E"),
+                        React.createElement("input", { type: "date", className: "input", value: from, onChange: (e) => setFrom(e.target.value) })),
+                    React.createElement("div", null,
+                        React.createElement("label", { className: "label" }, "\u0625\u0644\u0649 \u062A\u0627\u0631\u064A\u062E"),
+                        React.createElement("input", { type: "date", className: "input", value: to, onChange: (e) => setTo(e.target.value) })))),
+                React.createElement("button", { className: "btn-ghost btn-sm ms-auto", onClick: clear }, "\u0625\u0639\u0627\u062F\u0629 \u0636\u0628\u0637 \u0627\u0644\u0641\u0644\u0627\u062A\u0631"))),
+        React.createElement("div", { className: "grid grid-cols-2 gap-3 lg:grid-cols-4" },
+            React.createElement(ui_jsx_1.StatCard, { label: "\u0625\u062C\u0645\u0627\u0644\u064A \u0627\u0644\u062A\u0644\u0627\u0648\u0627\u062A \u0627\u0644\u0645\u0646\u062C\u0632\u0629", value: reads.length, hint: totalPages ? `${totalPages} صفحة مقروءة` : undefined }),
+            React.createElement(ui_jsx_1.StatCard, { label: "\u0644\u0645 \u062A\u062A\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629", value: misses.length, tone: misses.length ? 'bad' : undefined }),
+            React.createElement(ui_jsx_1.StatCard, { label: "\u0639\u062F\u062F \u0627\u0644\u0642\u0631\u0627\u0621 \u0627\u0644\u0645\u0634\u0627\u0631\u0643\u064A\u0646", value: board.length }),
+            React.createElement(ui_jsx_1.StatCard, { label: "\u0642\u0631\u0627\u0621\u0627\u062A \u0628\u0627\u0644\u0627\u0633\u062A\u062B\u0646\u0627\u0621", value: reads.filter((l) => l.is_exception).length, tone: reads.some((l) => l.is_exception) ? 'warn' : undefined })),
+        q.trim() && (React.createElement("div", { className: "card print-card mt-5 overflow-hidden" },
+            React.createElement("div", { className: "flex flex-wrap items-center justify-between gap-2 border-b border-cardline px-5 py-3.5" },
+                React.createElement("h2", { className: "font-extrabold" }, single ? `سجل القارئ: ${single.name}` : `نتائج البحث عن «${q.trim()}»`),
+                React.createElement("span", { className: "badge-brand" },
+                    board.length,
+                    " \u0642\u0627\u0631\u0626 \u2014 ",
+                    reads.length,
+                    " \u062A\u0644\u0627\u0648\u0629")),
+            board.length === 0 ? React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062A\u0644\u0627\u0648\u0627\u062A \u0645\u0637\u0627\u0628\u0642\u0629 \u0636\u0645\u0646 \u0627\u0644\u0641\u0644\u0627\u062A\u0631 \u0627\u0644\u062D\u0627\u0644\u064A\u0629" }) : single ? (React.createElement("div", { className: "overflow-x-auto" },
+                React.createElement("table", { className: "w-full min-w-[600px]" },
+                    React.createElement("thead", null,
+                        React.createElement("tr", null,
+                            React.createElement("th", { className: "th" }, "\u0627\u0644\u062A\u0627\u0631\u064A\u062E"),
+                            React.createElement("th", { className: "th" }, "\u0627\u0644\u0645\u0633\u062C\u062F"),
+                            React.createElement("th", { className: "th" }, "\u0627\u0644\u062E\u0627\u0646\u0629"),
+                            React.createElement("th", { className: "th" }, "\u0627\u0644\u0633\u0648\u0631\u0629"),
+                            React.createElement("th", { className: "th" }, "\u0645\u0644\u0627\u062D\u0638\u0627\u062A"))),
+                    React.createElement("tbody", null, reads.map((l) => (React.createElement("tr", { key: l.id },
+                        React.createElement("td", { className: "td whitespace-nowrap" },
+                            (0, util_js_1.fmtDate)(l.log_date),
+                            l.hijri_day && React.createElement("div", { className: "text-xs text-ink-soft" },
+                                l.hijri_day,
+                                " ",
+                                constants_js_1.HIJRI_MONTHS[(l.hijri_month || 1) - 1])),
+                        React.createElement("td", { className: "td" }, mosqueById[l.mosque_id]?.name),
+                        React.createElement("td", { className: "td" },
+                            constants_js_1.SLOTS[l.slot_key]?.short,
+                            l.is_exception && React.createElement("span", { className: "badge-warn ms-2" }, "\u0627\u0633\u062A\u062B\u0646\u0627\u0621")),
+                        React.createElement("td", { className: "td" }, l.surah || '—'),
+                        React.createElement("td", { className: "td" }, l.notes || '—')))))))) : React.createElement("p", { className: "px-5 py-4 text-sm text-ink-soft" }, "\u0623\u0643\u062B\u0631 \u0645\u0646 \u0642\u0627\u0631\u0626 \u0645\u0637\u0627\u0628\u0642 \u2014 \u0627\u062E\u062A\u0631 \u0623\u062D\u062F\u0647\u0645 \u0645\u0646 \u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u0634\u0627\u0631\u0643\u0629 \u0623\u062F\u0646\u0627\u0647 \u0644\u0639\u0631\u0636 \u0633\u062C\u0644\u0647."))),
+        React.createElement("div", { className: "card print-card mt-5 overflow-hidden" },
+            React.createElement("div", { className: "flex items-center justify-between border-b border-cardline px-5 py-3.5" },
+                React.createElement("h2", { className: "font-extrabold" }, "\u0644\u0648\u062D\u0629 \u0645\u0634\u0627\u0631\u0643\u0629 \u0627\u0644\u0642\u0631\u0627\u0621"),
+                React.createElement("span", { className: "no-print text-xs font-semibold text-ink-soft" }, "\u0627\u0636\u063A\u0637 \u0639\u0644\u0649 \u0635\u0641 \u0644\u0639\u0631\u0636 \u0627\u0644\u0633\u062C\u0644 \u0627\u0644\u0643\u0627\u0645\u0644")),
+            board.length === 0 ? React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062A\u0644\u0627\u0648\u0627\u062A \u0636\u0645\u0646 \u0627\u0644\u0641\u0644\u0627\u062A\u0631 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", hint: "\u0648\u0633\u0651\u0639 \u0627\u0644\u0641\u062A\u0631\u0629 \u0627\u0644\u0632\u0645\u0646\u064A\u0629 \u0623\u0648 \u0623\u0639\u062F \u0636\u0628\u0637 \u0627\u0644\u0641\u0644\u0627\u062A\u0631." }) : (React.createElement(React.Fragment, null,
+                React.createElement("div", { className: "overflow-x-auto" },
+                    React.createElement("table", { className: "w-full min-w-[640px]" },
+                        React.createElement("thead", null,
+                            React.createElement("tr", null,
+                                React.createElement("th", { className: "th w-12" }, "#"),
+                                React.createElement("th", { className: "th" }, "\u0627\u0644\u0642\u0627\u0631\u0626"),
+                                React.createElement("th", { className: "th w-56" }, "\u0639\u062F\u062F \u0627\u0644\u062A\u0644\u0627\u0648\u0627\u062A"),
+                                React.createElement("th", { className: "th" }, "\u0627\u0644\u0645\u0633\u0627\u062C\u062F"),
+                                React.createElement("th", { className: "th" }, "\u0622\u062E\u0631 \u062A\u0644\u0627\u0648\u0629"))),
+                        React.createElement("tbody", null, shown.map((e, i) => (React.createElement("tr", { key: e.key, className: "tr-hover cursor-pointer", onClick: () => setHist({ key: e.key, name: e.name }) },
+                            React.createElement("td", { className: "td text-ink-soft" }, i + 1),
+                            React.createElement("td", { className: "td font-bold" },
+                                e.name,
+                                e.exceptions > 0 && React.createElement("span", { className: "badge-warn ms-2" },
+                                    "\u0627\u0633\u062A\u062B\u0646\u0627\u0621 \u00D7",
+                                    e.exceptions)),
+                            React.createElement("td", { className: "td" },
+                                React.createElement("div", { className: "flex items-center gap-3" },
+                                    React.createElement("span", { className: "w-6 font-extrabold" }, e.count),
+                                    React.createElement(ui_jsx_1.Bar, { value: e.count, max: maxBoard }))),
+                            React.createElement("td", { className: "td" }, e.mosques.size),
+                            React.createElement("td", { className: "td text-sm" }, (0, util_js_1.fmtDate)(e.last)))))))),
+                board.length > 15 && (React.createElement("div", { className: "no-print border-t border-cardline p-3 text-center" },
+                    React.createElement("button", { className: "btn-ghost btn-sm", onClick: () => setShowAll((v) => !v) }, showAll ? 'عرض الأوائل فقط' : `عرض الكل (${board.length})`)))))),
+        React.createElement("div", { className: "mt-5 grid gap-5 lg:grid-cols-2" },
+            React.createElement("div", { className: "card card-pad print-card" },
+                React.createElement("h2", { className: "mb-4 font-extrabold" }, "\u062D\u0633\u0628 \u0627\u0644\u0645\u0633\u062C\u062F"),
+                byMosque.length === 0 ? React.createElement("p", { className: "text-sm text-ink-soft" }, "\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A.") : (React.createElement("ul", { className: "space-y-3.5" }, byMosque.map(({ m, r, x }) => (React.createElement("li", { key: m.id },
+                    React.createElement("div", { className: "mb-1.5 flex items-center justify-between gap-2 text-sm" },
+                        React.createElement("span", { className: "font-semibold" }, m.name),
+                        React.createElement("span", { className: "whitespace-nowrap text-xs font-semibold text-ink-soft" },
+                            r,
+                            " \u062A\u0644\u0627\u0648\u0629",
+                            x ? ` — ${x} لم تتم` : '')),
+                    React.createElement(ui_jsx_1.Bar, { value: r, max: Math.max(...byMosque.map((e) => e.r), 1) }))))))),
+            React.createElement("div", { className: "card card-pad print-card" },
+                React.createElement("h2", { className: "mb-4 font-extrabold" }, "\u062D\u0633\u0628 \u0627\u0644\u062E\u0627\u0646\u0629"),
+                bySlot.length === 0 ? React.createElement("p", { className: "text-sm text-ink-soft" }, "\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A.") : (React.createElement("ul", { className: "space-y-3.5" }, bySlot.map(({ k, r, x }) => (React.createElement("li", { key: k },
+                    React.createElement("div", { className: "mb-1.5 flex items-center justify-between text-sm" },
+                        React.createElement("span", { className: "font-semibold" }, constants_js_1.SLOTS[k].label),
+                        React.createElement("span", { className: "text-xs font-semibold text-ink-soft" },
+                            r,
+                            " \u062A\u0644\u0627\u0648\u0629",
+                            x ? ` — ${x} لم تتم` : '')),
+                    React.createElement(ui_jsx_1.Bar, { value: r, max: Math.max(...bySlot.map((e) => e.r), 1), color: "#B58F5B" })))))))),
+        React.createElement("div", { className: "card print-card mt-5 overflow-hidden" },
+            React.createElement("div", { className: "border-b border-cardline px-5 py-3.5" },
+                React.createElement("h2", { className: "font-extrabold" }, "\u062A\u062D\u0644\u064A\u0644 \u062D\u0627\u0644\u0627\u062A \u0639\u062F\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629")),
+            reasonRows.length === 0 ? React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062D\u0627\u0644\u0627\u062A \u0639\u062F\u0645 \u0642\u0631\u0627\u0621\u0629 \u0636\u0645\u0646 \u0627\u0644\u0641\u0644\u0627\u062A\u0631 \u0627\u0644\u062D\u0627\u0644\u064A\u0629" }) : (React.createElement("div", { className: "space-y-5 p-5" },
+                React.createElement("div", { className: "flex flex-wrap gap-x-5 gap-y-2" }, constants_js_1.REASONS.map((r) => (React.createElement("span", { key: r.code, className: "flex items-center gap-2 text-xs font-semibold" },
+                    React.createElement("span", { className: "h-3 w-3 rounded", style: { background: r.color } }),
+                    " ",
+                    r.short)))),
+                React.createElement("ul", { className: "space-y-4" }, reasonRows.map(({ m, counts, total }) => (React.createElement("li", { key: m.id },
+                    React.createElement("div", { className: "mb-1.5 flex justify-between text-sm" },
+                        React.createElement("span", { className: "font-semibold" }, m.name),
+                        React.createElement("span", { className: "text-xs font-semibold text-ink-soft" },
+                            total,
+                            " \u062D\u0627\u0644\u0629")),
+                    React.createElement("div", { className: "flex h-4 overflow-hidden rounded-full bg-page" }, constants_js_1.REASONS.map((r) => counts[r.code] > 0 && (React.createElement("div", { key: r.code, title: `${r.short}: ${counts[r.code]}`, style: { width: `${(counts[r.code] / total) * 100}%`, background: r.color } })))))))),
+                React.createElement("div", { className: "overflow-x-auto rounded-xl border border-cardline" },
+                    React.createElement("table", { className: "w-full min-w-[560px]" },
+                        React.createElement("thead", null,
+                            React.createElement("tr", null,
+                                React.createElement("th", { className: "th" }, "\u0627\u0644\u0645\u0633\u062C\u062F"),
+                                constants_js_1.REASONS.map((r) => React.createElement("th", { key: r.code, className: "th text-center" }, r.short)),
+                                React.createElement("th", { className: "th text-center" }, "\u0627\u0644\u0625\u062C\u0645\u0627\u0644\u064A"))),
+                        React.createElement("tbody", null,
+                            reasonRows.map(({ m, counts, total }) => (React.createElement("tr", { key: m.id },
+                                React.createElement("td", { className: "td font-semibold" }, m.name),
+                                constants_js_1.REASONS.map((r) => React.createElement("td", { key: r.code, className: "td text-center" }, counts[r.code] || '—')),
+                                React.createElement("td", { className: "td text-center font-extrabold" }, total)))),
+                            React.createElement("tr", { className: "bg-hover" },
+                                React.createElement("td", { className: "td font-extrabold" }, "\u0627\u0644\u0625\u062C\u0645\u0627\u0644\u064A"),
+                                constants_js_1.REASONS.map((r) => React.createElement("td", { key: r.code, className: "td text-center font-extrabold" }, reasonTotals[r.code] || '—')),
+                                React.createElement("td", { className: "td text-center font-extrabold" }, misses.length))))),
+                otherTexts.length > 0 && (React.createElement("div", null,
+                    React.createElement("p", { className: "mb-2 text-sm font-extrabold" }, "\u062A\u0641\u0627\u0635\u064A\u0644 \u00AB\u0623\u0633\u0628\u0627\u0628 \u0623\u062E\u0631\u0649\u00BB"),
+                    React.createElement("ul", { className: "list-inside list-disc space-y-1 text-sm" }, otherTexts.map(([t, n]) => React.createElement("li", { key: t },
+                        t,
+                        " ",
+                        n > 1 && React.createElement("span", { className: "text-ink-soft" },
+                            "(\u00D7",
+                            n,
+                            ")"))))))))),
+        React.createElement(ReciterHistoryModal_jsx_1.default, { open: Boolean(hist), onClose: () => setHist(null), reciterKeyValue: hist?.key, name: hist?.name, periodFrom: period.from, periodTo: period.to })));
+}
+
+};
+defs["src/pages/DailyLog.jsx"] = function(exports, require, module, React){
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = DailyLog;
+const react_1 = require("react");
+const lucide_react_1 = require("lucide-react");
+const supabase_js_1 = require("src/lib/supabase.js");
+const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
+const DataContext_jsx_1 = require("src/context/DataContext.jsx");
+const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
+const constants_js_1 = require("src/lib/constants.js");
+const hijri_js_1 = require("src/lib/hijri.js");
+const util_js_1 = require("src/lib/util.js");
+const ui_jsx_1 = require("src/components/ui.jsx");
+const ReciterCombobox_jsx_1 = __importDefault(require("src/components/ReciterCombobox.jsx"));
+function DailyLog() {
+    const { profile, isAdmin } = (0, AuthContext_jsx_1.useAuth)();
+    const { mosques, mosqueById, approvedBySlot, reciters, recitation_logs, profileById, upsertLocal, removeLocal } = (0, DataContext_jsx_1.useData)();
+    const toast = (0, ToastContext_jsx_1.useToast)();
+    // ----- المسجد ونطاق المسؤولية -----
+    const activeMosques = (0, react_1.useMemo)(() => mosques.filter((m) => m.is_active), [mosques]);
+    const [adminMosqueId, setAdminMosqueId] = (0, react_1.useState)('');
+    (0, react_1.useEffect)(() => {
+        if (isAdmin && !adminMosqueId && activeMosques[0])
+            setAdminMosqueId(activeMosques[0].id);
+    }, [isAdmin, activeMosques, adminMosqueId]);
+    const mosque = isAdmin ? mosqueById[adminMosqueId] : mosqueById[profile.mosque_id];
+    const scope = isAdmin ? 'both' : profile.scope;
+    const allowedSlots = (0, react_1.useMemo)(() => {
+        if (!mosque)
+            return [];
+        const s = [];
+        if (mosque.enable_friday && (scope === 'both' || scope === 'friday'))
+            s.push('fri');
+        if (mosque.enable_night && (scope === 'both' || scope === 'night'))
+            constants_js_1.NIGHT_KEYS.forEach((k) => mosque.night_days?.includes(k) && s.push(k));
+        return s;
+    }, [mosque, scope]);
+    // ----- حالة النموذج -----
+    const [date, setDate] = (0, react_1.useState)((0, util_js_1.todayStr)());
+    const [hijri, setHijri] = (0, react_1.useState)(() => (0, hijri_js_1.toHijri)((0, util_js_1.todayStr)()));
+    const [slot, setSlot] = (0, react_1.useState)('');
+    const [status, setStatus] = (0, react_1.useState)('read');
+    const [reciter, setReciter] = (0, react_1.useState)(null); // { id, name, confirmedFor }
+    const [pending, setPending] = (0, react_1.useState)(null); // قارئ غير معتمد بانتظار تأكيد الاستثناء
+    const [comboKey, setComboKey] = (0, react_1.useState)(0);
+    const [surah, setSurah] = (0, react_1.useState)('');
+    const [pages, setPages] = (0, react_1.useState)('');
+    const [notes, setNotes] = (0, react_1.useState)('');
+    const [reasonCode, setReasonCode] = (0, react_1.useState)('');
+    const [reasonText, setReasonText] = (0, react_1.useState)('');
+    const [editing, setEditing] = (0, react_1.useState)(null);
+    const [busy, setBusy] = (0, react_1.useState)(false);
+    const [delTarget, setDelTarget] = (0, react_1.useState)(null);
+    (0, react_1.useEffect)(() => {
+        if (!allowedSlots.length)
+            return setSlot('');
+        setSlot((cur) => {
+            if (allowedSlots.includes(cur))
+                return cur;
+            const sug = constants_js_1.SLOT_BY_WEEKDAY[(0, util_js_1.weekdayOf)(date)];
+            return allowedSlots.includes(sug) ? sug : allowedSlots[0];
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [allowedSlots]);
+    const onDateChange = (v) => {
+        setDate(v);
+        if (!v)
+            return;
+        setHijri((0, hijri_js_1.toHijri)(v));
+        const sug = constants_js_1.SLOT_BY_WEEKDAY[(0, util_js_1.weekdayOf)(v)];
+        if (sug && allowedSlots.includes(sug))
+            setSlot(sug);
+    };
+    // ----- القراء المعتمدون لهذه الخانة -----
+    const approved = (0, react_1.useMemo)(() => (slot ? approvedBySlot[slot] || [] : []), [approvedBySlot, slot]);
+    const approvedIds = (0, react_1.useMemo)(() => new Set(approved.map((r) => r.id)), [approved]);
+    const others = (0, react_1.useMemo)(() => reciters.filter((r) => r.is_active && !approvedIds.has(r.id)), [reciters, approvedIds]);
+    const slotWord = slot === 'fri' ? 'لهذه الجمعة' : 'لهذه الليلة';
+    const resetEntry = () => {
+        setReciter(null);
+        setPending(null);
+        setSurah('');
+        setPages('');
+        setNotes('');
+        setReasonCode('');
+        setReasonText('');
+        setEditing(null);
+        setComboKey((k) => k + 1);
+    };
+    const handlePick = (item) => {
+        if (item.approved) {
+            setReciter({ id: item.id, name: item.name });
+            return;
+        }
+        setReciter(null);
+        setPending(item); // → نافذة تنبيه الاستثناء
+    };
+    const confirmException = () => {
+        setReciter({ id: pending.id, name: pending.name, confirmedFor: slot });
+        setPending(null);
+    };
+    const cancelException = () => {
+        setPending(null);
+        setReciter(null);
+        setComboKey((k) => k + 1);
+    };
+    // ----- الحفظ -----
+    const save = async () => {
+        if (!mosque || !slot)
+            return;
+        if (!date)
+            return toast.warn('اختر التاريخ');
+        let isApproved = false;
+        if (status === 'read') {
+            if (!reciter)
+                return toast.warn('اختر القارئ', 'اختر اسماً من القائمة، أو اضغط «استخدام … كاسم يدوي».');
+            isApproved = Boolean(reciter.id && approvedIds.has(reciter.id));
+            if (!isApproved && reciter.confirmedFor !== slot) {
+                setPending({ id: reciter.id, name: reciter.name });
+                return;
+            }
+        }
+        else {
+            if (!reasonCode)
+                return toast.warn('اختر سبب عدم القراءة');
+            if (reasonCode === 'other' && !reasonText.trim())
+                return toast.warn('اكتب السبب', 'حقل «سبب آخر» مطلوب.');
+        }
+        const row = {
+            mosque_id: mosque.id,
+            log_date: date,
+            slot_key: slot,
+            hijri_day: hijri.day ? Number(hijri.day) : null,
+            hijri_month: hijri.month ? Number(hijri.month) : null,
+            hijri_year: hijri.year ? Number(hijri.year) : null,
+            status,
+            notes: notes.trim() || null,
+            ...(status === 'read'
+                ? { reciter_id: reciter.id, reciter_name: reciter.name, is_exception: !isApproved, surah: surah.trim() || null, pages: pages !== '' ? Number(pages) : null, reason_code: null, reason_text: null }
+                : { reciter_id: null, reciter_name: null, is_exception: false, surah: null, pages: null, reason_code: reasonCode, reason_text: reasonCode === 'other' ? reasonText.trim() : null }),
+        };
+        setBusy(true);
+        const q = editing
+            ? supabase_js_1.supabase.from('recitation_logs').update(row).eq('id', editing.id)
+            : supabase_js_1.supabase.from('recitation_logs').insert(row);
+        const { data: saved, error } = await q.select().single();
+        setBusy(false);
+        if (error)
+            return toast.error('تعذّر الحفظ', error.message);
+        upsertLocal('recitation_logs', saved);
+        toast.success(editing ? 'تم تحديث التسجيل' : 'تم حفظ التسجيل', status === 'read' ? saved.reciter_name : 'سُجّل عدم القراءة');
+        resetEntry();
+    };
+    const startEdit = (l) => {
+        setEditing(l);
+        setDate(l.log_date);
+        setHijri({ day: l.hijri_day ?? '', month: l.hijri_month ?? '', year: l.hijri_year ?? '' });
+        setSlot(l.slot_key);
+        setStatus(l.status);
+        setPending(null);
+        setReciter(l.reciter_name ? { id: l.reciter_id, name: l.reciter_name, confirmedFor: l.is_exception ? l.slot_key : undefined } : null);
+        setSurah(l.surah || '');
+        setPages(l.pages ?? '');
+        setNotes(l.notes || '');
+        setReasonCode(l.reason_code || '');
+        setReasonText(l.reason_text || '');
+        setComboKey((k) => k + 1);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    const doDelete = async () => {
+        setBusy(true);
+        const { data, error } = await supabase_js_1.supabase.from('recitation_logs').delete().eq('id', delTarget.id).select();
+        setBusy(false);
+        if (error || !data?.length)
+            return toast.error('تعذّر الحذف', error?.message || 'ليست لديك صلاحية حذف هذا التسجيل.');
+        removeLocal('recitation_logs', delTarget.id);
+        if (editing?.id === delTarget.id)
+            resetEntry();
+        setDelTarget(null);
+        toast.success('تم حذف التسجيل');
+    };
+    // ----- عرض التسجيلات -----
+    const sameSlot = (0, react_1.useMemo)(() => (mosque ? recitation_logs.filter((l) => l.mosque_id === mosque.id && l.log_date === date && l.slot_key === slot && l.id !== editing?.id) : []), [recitation_logs, mosque, date, slot, editing]);
+    const recent = (0, react_1.useMemo)(() => (mosque ? recitation_logs.filter((l) => l.mosque_id === mosque.id).slice(0, 25) : []), [recitation_logs, mosque]);
+    if (!isAdmin && !mosque) {
+        return (React.createElement(React.Fragment, null,
+            React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A" }),
+            React.createElement("div", { className: "card" },
+                React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0645 \u064A\u062A\u0645 \u0631\u0628\u0637\u0643 \u0628\u0645\u0633\u062C\u062F \u0628\u0639\u062F", hint: "\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u064A\u0631\u0628\u0637 \u062D\u0633\u0627\u0628\u0643 \u0628\u0645\u0633\u062C\u062F \u0648\u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u0629." }))));
+    }
+    const editable = (l) => isAdmin || (l.mosque_id === profile.mosque_id && (scope === 'both' || (scope === 'friday') === (l.slot_key === 'fri')));
+    return (React.createElement(React.Fragment, null,
+        React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A", subtitle: "\u0633\u062C\u0651\u0644 \u0627\u0644\u0642\u0627\u0631\u0626 \u0623\u0648 \u0633\u0628\u0628 \u0639\u062F\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u0644\u0643\u0644 \u062E\u0627\u0646\u0629 \u062A\u0644\u0627\u0648\u0629." }),
+        React.createElement("div", { className: "mb-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-line p-5 text-white" },
+            React.createElement("div", null,
+                React.createElement("p", { className: "text-sm font-semibold text-white/80" },
+                    "\u0645\u0631\u062D\u0628\u0627\u064B\u060C ",
+                    profile.full_name),
+                React.createElement("p", { className: "mt-1 text-xl font-extrabold" },
+                    constants_js_1.SCOPE_DUTY[scope],
+                    mosque ? ` - ${mosque.name}` : '')),
+            isAdmin && (React.createElement("div", { className: "w-full sm:w-72" },
+                React.createElement("label", { className: "mb-1.5 block text-xs font-semibold text-white/80" }, "\u0627\u0644\u0645\u0633\u062C\u062F (\u0628\u0635\u0641\u062A\u0643 \u0645\u062F\u064A\u0631\u0627\u064B)"),
+                React.createElement("select", { className: "input !border-white/30", value: adminMosqueId, onChange: (e) => { setAdminMosqueId(e.target.value); resetEntry(); } }, activeMosques.map((m) => React.createElement("option", { key: m.id, value: m.id }, m.name)))))),
+        !allowedSlots.length ? (React.createElement("div", { className: "card" },
+            React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062E\u0627\u0646\u0627\u062A \u062A\u0644\u0627\u0648\u0629 \u0645\u0641\u0639\u0651\u0644\u0629", hint: "\u0644\u0627 \u064A\u0648\u062C\u062F \u062A\u0637\u0627\u0628\u0642 \u0628\u064A\u0646 \u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u062A\u0643 \u0648\u0627\u0644\u062E\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0641\u0639\u0651\u0644\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u062C\u062F. \u0631\u0627\u062C\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645." }))) : (React.createElement("div", { className: "card card-pad space-y-5" },
+            editing && (React.createElement("div", { className: "flex items-center justify-between rounded-xl border border-warn/30 bg-warn/10 px-4 py-2.5 text-sm font-semibold text-warn" },
+                React.createElement("span", { className: "flex items-center gap-2" },
+                    React.createElement(lucide_react_1.Pencil, { className: "h-4 w-4" }),
+                    " \u0623\u0646\u062A \u062A\u0639\u062F\u0651\u0644 \u062A\u0633\u062C\u064A\u0644\u0627\u064B \u0633\u0627\u0628\u0642\u0627\u064B"),
+                React.createElement("button", { className: "btn-ghost btn-sm", onClick: resetEntry },
+                    React.createElement(lucide_react_1.X, { className: "h-4 w-4" }),
+                    " \u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u062A\u0639\u062F\u064A\u0644"))),
+            React.createElement("div", { className: "grid gap-4 md:grid-cols-4" },
+                React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0645\u064A\u0644\u0627\u062F\u064A" },
+                    React.createElement("input", { type: "date", className: "input", value: date, onChange: (e) => onDateChange(e.target.value) })),
+                React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u062E\u0627\u0646\u0629 (\u062C\u0645\u0639\u0629 / \u0644\u064A\u0644\u0629)" },
+                    React.createElement("select", { className: "input", value: slot, onChange: (e) => { setSlot(e.target.value); setReciter(null); setComboKey((k) => k + 1); } }, [...new Set([...allowedSlots, ...(slot && !allowedSlots.includes(slot) ? [slot] : [])])].map((k) => React.createElement("option", { key: k, value: k }, constants_js_1.SLOTS[k].label)))),
+                React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0647\u062C\u0631\u064A (\u0631\u0642\u0645 \u0627\u0644\u0644\u064A\u0644\u0629 / \u0627\u0644\u064A\u0648\u0645)", className: "md:col-span-2", hint: "\u064A\u064F\u062D\u0633\u0628 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B (\u0623\u0645 \u0627\u0644\u0642\u0631\u0649) \u0648\u064A\u0645\u0643\u0646\u0643 \u062A\u0639\u062F\u064A\u0644\u0647 \u0644\u064A\u0648\u0627\u0641\u0642 \u0631\u0624\u064A\u0629 \u0627\u0644\u0647\u0644\u0627\u0644 \u0627\u0644\u0645\u062D\u0644\u064A\u0629." },
+                    React.createElement("div", { className: "grid grid-cols-[4.5rem_1fr_5.5rem] gap-2" },
+                        React.createElement("input", { type: "number", min: "1", max: "30", className: "input", placeholder: "\u0627\u0644\u064A\u0648\u0645", value: hijri.day, onChange: (e) => setHijri({ ...hijri, day: e.target.value }), "aria-label": "\u0627\u0644\u064A\u0648\u0645 \u0627\u0644\u0647\u062C\u0631\u064A" }),
+                        React.createElement("select", { className: "input", value: hijri.month, onChange: (e) => setHijri({ ...hijri, month: e.target.value }), "aria-label": "\u0627\u0644\u0634\u0647\u0631 \u0627\u0644\u0647\u062C\u0631\u064A" },
+                            React.createElement("option", { value: "" }, "\u0627\u0644\u0634\u0647\u0631"),
+                            constants_js_1.HIJRI_MONTHS.map((m, i) => React.createElement("option", { key: m, value: i + 1 }, m))),
+                        React.createElement("input", { type: "number", className: "input", placeholder: "\u0627\u0644\u0633\u0646\u0629", value: hijri.year, onChange: (e) => setHijri({ ...hijri, year: e.target.value }), "aria-label": "\u0627\u0644\u0633\u0646\u0629 \u0627\u0644\u0647\u062C\u0631\u064A\u0629" })))),
+            sameSlot.length > 0 && (React.createElement("div", { className: "flex items-start gap-2 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-warn" },
+                React.createElement(lucide_react_1.Info, { className: "mt-0.5 h-4 w-4 shrink-0" }),
+                React.createElement("p", null,
+                    "\u064A\u0648\u062C\u062F ",
+                    sameSlot.length,
+                    " \u062A\u0633\u062C\u064A\u0644 \u0633\u0627\u0628\u0642 \u0644\u0646\u0641\u0633 \u0627\u0644\u0645\u0633\u062C\u062F \u0648\u0627\u0644\u062A\u0627\u0631\u064A\u062E \u0648\u0627\u0644\u062E\u0627\u0646\u0629:",
+                    ' ',
+                    React.createElement("b", null, sameSlot.map((l) => (l.status === 'read' ? l.reciter_name : 'لم تتم القراءة')).join('، ')),
+                    ". \u064A\u0645\u0643\u0646\u0643 \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0625\u0646 \u0643\u0627\u0646 \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062C\u062F\u064A\u062F \u0644\u0642\u0627\u0631\u0626 \u0622\u062E\u0631."))),
+            React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+                React.createElement("button", { type: "button", onClick: () => setStatus('read'), className: `flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-3.5 font-bold transition-colors ${status === 'read' ? 'border-ok bg-ok/10 text-ok' : 'border-cardline bg-white text-ink hover:bg-hover'}` },
+                    React.createElement(lucide_react_1.CheckCircle2, { className: "h-5 w-5" }),
+                    " \u062A\u0645\u062A \u0627\u0644\u0642\u0631\u0627\u0621\u0629"),
+                React.createElement("button", { type: "button", onClick: () => setStatus('not_read'), className: `flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-3.5 font-bold transition-colors ${status === 'not_read' ? 'border-bad bg-bad/10 text-bad' : 'border-cardline bg-white text-ink hover:bg-hover'}` },
+                    React.createElement(lucide_react_1.XCircle, { className: "h-5 w-5" }),
+                    " \u0644\u0645 \u062A\u062A\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629")),
+            status === 'read' ? (React.createElement("div", { className: "grid gap-4 md:grid-cols-2" },
+                React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0642\u0627\u0631\u0626", className: "md:col-span-2", hint: `${approved.length} قارئاً معتمداً في «${constants_js_1.SLOTS[slot]?.label}». يمكنك أيضاً كتابة اسم غير موجود.` },
+                    React.createElement(ReciterCombobox_jsx_1.default, { key: comboKey, approved: approved, others: others, initial: reciter?.name || '', onPick: handlePick, onEdit: () => setReciter(null) }),
+                    reciter && (React.createElement("p", { className: "mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-ok" },
+                        React.createElement(lucide_react_1.CheckCircle2, { className: "h-3.5 w-3.5" }),
+                        " \u062A\u0645 \u0627\u062E\u062A\u064A\u0627\u0631: ",
+                        reciter.name,
+                        reciter.confirmedFor && React.createElement("span", { className: "badge-warn" }, "\u0627\u0633\u062A\u062B\u0646\u0627\u0621")))),
+                React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0633\u0648\u0631\u0629 / \u0627\u0644\u0645\u0642\u0637\u0639 \u0627\u0644\u0645\u0642\u0631\u0648\u0621 (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)" },
+                    React.createElement("input", { className: "input", value: surah, onChange: (e) => setSurah(e.target.value), placeholder: "\u0645\u062B\u0627\u0644: \u0633\u0648\u0631\u0629 \u0627\u0644\u0643\u0647\u0641" })),
+                React.createElement(ui_jsx_1.Field, { label: "\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)" },
+                    React.createElement("input", { type: "number", min: "0", className: "input", value: pages, onChange: (e) => setPages(e.target.value) })),
+                React.createElement(ui_jsx_1.Field, { label: "\u0645\u0644\u0627\u062D\u0638\u0627\u062A (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)", className: "md:col-span-2" },
+                    React.createElement("input", { className: "input", value: notes, onChange: (e) => setNotes(e.target.value) })))) : (React.createElement("div", { className: "grid gap-4 md:grid-cols-2" },
+                React.createElement(ui_jsx_1.Field, { label: "\u0633\u0628\u0628 \u0639\u062F\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629", className: reasonCode === 'other' ? '' : 'md:col-span-2' },
+                    React.createElement("select", { className: "input", value: reasonCode, onChange: (e) => setReasonCode(e.target.value) },
+                        React.createElement("option", { value: "" }, "\u0627\u062E\u062A\u0631 \u0627\u0644\u0633\u0628\u0628\u2026"),
+                        constants_js_1.REASONS.map((r, i) => React.createElement("option", { key: r.code, value: r.code },
+                            i + 1,
+                            ". ",
+                            r.label)))),
+                reasonCode === 'other' && (React.createElement(ui_jsx_1.Field, { label: "\u0627\u0643\u062A\u0628 \u0627\u0644\u0633\u0628\u0628" },
+                    React.createElement("input", { className: "input", value: reasonText, onChange: (e) => setReasonText(e.target.value), placeholder: "\u0627\u0644\u0633\u0628\u0628 \u0628\u0627\u0644\u062A\u0641\u0635\u064A\u0644" }))),
+                React.createElement(ui_jsx_1.Field, { label: "\u0645\u0644\u0627\u062D\u0638\u0627\u062A (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)", className: "md:col-span-2" },
+                    React.createElement("input", { className: "input", value: notes, onChange: (e) => setNotes(e.target.value) })))),
+            React.createElement("div", { className: "flex justify-end gap-2 border-t border-cardline pt-4" },
+                editing && React.createElement("button", { className: "btn-outline", onClick: resetEntry }, "\u0625\u0644\u063A\u0627\u0621"),
+                React.createElement("button", { className: "btn-primary min-w-40", onClick: save, disabled: busy },
+                    busy ? React.createElement(ui_jsx_1.Spinner, { className: "!text-white h-4 w-4" }) : React.createElement(lucide_react_1.Save, { className: "h-4 w-4" }),
+                    " ",
+                    editing ? 'حفظ التعديل' : 'حفظ التسجيل')))),
+        React.createElement("div", { className: "card mt-6 overflow-hidden" },
+            React.createElement("div", { className: "border-b border-cardline px-5 py-3.5" },
+                React.createElement("h2", { className: "font-extrabold" }, "\u0622\u062E\u0631 \u062A\u0633\u062C\u064A\u0644\u0627\u062A \u0627\u0644\u0645\u0633\u062C\u062F")),
+            recent.length === 0 ? (React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062A\u0633\u062C\u064A\u0644\u0627\u062A \u0628\u0639\u062F", hint: "\u0633\u062A\u0638\u0647\u0631 \u0647\u0646\u0627 \u0641\u0648\u0631 \u062D\u0641\u0638 \u0623\u0648\u0644 \u062A\u0633\u062C\u064A\u0644\u060C \u0648\u062A\u062A\u062D\u062F\u062B \u0644\u062D\u0638\u064A\u0627\u064B." })) : (React.createElement("div", { className: "overflow-x-auto" },
+                React.createElement("table", { className: "w-full min-w-[720px]" },
+                    React.createElement("thead", null,
+                        React.createElement("tr", null,
+                            React.createElement("th", { className: "th" }, "\u0627\u0644\u062A\u0627\u0631\u064A\u062E"),
+                            React.createElement("th", { className: "th" }, "\u0627\u0644\u062E\u0627\u0646\u0629"),
+                            React.createElement("th", { className: "th" }, "\u0627\u0644\u0642\u0627\u0631\u0626 / \u0627\u0644\u0633\u0628\u0628"),
+                            React.createElement("th", { className: "th" }, "\u0628\u0648\u0627\u0633\u0637\u0629"),
+                            React.createElement("th", { className: "th w-24" }))),
+                    React.createElement("tbody", null, recent.map((l) => (React.createElement("tr", { key: l.id, className: "tr-hover" },
+                        React.createElement("td", { className: "td whitespace-nowrap" },
+                            (0, util_js_1.fmtDate)(l.log_date),
+                            l.hijri_day && React.createElement("div", { className: "text-xs text-ink-soft" },
+                                l.hijri_day,
+                                " ",
+                                constants_js_1.HIJRI_MONTHS[(l.hijri_month || 1) - 1])),
+                        React.createElement("td", { className: "td whitespace-nowrap" }, constants_js_1.SLOTS[l.slot_key]?.short),
+                        React.createElement("td", { className: "td" }, l.status === 'read' ? (React.createElement("span", { className: "flex flex-wrap items-center gap-2" },
+                            l.reciter_name,
+                            l.is_exception && React.createElement("span", { className: "badge-warn" }, "\u0627\u0633\u062A\u062B\u0646\u0627\u0621"))) : (React.createElement("span", { className: "flex flex-wrap items-center gap-2" },
+                            React.createElement("span", { className: "badge-bad" }, "\u0644\u0645 \u062A\u062A\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629"),
+                            React.createElement("span", { className: "text-xs" }, l.reason_code === 'other' ? l.reason_text : constants_js_1.REASON_BY_CODE[l.reason_code]?.label)))),
+                        React.createElement("td", { className: "td text-xs" }, profileById[l.created_by]?.full_name ?? '—'),
+                        React.createElement("td", { className: "td" }, editable(l) && (React.createElement("div", { className: "flex gap-1" },
+                            React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => startEdit(l), "aria-label": "\u062A\u0639\u062F\u064A\u0644" },
+                                React.createElement(lucide_react_1.Pencil, { className: "h-4 w-4" })),
+                            React.createElement("button", { className: "btn-ghost btn-sm !px-2 text-bad", onClick: () => setDelTarget(l), "aria-label": "\u062D\u0630\u0641" },
+                                React.createElement(lucide_react_1.Trash2, { className: "h-4 w-4" }))))))))))))),
+        React.createElement(ui_jsx_1.Modal, { open: Boolean(pending), onClose: cancelException, title: "\u0642\u0627\u0631\u0626 \u062E\u0627\u0631\u062C \u0627\u0644\u062C\u062F\u0648\u0644 \u0627\u0644\u0645\u0639\u062A\u0645\u062F", size: "sm", footer: React.createElement(React.Fragment, null,
+                React.createElement("button", { className: "btn-outline", onClick: cancelException }, "\u0625\u0644\u063A\u0627\u0621 \u0648\u0627\u062E\u062A\u064A\u0627\u0631 \u0642\u0627\u0631\u0626 \u0622\u062E\u0631"),
+                React.createElement("button", { className: "btn-primary", onClick: confirmException }, "\u062A\u0623\u0643\u064A\u062F \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0643\u0627\u0633\u062A\u062B\u0646\u0627\u0621")) },
+            React.createElement("div", { className: "flex gap-3" },
+                React.createElement(lucide_react_1.AlertTriangle, { className: "mt-1 h-6 w-6 shrink-0 text-warn" }),
+                React.createElement("p", { className: "text-sm leading-8" },
+                    "\u26A0\uFE0F \u062A\u0646\u0628\u064A\u0647: \u0627\u0644\u0642\u0627\u0631\u0626 ",
+                    React.createElement("b", null, pending?.name),
+                    " \u063A\u064A\u0631 \u0645\u062F\u0631\u062C \u0636\u0645\u0646 \u0627\u0644\u062C\u062F\u0648\u0644 \u0627\u0644\u0645\u0639\u062A\u0645\u062F ",
+                    slotWord,
+                    ". \u0647\u0644 \u062A\u0631\u063A\u0628 \u0628\u062A\u0633\u062C\u064A\u0644\u0647 \u0643\u0627\u0633\u062A\u062B\u0646\u0627\u0621\u061F"))),
+        React.createElement(ui_jsx_1.ConfirmDialog, { open: Boolean(delTarget), danger: true, busy: busy, onClose: () => setDelTarget(null), onConfirm: doDelete, title: "\u062D\u0630\u0641 \u0627\u0644\u062A\u0633\u062C\u064A\u0644", confirmLabel: "\u062D\u0630\u0641", message: "\u0633\u064A\u064F\u062D\u0630\u0641 \u0647\u0630\u0627 \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0646\u0647\u0627\u0626\u064A\u0627\u064B \u0645\u0646 \u062C\u0645\u064A\u0639 \u0627\u0644\u0623\u062C\u0647\u0632\u0629. \u0647\u0644 \u0623\u0646\u062A \u0645\u062A\u0623\u0643\u062F\u061F" })));
+}
+
+};
+defs["src/pages/Dashboard.jsx"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = Dashboard;
+const react_1 = require("react");
+const react_router_dom_1 = require("react-router-dom");
+const lucide_react_1 = require("lucide-react");
+const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
+const DataContext_jsx_1 = require("src/context/DataContext.jsx");
+const constants_js_1 = require("src/lib/constants.js");
+const util_js_1 = require("src/lib/util.js");
+const ui_jsx_1 = require("src/components/ui.jsx");
+function Coverage({ title, date, slot, mosques, logs }) {
+    const list = slot
+        ? mosques.filter((m) => m.is_active && (slot === 'fri' ? m.enable_friday : m.enable_night && m.night_days?.includes(slot)))
+        : [];
+    return (React.createElement("div", { className: "card overflow-hidden" },
+        React.createElement("div", { className: "flex items-center justify-between border-b border-cardline px-5 py-3.5" },
+            React.createElement("h2", { className: "font-extrabold" }, title),
+            React.createElement("span", { className: "text-xs font-semibold text-ink-soft" }, slot ? `${constants_js_1.SLOTS[slot].short} — ${(0, util_js_1.fmtDate)(date)}` : (0, util_js_1.fmtDate)(date))),
+        !slot ? (React.createElement("p", { className: "px-5 py-6 text-sm text-ink-soft" }, "\u0644\u0627 \u062A\u0648\u062C\u062F \u062A\u0644\u0627\u0648\u0629 \u0645\u0642\u0631\u0631\u0629 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u064A\u0648\u0645.")) : list.length === 0 ? (React.createElement("p", { className: "px-5 py-6 text-sm text-ink-soft" }, "\u0644\u0627 \u062A\u0648\u062C\u062F \u0645\u0633\u0627\u062C\u062F \u0645\u0641\u0639\u0651\u0644\u0629 \u0644\u0647\u0630\u0647 \u0627\u0644\u062E\u0627\u0646\u0629.")) : (React.createElement("ul", { className: "divide-y divide-cardline" }, list.map((m) => {
+            const es = logs.filter((l) => l.mosque_id === m.id && l.log_date === date && l.slot_key === slot);
+            return (React.createElement("li", { key: m.id, className: "flex items-center justify-between gap-3 px-5 py-3" },
+                React.createElement("span", { className: "text-sm font-semibold" }, m.name),
+                es.length === 0 ? (React.createElement("span", { className: "badge-warn" }, "\u0644\u0645 \u064A\u064F\u0633\u062C\u064E\u0651\u0644 \u0628\u0639\u062F")) : (React.createElement("span", { className: "flex flex-wrap justify-end gap-1.5" }, es.map((l) => l.status === 'read'
+                    ? React.createElement("span", { key: l.id, className: "badge-ok" }, l.reciter_name)
+                    : React.createElement("span", { key: l.id, className: "badge-bad" }, "\u0644\u0645 \u062A\u062A\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629"))))));
+        })))));
+}
+function Dashboard() {
+    const { profile } = (0, AuthContext_jsx_1.useAuth)();
+    const { mosques, reciters, recitation_logs: logs, mosqueById, profileById } = (0, DataContext_jsx_1.useData)();
+    const today = (0, util_js_1.todayStr)();
+    const s = (0, react_1.useMemo)(() => {
+        const since = (0, util_js_1.addDays)(today, -29);
+        const last30 = logs.filter((l) => l.log_date >= since && l.log_date <= today);
+        const reads30 = last30.filter((l) => l.status === 'read');
+        const perMosque = mosques
+            .filter((m) => m.is_active)
+            .map((m) => ({ m, n: reads30.filter((l) => l.mosque_id === m.id).length, miss: last30.filter((l) => l.mosque_id === m.id && l.status === 'not_read').length }));
+        return {
+            month: logs.filter((l) => l.status === 'read' && l.log_date >= (0, util_js_1.monthStart)(today) && l.log_date <= today).length,
+            todayCount: logs.filter((l) => l.log_date === today).length,
+            missed: last30.filter((l) => l.status === 'not_read').length,
+            exceptions: reads30.filter((l) => l.is_exception).length,
+            perMosque,
+            max: Math.max(1, ...perMosque.map((x) => x.n)),
+        };
+    }, [logs, mosques, today]);
+    const todaySlot = constants_js_1.SLOT_BY_WEEKDAY[(0, util_js_1.weekdayOf)(today)] || null;
+    return (React.createElement(React.Fragment, null,
+        React.createElement(ui_jsx_1.PageHeader, { title: `مرحباً، ${profile.full_name}`, subtitle: "\u0646\u0638\u0631\u0629 \u0639\u0627\u0645\u0629 \u0639\u0644\u0649 \u0627\u0644\u062A\u0644\u0627\u0648\u0627\u062A \u0648\u062A\u063A\u0637\u064A\u0629 \u0627\u0644\u0645\u0633\u0627\u062C\u062F \u2014 \u062A\u062A\u062D\u062F\u062B \u0644\u062D\u0638\u064A\u0627\u064B.", actions: React.createElement(react_router_dom_1.Link, { to: "/log", className: "btn-primary" },
+                React.createElement(lucide_react_1.ClipboardList, { className: "h-4 w-4" }),
+                " \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A") }),
+        React.createElement("div", { className: "grid grid-cols-2 gap-3 lg:grid-cols-4" },
+            React.createElement(ui_jsx_1.StatCard, { label: "\u062A\u0644\u0627\u0648\u0627\u062A \u0647\u0630\u0627 \u0627\u0644\u0634\u0647\u0631", value: s.month, hint: "\u062D\u0633\u0628 \u0627\u0644\u062A\u0642\u0648\u064A\u0645 \u0627\u0644\u0645\u064A\u0644\u0627\u062F\u064A" }),
+            React.createElement(ui_jsx_1.StatCard, { label: "\u062A\u0633\u062C\u064A\u0644\u0627\u062A \u0627\u0644\u064A\u0648\u0645", value: s.todayCount }),
+            React.createElement(ui_jsx_1.StatCard, { label: "\u0644\u0645 \u062A\u062A\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629 (\u0622\u062E\u0631 30 \u064A\u0648\u0645\u0627\u064B)", value: s.missed, tone: s.missed ? 'bad' : undefined }),
+            React.createElement(ui_jsx_1.StatCard, { label: "\u0642\u0631\u0627\u0621 \u0645\u0633\u062C\u0644\u0648\u0646 / \u0627\u0633\u062A\u062B\u0646\u0627\u0621\u0627\u062A", value: `${reciters.filter((r) => r.is_active).length} / ${s.exceptions}`, hint: "\u0627\u0644\u0627\u0633\u062A\u062B\u0646\u0627\u0621\u0627\u062A \u0641\u064A \u0622\u062E\u0631 30 \u064A\u0648\u0645\u0627\u064B", tone: s.exceptions ? 'warn' : undefined })),
+        React.createElement("div", { className: "mt-5 grid gap-5 lg:grid-cols-2" },
+            React.createElement(Coverage, { title: "\u062A\u063A\u0637\u064A\u0629 \u0627\u0644\u064A\u0648\u0645", date: today, slot: todaySlot, mosques: mosques, logs: logs }),
+            React.createElement(Coverage, { title: "\u062A\u063A\u0637\u064A\u0629 \u0622\u062E\u0631 \u062C\u0645\u0639\u0629", date: (0, util_js_1.lastFriday)(today), slot: "fri", mosques: mosques, logs: logs })),
+        React.createElement("div", { className: "mt-5 grid gap-5 lg:grid-cols-2" },
+            React.createElement("div", { className: "card card-pad" },
+                React.createElement("h2", { className: "mb-4 font-extrabold" }, "\u0627\u0644\u062A\u0644\u0627\u0648\u0627\u062A \u062D\u0633\u0628 \u0627\u0644\u0645\u0633\u062C\u062F (\u0622\u062E\u0631 30 \u064A\u0648\u0645\u0627\u064B)"),
+                s.perMosque.length === 0 ? React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u0645\u0633\u0627\u062C\u062F" }) : (React.createElement("ul", { className: "space-y-3.5" }, s.perMosque.map(({ m, n, miss }) => (React.createElement("li", { key: m.id },
+                    React.createElement("div", { className: "mb-1.5 flex items-center justify-between text-sm" },
+                        React.createElement("span", { className: "font-semibold" }, m.name),
+                        React.createElement("span", { className: "text-xs font-semibold text-ink-soft" },
+                            n,
+                            " \u062A\u0644\u0627\u0648\u0629",
+                            miss ? ` — ${miss} لم تتم` : '')),
+                    React.createElement(ui_jsx_1.Bar, { value: n, max: s.max }))))))),
+            React.createElement("div", { className: "card overflow-hidden" },
+                React.createElement("div", { className: "border-b border-cardline px-5 py-3.5" },
+                    React.createElement("h2", { className: "font-extrabold" }, "\u0622\u062E\u0631 \u0627\u0644\u0646\u0634\u0627\u0637\u0627\u062A")),
+                logs.length === 0 ? React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062A\u0633\u062C\u064A\u0644\u0627\u062A \u0628\u0639\u062F", hint: "\u0627\u0628\u062F\u0623 \u0628\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A \u0648\u0633\u064A\u0638\u0647\u0631 \u0627\u0644\u0646\u0634\u0627\u0637 \u0647\u0646\u0627 \u0641\u0648\u0631\u0627\u064B." }) : (React.createElement("ul", { className: "divide-y divide-cardline" }, logs.slice(0, 8).map((l) => (React.createElement("li", { key: l.id, className: "px-5 py-3" },
+                    React.createElement("div", { className: "flex items-center justify-between gap-3" },
+                        React.createElement("p", { className: "text-sm font-bold" }, l.status === 'read' ? l.reciter_name : `لم تتم القراءة — ${l.reason_code === 'other' ? l.reason_text : constants_js_1.REASON_BY_CODE[l.reason_code]?.short}`),
+                        l.is_exception && React.createElement("span", { className: "badge-warn" }, "\u0627\u0633\u062A\u062B\u0646\u0627\u0621")),
+                    React.createElement("p", { className: "mt-0.5 text-xs text-ink-soft" },
+                        mosqueById[l.mosque_id]?.name,
+                        " \u2014 ",
+                        constants_js_1.SLOTS[l.slot_key]?.short,
+                        " \u2014 ",
+                        (0, util_js_1.fmtDate)(l.log_date),
+                        profileById[l.created_by] ? ` — ${profileById[l.created_by].full_name}` : ''))))))))));
+}
+
+};
+defs["src/pages/Login.jsx"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = Login;
+const react_1 = require("react");
+const lucide_react_1 = require("lucide-react");
+const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
+const ui_jsx_1 = require("src/components/ui.jsx");
+function Login() {
+    const { signIn } = (0, AuthContext_jsx_1.useAuth)();
+    const [email, setEmail] = (0, react_1.useState)('');
+    const [password, setPassword] = (0, react_1.useState)('');
+    const [busy, setBusy] = (0, react_1.useState)(false);
+    const [error, setError] = (0, react_1.useState)('');
+    const submit = async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        setError('');
+        const err = await signIn(email, password);
+        if (err)
+            setError(err.message?.includes('Invalid login') ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : err.message);
+        setBusy(false);
+    };
+    return (React.createElement("div", { className: "flex min-h-screen items-center justify-center bg-page p-4" },
+        React.createElement("div", { className: "w-full max-w-sm" },
+            React.createElement("div", { className: "mb-6 flex flex-col items-center gap-3 text-center" },
+                React.createElement("span", { className: "grid h-14 w-14 place-items-center rounded-2xl bg-line text-white" },
+                    React.createElement(lucide_react_1.BookOpen, { className: "h-7 w-7" })),
+                React.createElement("div", null,
+                    React.createElement("h1", { className: "text-3xl font-extrabold" }, "\u062A\u0644\u0627\u0648\u0627\u062A"),
+                    React.createElement("p", { className: "mt-1 text-sm text-ink-soft" }, "\u0646\u0638\u0627\u0645 \u0625\u062F\u0627\u0631\u0629 \u0648\u062A\u0646\u0638\u064A\u0645 \u0642\u0631\u0627\u0621 \u0648\u062A\u0644\u0627\u0648\u0627\u062A \u0627\u0644\u0645\u0633\u0627\u062C\u062F"))),
+            React.createElement("form", { onSubmit: submit, className: "card card-pad space-y-4" },
+                React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A" },
+                    React.createElement("input", { className: "input", type: "email", dir: "ltr", autoComplete: "username", required: true, value: email, onChange: (e) => setEmail(e.target.value) })),
+                React.createElement(ui_jsx_1.Field, { label: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631" },
+                    React.createElement("input", { className: "input", type: "password", dir: "ltr", autoComplete: "current-password", required: true, value: password, onChange: (e) => setPassword(e.target.value) })),
+                error && React.createElement("p", { className: "rounded-lg bg-bad/10 px-3 py-2 text-sm font-semibold text-bad", role: "alert" }, error),
+                React.createElement("button", { className: "btn-primary w-full", disabled: busy },
+                    busy ? React.createElement(ui_jsx_1.Spinner, { className: "!text-white h-4 w-4" }) : React.createElement(lucide_react_1.LogIn, { className: "h-4 w-4" }),
+                    " \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644"),
+                React.createElement("p", { className: "text-center text-xs text-ink-soft" }, "\u062A\u0628\u0642\u0649 \u0645\u0633\u062C\u0651\u0644\u0627\u064B \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u062D\u062A\u0649 \u062A\u0636\u063A\u0637 \u00AB\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062E\u0631\u0648\u062C\u00BB.")))));
+}
+
+};
+defs["src/pages/Mosques.jsx"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = Mosques;
+const react_1 = require("react");
+const lucide_react_1 = require("lucide-react");
+const supabase_js_1 = require("src/lib/supabase.js");
+const DataContext_jsx_1 = require("src/context/DataContext.jsx");
+const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
+const constants_js_1 = require("src/lib/constants.js");
+const ui_jsx_1 = require("src/components/ui.jsx");
+const blank = { name: '', location: '', city: '', enable_friday: true, enable_night: true, night_days: [...constants_js_1.NIGHT_KEYS], is_active: true };
+function Mosques() {
+    const { mosques, recitation_logs, upsertLocal, removeLocal } = (0, DataContext_jsx_1.useData)();
+    const toast = (0, ToastContext_jsx_1.useToast)();
+    const [form, setForm] = (0, react_1.useState)(null); // null = مغلق
+    const [busy, setBusy] = (0, react_1.useState)(false);
+    const [del, setDel] = (0, react_1.useState)(null);
+    const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+    const toggleNight = (k) => set({ night_days: form.night_days.includes(k) ? form.night_days.filter((x) => x !== k) : [...form.night_days, k] });
+    const save = async () => {
+        if (!form.name.trim())
+            return toast.warn('اسم المسجد مطلوب');
+        const row = {
+            name: form.name.trim(), location: form.location?.trim() || null, city: form.city?.trim() || null,
+            enable_friday: form.enable_friday, enable_night: form.enable_night,
+            night_days: constants_js_1.NIGHT_KEYS.filter((k) => form.night_days.includes(k)), is_active: form.is_active,
+        };
+        setBusy(true);
+        const q = form.id ? supabase_js_1.supabase.from('mosques').update(row).eq('id', form.id) : supabase_js_1.supabase.from('mosques').insert(row);
+        const { data, error } = await q.select().single();
+        setBusy(false);
+        if (error)
+            return toast.error('تعذّر الحفظ', error.code === '23505' ? 'يوجد مسجد بنفس الاسم.' : error.message);
+        upsertLocal('mosques', data);
+        toast.success(form.id ? 'تم تحديث المسجد' : 'تمت إضافة المسجد');
+        setForm(null);
+    };
+    const remove = async () => {
+        setBusy(true);
+        const { error } = await supabase_js_1.supabase.from('mosques').delete().eq('id', del.id);
+        setBusy(false);
+        if (error) {
+            return toast.error('لا يمكن حذف المسجد', error.code === '23503' ? 'توجد تسجيلات مرتبطة به. عطّله بدلاً من حذفه.' : error.message);
+        }
+        removeLocal('mosques', del.id);
+        setDel(null);
+        toast.success('تم حذف المسجد');
+    };
+    return (React.createElement(React.Fragment, null,
+        React.createElement(ui_jsx_1.PageHeader, { title: "\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0633\u0627\u062C\u062F", subtitle: "\u0623\u0636\u0641 \u0627\u0644\u0645\u0633\u0627\u062C\u062F \u0648\u062D\u062F\u0651\u062F \u062E\u0627\u0646\u0627\u062A \u0627\u0644\u062A\u0644\u0627\u0648\u0629 \u0627\u0644\u0645\u0641\u0639\u0651\u0644\u0629 \u0644\u0643\u0644 \u0645\u0633\u062C\u062F.", actions: React.createElement("button", { className: "btn-primary", onClick: () => setForm({ ...blank }) },
+                React.createElement(lucide_react_1.Plus, { className: "h-4 w-4" }),
+                " \u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062C\u062F") }),
+        React.createElement("div", { className: "card overflow-hidden" }, mosques.length === 0 ? (React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u0645\u0633\u0627\u062C\u062F", hint: "\u0623\u0636\u0641 \u0623\u0648\u0644 \u0645\u0633\u062C\u062F \u0644\u0644\u0628\u062F\u0621.", action: React.createElement("button", { className: "btn-primary", onClick: () => setForm({ ...blank }) }, "\u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062C\u062F") })) : (React.createElement("div", { className: "overflow-x-auto" },
+            React.createElement("table", { className: "w-full min-w-[760px]" },
+                React.createElement("thead", null,
+                    React.createElement("tr", null,
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u0645\u0633\u062C\u062F"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u0645\u0648\u0642\u0639 / \u0627\u0644\u0645\u062F\u064A\u0646\u0629"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u062E\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0641\u0639\u0651\u0644\u0629"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u062A\u0633\u062C\u064A\u0644\u0627\u062A"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u062D\u0627\u0644\u0629"),
+                        React.createElement("th", { className: "th w-24" }))),
+                React.createElement("tbody", null, mosques.map((m) => (React.createElement("tr", { key: m.id, className: "tr-hover" },
+                    React.createElement("td", { className: "td font-bold" },
+                        React.createElement("span", { className: "flex items-center gap-2" },
+                            React.createElement(lucide_react_1.Building2, { className: "h-4 w-4 text-ink-soft" }),
+                            m.name)),
+                    React.createElement("td", { className: "td text-sm" }, [m.location, m.city].filter(Boolean).join(' — ') || React.createElement("span", { className: "text-ink-soft" }, "\u2014")),
+                    React.createElement("td", { className: "td" },
+                        React.createElement("div", { className: "flex flex-wrap gap-1.5" },
+                            m.enable_friday && React.createElement("span", { className: "badge-brand" }, "\u0627\u0644\u062C\u0645\u0639\u0629"),
+                            m.enable_night && (m.night_days?.length
+                                ? m.night_days.map((k) => React.createElement("span", { key: k, className: "badge-neutral" }, constants_js_1.SLOTS[k]?.short))
+                                : React.createElement("span", { className: "badge-warn" }, "\u0644\u064A\u0627\u0644\u064D (\u0628\u062F\u0648\u0646 \u0623\u064A\u0627\u0645)")),
+                            !m.enable_friday && !m.enable_night && React.createElement("span", { className: "text-ink-soft" }, "\u2014"))),
+                    React.createElement("td", { className: "td" }, recitation_logs.filter((l) => l.mosque_id === m.id).length),
+                    React.createElement("td", { className: "td" }, m.is_active ? React.createElement("span", { className: "badge-ok" }, "\u0646\u0634\u0637") : React.createElement("span", { className: "badge-neutral" }, "\u0645\u0639\u0637\u0651\u0644")),
+                    React.createElement("td", { className: "td" },
+                        React.createElement("div", { className: "flex gap-1" },
+                            React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => setForm({ ...m, night_days: m.night_days || [] }), "aria-label": "\u062A\u0639\u062F\u064A\u0644" },
+                                React.createElement(lucide_react_1.Pencil, { className: "h-4 w-4" })),
+                            React.createElement("button", { className: "btn-ghost btn-sm !px-2 text-bad", onClick: () => setDel(m), "aria-label": "\u062D\u0630\u0641" },
+                                React.createElement(lucide_react_1.Trash2, { className: "h-4 w-4" })))))))))))),
+        React.createElement(ui_jsx_1.Modal, { drawer: true, open: Boolean(form), onClose: () => setForm(null), title: form?.id ? 'تعديل المسجد' : 'إضافة مسجد', footer: React.createElement(React.Fragment, null,
+                React.createElement("button", { className: "btn-outline", onClick: () => setForm(null) }, "\u0625\u0644\u063A\u0627\u0621"),
+                React.createElement("button", { className: "btn-primary", onClick: save, disabled: busy },
+                    busy && React.createElement(ui_jsx_1.Spinner, { className: "!text-white h-4 w-4" }),
+                    " \u062D\u0641\u0638")) }, form && (React.createElement("div", { className: "space-y-4" },
+            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062C\u062F" },
+                React.createElement("input", { className: "input", value: form.name, onChange: (e) => set({ name: e.target.value }), autoFocus: true })),
+            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0645\u0648\u0642\u0639 / \u0627\u0644\u062D\u064A" },
+                React.createElement("input", { className: "input", value: form.location || '', onChange: (e) => set({ location: e.target.value }) })),
+            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0645\u062F\u064A\u0646\u0629" },
+                React.createElement("input", { className: "input", value: form.city || '', onChange: (e) => set({ city: e.target.value }) })),
+            React.createElement("div", { className: "space-y-3 rounded-xl border border-cardline bg-hover p-4" },
+                React.createElement("p", { className: "text-sm font-extrabold" }, "\u0627\u0644\u062E\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0641\u0639\u0651\u0644\u0629"),
+                React.createElement(ui_jsx_1.Switch, { checked: form.enable_friday, onChange: (v) => set({ enable_friday: v }), label: "\u0627\u0644\u062A\u0644\u0627\u0648\u0629 \u0627\u0644\u0646\u0647\u0627\u0631\u064A\u0629 (\u0642\u0631\u0627\u0621 \u0627\u0644\u062C\u0645\u0639\u0629)" }),
+                React.createElement(ui_jsx_1.Switch, { checked: form.enable_night, onChange: (v) => set({ enable_night: v }), label: "\u0627\u0644\u062A\u0644\u0627\u0648\u0629 \u0627\u0644\u0644\u064A\u0644\u064A\u0629 (\u0642\u0631\u0627\u0621 \u0627\u0644\u0644\u064A\u0627\u0644\u064A)" }),
+                form.enable_night && (React.createElement("div", null,
+                    React.createElement("p", { className: "mb-2 mt-1 text-xs font-semibold text-ink-soft" }, "\u0627\u0644\u0644\u064A\u0627\u0644\u064A \u0627\u0644\u0645\u062A\u0627\u062D\u0629"),
+                    React.createElement("div", { className: "flex flex-wrap gap-2" }, constants_js_1.NIGHT_KEYS.map((k) => {
+                        const on = form.night_days.includes(k);
+                        return (React.createElement("button", { key: k, type: "button", "aria-pressed": on, onClick: () => toggleNight(k), className: `rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${on ? 'border-line bg-line text-white' : 'border-cardline bg-white text-ink hover:bg-card'}` }, constants_js_1.SLOTS[k].label));
+                    }))))),
+            React.createElement(ui_jsx_1.Switch, { checked: form.is_active, onChange: (v) => set({ is_active: v }), label: "\u0627\u0644\u0645\u0633\u062C\u062F \u0646\u0634\u0637" })))),
+        React.createElement(ui_jsx_1.ConfirmDialog, { open: Boolean(del), danger: true, busy: busy, onClose: () => setDel(null), onConfirm: remove, title: "\u062D\u0630\u0641 \u0627\u0644\u0645\u0633\u062C\u062F", confirmLabel: "\u062D\u0630\u0641", message: `هل تريد حذف «${del?.name}»؟ إن كانت له تسجيلات فلن يُحذف — عطّله بدلاً من ذلك.` })));
+}
+
+};
+defs["src/pages/Reciters.jsx"] = function(exports, require, module, React){
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = Reciters;
+const react_1 = require("react");
+const lucide_react_1 = require("lucide-react");
+const supabase_js_1 = require("src/lib/supabase.js");
+const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
+const DataContext_jsx_1 = require("src/context/DataContext.jsx");
+const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
+const constants_js_1 = require("src/lib/constants.js");
+const util_js_1 = require("src/lib/util.js");
+const ui_jsx_1 = require("src/components/ui.jsx");
+const ReciterHistoryModal_jsx_1 = __importDefault(require("src/components/ReciterHistoryModal.jsx"));
+const blank = { name: '', notes: '', is_active: true, slots: [] };
+function Reciters() {
+    const { isAdmin } = (0, AuthContext_jsx_1.useAuth)();
+    const { reciters, slotsByReciter, recitation_logs, upsertLocal, removeLocal } = (0, DataContext_jsx_1.useData)();
+    const toast = (0, ToastContext_jsx_1.useToast)();
+    const [q, setQ] = (0, react_1.useState)('');
+    const [slotFilter, setSlotFilter] = (0, react_1.useState)('all');
+    const [showInactive, setShowInactive] = (0, react_1.useState)(false);
+    const [hist, setHist] = (0, react_1.useState)(null);
+    const [form, setForm] = (0, react_1.useState)(null);
+    const [del, setDel] = (0, react_1.useState)(null);
+    const [busy, setBusy] = (0, react_1.useState)(false);
+    const stats = (0, react_1.useMemo)(() => {
+        const m = {};
+        recitation_logs.forEach((l) => {
+            var _a;
+            if (l.status !== 'read' || !l.reciter_id)
+                return;
+            const e = (m[_a = l.reciter_id] || (m[_a] = { count: 0, last: '' }));
+            e.count++;
+            if (l.log_date > e.last)
+                e.last = l.log_date;
+        });
+        return m;
+    }, [recitation_logs]);
+    const rows = (0, react_1.useMemo)(() => reciters.filter((r) => (showInactive || r.is_active) &&
+        (!q || (0, util_js_1.matchesQuery)(r.name, q)) &&
+        (slotFilter === 'all' || (slotsByReciter[r.id] || []).some((s) => s.slot_key === slotFilter))), [reciters, q, slotFilter, showInactive, slotsByReciter]);
+    const save = async () => {
+        if (!form.name.trim())
+            return toast.warn('اسم القارئ مطلوب');
+        setBusy(true);
+        const row = { name: form.name.trim(), notes: form.notes?.trim() || null, is_active: form.is_active };
+        const q1 = form.id ? supabase_js_1.supabase.from('reciters').update(row).eq('id', form.id) : supabase_js_1.supabase.from('reciters').insert(row);
+        const { data: r, error } = await q1.select().single();
+        if (error) {
+            setBusy(false);
+            return toast.error('تعذّر الحفظ', error.code === '23505' ? 'يوجد قارئ بنفس الاسم.' : error.message);
+        }
+        upsertLocal('reciters', r);
+        const existing = slotsByReciter[r.id] || [];
+        const want = new Set(form.slots);
+        const toDelete = existing.filter((s) => !want.has(s.slot_key));
+        const toAdd = [...want].filter((k) => !existing.some((s) => s.slot_key === k));
+        if (toDelete.length) {
+            const { error: e } = await supabase_js_1.supabase.from('reciter_slots').delete().in('id', toDelete.map((s) => s.id));
+            if (!e)
+                toDelete.forEach((s) => removeLocal('reciter_slots', s.id));
+        }
+        if (toAdd.length) {
+            const { data: ins, error: e } = await supabase_js_1.supabase.from('reciter_slots').insert(toAdd.map((k) => ({ reciter_id: r.id, slot_key: k }))).select();
+            if (!e)
+                ins.forEach((x) => upsertLocal('reciter_slots', x));
+        }
+        setBusy(false);
+        toast.success(form.id ? 'تم تحديث القارئ' : 'تمت إضافة القارئ');
+        setForm(null);
+    };
+    const remove = async () => {
+        setBusy(true);
+        const { error } = await supabase_js_1.supabase.from('reciters').delete().eq('id', del.id);
+        setBusy(false);
+        if (error)
+            return toast.error('تعذّر الحذف', error.message);
+        removeLocal('reciters', del.id);
+        setDel(null);
+        toast.success('تم حذف القارئ', 'تبقى تسجيلاته السابقة محفوظة باسمه.');
+    };
+    return (React.createElement(React.Fragment, null,
+        React.createElement(ui_jsx_1.PageHeader, { title: "\u062F\u0644\u064A\u0644 \u0627\u0644\u0642\u0631\u0627\u0621", subtitle: "\u0627\u0644\u0642\u0631\u0627\u0621 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0648\u0646 \u0648\u062E\u0627\u0646\u0627\u062A\u0647\u0645. \u0627\u0636\u063A\u0637 \u0639\u0644\u0649 \u0642\u0627\u0631\u0626 \u0644\u0639\u0631\u0636 \u0633\u062C\u0644 \u062A\u0644\u0627\u0648\u0627\u062A\u0647 \u0627\u0644\u0643\u0627\u0645\u0644.", actions: isAdmin && React.createElement("button", { className: "btn-primary", onClick: () => setForm({ ...blank }) },
+                React.createElement(lucide_react_1.Plus, { className: "h-4 w-4" }),
+                " \u0625\u0636\u0627\u0641\u0629 \u0642\u0627\u0631\u0626") }),
+        React.createElement("div", { className: "card card-pad mb-4 flex flex-wrap items-end gap-3" },
+            React.createElement("div", { className: "relative min-w-56 flex-1" },
+                React.createElement(lucide_react_1.Search, { className: "pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" }),
+                React.createElement("input", { className: "input ps-9", placeholder: "\u0627\u0628\u062D\u062B \u0628\u0627\u0633\u0645 \u0627\u0644\u0642\u0627\u0631\u0626\u2026", value: q, onChange: (e) => setQ(e.target.value) })),
+            React.createElement("select", { className: "input w-auto", value: slotFilter, onChange: (e) => setSlotFilter(e.target.value), "aria-label": "\u0641\u0644\u062A\u0631 \u0627\u0644\u062E\u0627\u0646\u0629" },
+                React.createElement("option", { value: "all" }, "\u0643\u0644 \u0627\u0644\u062E\u0627\u0646\u0627\u062A"),
+                constants_js_1.SLOT_KEYS.map((k) => React.createElement("option", { key: k, value: k }, constants_js_1.SLOTS[k].label))),
+            isAdmin && React.createElement(ui_jsx_1.Switch, { checked: showInactive, onChange: setShowInactive, label: "\u0639\u0631\u0636 \u0627\u0644\u0645\u0639\u0637\u0651\u0644\u064A\u0646" }),
+            React.createElement("span", { className: "text-sm font-semibold text-ink-soft" },
+                rows.length,
+                " \u0642\u0627\u0631\u0626")),
+        React.createElement("div", { className: "card overflow-hidden" }, rows.length === 0 ? React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u0646\u062A\u0627\u0626\u062C", hint: "\u062C\u0631\u0651\u0628 \u062A\u063A\u064A\u064A\u0631 \u0627\u0644\u0628\u062D\u062B \u0623\u0648 \u0627\u0644\u0641\u0644\u062A\u0631." }) : (React.createElement("div", { className: "overflow-x-auto" },
+            React.createElement("table", { className: "w-full min-w-[760px]" },
+                React.createElement("thead", null,
+                    React.createElement("tr", null,
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u0642\u0627\u0631\u0626"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u062E\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629"),
+                        React.createElement("th", { className: "th" }, "\u0639\u062F\u062F \u0627\u0644\u062A\u0644\u0627\u0648\u0627\u062A"),
+                        React.createElement("th", { className: "th" }, "\u0622\u062E\u0631 \u062A\u0644\u0627\u0648\u0629"),
+                        isAdmin && React.createElement("th", { className: "th w-24" }))),
+                React.createElement("tbody", null, rows.map((r) => {
+                    const st = stats[r.id];
+                    const slots = (slotsByReciter[r.id] || []).map((s) => s.slot_key).sort((a, b) => constants_js_1.SLOT_KEYS.indexOf(a) - constants_js_1.SLOT_KEYS.indexOf(b));
+                    return (React.createElement("tr", { key: r.id, className: "tr-hover cursor-pointer", onClick: () => setHist({ key: r.id, name: r.name }) },
+                        React.createElement("td", { className: "td font-bold" },
+                            r.name,
+                            !r.is_active && React.createElement("span", { className: "badge-neutral ms-2" }, "\u0645\u0639\u0637\u0651\u0644")),
+                        React.createElement("td", { className: "td" },
+                            React.createElement("div", { className: "flex flex-wrap gap-1.5" }, slots.length ? slots.map((k) => React.createElement("span", { key: k, className: k === 'fri' ? 'badge-brand' : 'badge-neutral' }, constants_js_1.SLOTS[k].short)) : React.createElement("span", { className: "text-ink-soft" }, "\u2014"))),
+                        React.createElement("td", { className: "td font-bold" }, st?.count ?? 0),
+                        React.createElement("td", { className: "td text-sm" }, st ? (0, util_js_1.fmtDate)(st.last) : '—'),
+                        isAdmin && (React.createElement("td", { className: "td", onClick: (e) => e.stopPropagation() },
+                            React.createElement("div", { className: "flex gap-1" },
+                                React.createElement("button", { className: "btn-ghost btn-sm !px-2", "aria-label": "\u062A\u0639\u062F\u064A\u0644", onClick: () => setForm({ ...r, notes: r.notes || '', slots }) },
+                                    React.createElement(lucide_react_1.Pencil, { className: "h-4 w-4" })),
+                                React.createElement("button", { className: "btn-ghost btn-sm !px-2 text-bad", "aria-label": "\u062D\u0630\u0641", onClick: () => setDel(r) },
+                                    React.createElement(lucide_react_1.Trash2, { className: "h-4 w-4" })))))));
+                })))))),
+        React.createElement(ReciterHistoryModal_jsx_1.default, { open: Boolean(hist), onClose: () => setHist(null), reciterKeyValue: hist?.key, name: hist?.name }),
+        React.createElement(ui_jsx_1.Modal, { drawer: true, open: Boolean(form), onClose: () => setForm(null), title: form?.id ? 'تعديل القارئ' : 'إضافة قارئ', footer: React.createElement(React.Fragment, null,
+                React.createElement("button", { className: "btn-outline", onClick: () => setForm(null) }, "\u0625\u0644\u063A\u0627\u0621"),
+                React.createElement("button", { className: "btn-primary", onClick: save, disabled: busy },
+                    busy && React.createElement(ui_jsx_1.Spinner, { className: "!text-white h-4 w-4" }),
+                    " \u062D\u0641\u0638")) }, form && (React.createElement("div", { className: "space-y-4" },
+            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0633\u0645 \u0627\u0644\u0642\u0627\u0631\u0626" },
+                React.createElement("input", { className: "input", value: form.name, onChange: (e) => setForm({ ...form, name: e.target.value }), autoFocus: true })),
+            React.createElement(ui_jsx_1.Field, { label: "\u0645\u0644\u0627\u062D\u0638\u0627\u062A (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)" },
+                React.createElement("input", { className: "input", value: form.notes, onChange: (e) => setForm({ ...form, notes: e.target.value }) })),
+            React.createElement("div", { className: "rounded-xl border border-cardline bg-hover p-4" },
+                React.createElement("p", { className: "mb-2.5 text-sm font-extrabold" }, "\u0627\u0644\u062E\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629 \u0644\u0647"),
+                React.createElement("div", { className: "flex flex-wrap gap-2" }, constants_js_1.SLOT_KEYS.map((k) => {
+                    const on = form.slots.includes(k);
+                    return (React.createElement("button", { key: k, type: "button", "aria-pressed": on, onClick: () => setForm({ ...form, slots: on ? form.slots.filter((x) => x !== k) : [...form.slots, k] }), className: `rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${on ? 'border-line bg-line text-white' : 'border-cardline bg-white text-ink hover:bg-card'}` }, constants_js_1.SLOTS[k].label));
+                }))),
+            React.createElement(ui_jsx_1.Switch, { checked: form.is_active, onChange: (v) => setForm({ ...form, is_active: v }), label: "\u0627\u0644\u0642\u0627\u0631\u0626 \u0646\u0634\u0637" })))),
+        React.createElement(ui_jsx_1.ConfirmDialog, { open: Boolean(del), danger: true, busy: busy, onClose: () => setDel(null), onConfirm: remove, title: "\u062D\u0630\u0641 \u0627\u0644\u0642\u0627\u0631\u0626", confirmLabel: "\u062D\u0630\u0641", message: `هل تريد حذف «${del?.name}» من الدليل؟ تبقى تسجيلاته السابقة محفوظة باسمه. للإيقاف المؤقت استخدم «معطّل» بدلاً من الحذف.` })));
+}
+
+};
+defs["src/pages/Users.jsx"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = UsersPage;
+const react_1 = require("react");
+const lucide_react_1 = require("lucide-react");
+const supabase_js_1 = require("src/lib/supabase.js");
+const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
+const DataContext_jsx_1 = require("src/context/DataContext.jsx");
+const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
+const constants_js_1 = require("src/lib/constants.js");
+const ui_jsx_1 = require("src/components/ui.jsx");
+const blank = { full_name: '', email: '', password: '', role: 'supervisor', mosque_id: '', scope: 'both', is_active: true };
+function UsersPage() {
+    const { session } = (0, AuthContext_jsx_1.useAuth)();
+    const { profiles, mosques, mosqueById, upsertLocal, removeLocal } = (0, DataContext_jsx_1.useData)();
+    const toast = (0, ToastContext_jsx_1.useToast)();
+    const [form, setForm] = (0, react_1.useState)(null);
+    const [pw, setPw] = (0, react_1.useState)(null); // { user, password }
+    const [del, setDel] = (0, react_1.useState)(null);
+    const [busy, setBusy] = (0, react_1.useState)(false);
+    const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+    const isNew = form && !form.id;
+    const save = async () => {
+        if (!form.full_name.trim())
+            return toast.warn('الاسم مطلوب');
+        if (form.role === 'supervisor' && !form.mosque_id)
+            return toast.warn('اربط المشرف بمسجد');
+        setBusy(true);
+        if (isNew) {
+            if (!form.email.trim() || form.password.length < 8) {
+                setBusy(false);
+                return toast.warn('بيانات ناقصة', 'البريد مطلوب، وكلمة المرور 8 أحرف على الأقل.');
+            }
+            const { data, error } = await supabase_js_1.supabase.functions.invoke('admin-users', {
+                body: { action: 'create', email: form.email.trim(), password: form.password, full_name: form.full_name.trim(), role: form.role, mosque_id: form.mosque_id || null, scope: form.scope },
+            });
+            setBusy(false);
+            if (error)
+                return toast.error('تعذّر إنشاء المستخدم', await (0, supabase_js_1.functionError)(error));
+            upsertLocal('profiles', data.profile);
+            toast.success('تم إنشاء المستخدم', form.full_name);
+        }
+        else {
+            const { data, error } = await supabase_js_1.supabase.from('profiles')
+                .update({ full_name: form.full_name.trim(), role: form.role, mosque_id: form.mosque_id || null, scope: form.scope, is_active: form.is_active })
+                .eq('id', form.id).select().single();
+            setBusy(false);
+            if (error)
+                return toast.error('تعذّر الحفظ', error.message);
+            upsertLocal('profiles', data);
+            toast.success('تم تحديث المستخدم');
+        }
+        setForm(null);
+    };
+    const resetPassword = async () => {
+        if (pw.password.length < 8)
+            return toast.warn('كلمة المرور قصيرة', '8 أحرف على الأقل.');
+        setBusy(true);
+        const { error } = await supabase_js_1.supabase.functions.invoke('admin-users', { body: { action: 'reset_password', user_id: pw.user.id, password: pw.password } });
+        setBusy(false);
+        if (error)
+            return toast.error('تعذّر تغيير كلمة المرور', await (0, supabase_js_1.functionError)(error));
+        toast.success('تم تغيير كلمة المرور', pw.user.full_name);
+        setPw(null);
+    };
+    const remove = async () => {
+        setBusy(true);
+        const { error } = await supabase_js_1.supabase.functions.invoke('admin-users', { body: { action: 'delete', user_id: del.id } });
+        setBusy(false);
+        if (error)
+            return toast.error('تعذّر الحذف', await (0, supabase_js_1.functionError)(error));
+        removeLocal('profiles', del.id);
+        setDel(null);
+        toast.success('تم حذف المستخدم');
+    };
+    return (React.createElement(React.Fragment, null,
+        React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646 \u0648\u0627\u0644\u0631\u0628\u0637", subtitle: "\u0623\u0646\u0634\u0626 \u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0645\u0634\u0631\u0641\u064A\u0646 \u0648\u0627\u0631\u0628\u0637 \u0643\u0644 \u0645\u0634\u0631\u0641 \u0628\u0645\u0633\u062C\u062F \u0648\u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u0629.", actions: React.createElement("button", { className: "btn-primary", onClick: () => setForm({ ...blank }) },
+                React.createElement(lucide_react_1.Plus, { className: "h-4 w-4" }),
+                " \u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062A\u062E\u062F\u0645") }),
+        React.createElement("div", { className: "card overflow-hidden" }, profiles.length === 0 ? React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u064A\u0648\u062C\u062F \u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646" }) : (React.createElement("div", { className: "overflow-x-auto" },
+            React.createElement("table", { className: "w-full min-w-[820px]" },
+                React.createElement("thead", null,
+                    React.createElement("tr", null,
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u0627\u0633\u0645"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u0628\u0631\u064A\u062F"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u062F\u0648\u0631"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u0645\u0633\u062C\u062F"),
+                        React.createElement("th", { className: "th" }, "\u0646\u0637\u0627\u0642 \u0627\u0644\u0645\u0633\u0624\u0648\u0644\u064A\u0629"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u062D\u0627\u0644\u0629"),
+                        React.createElement("th", { className: "th w-32" }))),
+                React.createElement("tbody", null, profiles.map((p) => (React.createElement("tr", { key: p.id, className: "tr-hover" },
+                    React.createElement("td", { className: "td font-bold" }, p.full_name),
+                    React.createElement("td", { className: "td text-xs", dir: "ltr" }, p.email || '—'),
+                    React.createElement("td", { className: "td" }, p.role === 'admin' ? React.createElement("span", { className: "badge-brand" }, constants_js_1.ROLES.admin) : React.createElement("span", { className: "badge-neutral" }, constants_js_1.ROLES.supervisor)),
+                    React.createElement("td", { className: "td text-sm" }, mosqueById[p.mosque_id]?.name ?? React.createElement("span", { className: "text-ink-soft" }, "\u2014")),
+                    React.createElement("td", { className: "td text-sm" }, p.role === 'admin' ? 'كل التلاوات' : constants_js_1.SCOPES[p.scope]),
+                    React.createElement("td", { className: "td" }, p.is_active ? React.createElement("span", { className: "badge-ok" }, "\u0645\u0641\u0639\u0651\u0644") : React.createElement("span", { className: "badge-bad" }, "\u0645\u0639\u0637\u0651\u0644")),
+                    React.createElement("td", { className: "td" },
+                        React.createElement("div", { className: "flex gap-1" },
+                            React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => setForm({ ...p, mosque_id: p.mosque_id || '' }), "aria-label": "\u062A\u0639\u062F\u064A\u0644" },
+                                React.createElement(lucide_react_1.Pencil, { className: "h-4 w-4" })),
+                            React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => setPw({ user: p, password: '' }), "aria-label": "\u062A\u063A\u064A\u064A\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631" },
+                                React.createElement(lucide_react_1.KeyRound, { className: "h-4 w-4" })),
+                            p.id !== session.user.id && React.createElement("button", { className: "btn-ghost btn-sm !px-2 text-bad", onClick: () => setDel(p), "aria-label": "\u062D\u0630\u0641" },
+                                React.createElement(lucide_react_1.Trash2, { className: "h-4 w-4" })))))))))))),
+        React.createElement(ui_jsx_1.Modal, { drawer: true, open: Boolean(form), onClose: () => setForm(null), title: isNew ? 'إضافة مستخدم' : 'تعديل المستخدم', footer: React.createElement(React.Fragment, null,
+                React.createElement("button", { className: "btn-outline", onClick: () => setForm(null) }, "\u0625\u0644\u063A\u0627\u0621"),
+                React.createElement("button", { className: "btn-primary", onClick: save, disabled: busy },
+                    busy && React.createElement(ui_jsx_1.Spinner, { className: "!text-white h-4 w-4" }),
+                    " \u062D\u0641\u0638")) }, form && (React.createElement("div", { className: "space-y-4" },
+            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0643\u0627\u0645\u0644" },
+                React.createElement("input", { className: "input", value: form.full_name, onChange: (e) => set({ full_name: e.target.value }), autoFocus: true })),
+            isNew && (React.createElement(React.Fragment, null,
+                React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A" },
+                    React.createElement("input", { className: "input", dir: "ltr", type: "email", value: form.email, onChange: (e) => set({ email: e.target.value }) })),
+                React.createElement(ui_jsx_1.Field, { label: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0645\u0624\u0642\u062A\u0629", hint: "8 \u0623\u062D\u0631\u0641 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644. \u0634\u0627\u0631\u0643\u0647\u0627 \u0645\u0639 \u0627\u0644\u0645\u0634\u0631\u0641 \u0628\u0637\u0631\u064A\u0642\u0629 \u0622\u0645\u0646\u0629." },
+                    React.createElement("input", { className: "input", dir: "ltr", type: "text", value: form.password, onChange: (e) => set({ password: e.target.value }) })))),
+            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u062F\u0648\u0631" },
+                React.createElement("select", { className: "input", value: form.role, onChange: (e) => set({ role: e.target.value }) }, Object.entries(constants_js_1.ROLES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v)))),
+            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0645\u0633\u062C\u062F \u0627\u0644\u0645\u0631\u062A\u0628\u0637", hint: form.role === 'admin' ? 'اختياري للمدير.' : undefined },
+                React.createElement("select", { className: "input", value: form.mosque_id, onChange: (e) => set({ mosque_id: e.target.value }) },
+                    React.createElement("option", { value: "" }, "\u2014 \u0627\u062E\u062A\u0631 \u2014"),
+                    mosques.map((m) => React.createElement("option", { key: m.id, value: m.id }, m.name)))),
+            React.createElement(ui_jsx_1.Field, { label: "\u0646\u0637\u0627\u0642 \u0627\u0644\u0645\u0633\u0624\u0648\u0644\u064A\u0629" },
+                React.createElement("select", { className: "input", value: form.scope, onChange: (e) => set({ scope: e.target.value }) }, Object.entries(constants_js_1.SCOPES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v)))),
+            !isNew && React.createElement(ui_jsx_1.Switch, { checked: form.is_active, onChange: (v) => set({ is_active: v }), label: "\u0627\u0644\u062D\u0633\u0627\u0628 \u0645\u0641\u0639\u0651\u0644" })))),
+        React.createElement(ui_jsx_1.Modal, { open: Boolean(pw), onClose: () => setPw(null), title: `تغيير كلمة مرور: ${pw?.user.full_name ?? ''}`, size: "sm", footer: React.createElement(React.Fragment, null,
+                React.createElement("button", { className: "btn-outline", onClick: () => setPw(null) }, "\u0625\u0644\u063A\u0627\u0621"),
+                React.createElement("button", { className: "btn-primary", onClick: resetPassword, disabled: busy },
+                    busy && React.createElement(ui_jsx_1.Spinner, { className: "!text-white h-4 w-4" }),
+                    " \u062A\u063A\u064A\u064A\u0631")) }, pw && React.createElement(ui_jsx_1.Field, { label: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u062C\u062F\u064A\u062F\u0629", hint: "8 \u0623\u062D\u0631\u0641 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644." },
+            React.createElement("input", { className: "input", dir: "ltr", value: pw.password, onChange: (e) => setPw({ ...pw, password: e.target.value }), autoFocus: true }))),
+        React.createElement(ui_jsx_1.ConfirmDialog, { open: Boolean(del), danger: true, busy: busy, onClose: () => setDel(null), onConfirm: remove, title: "\u062D\u0630\u0641 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645", confirmLabel: "\u062D\u0630\u0641", message: `سيُحذف حساب «${del?.full_name}» نهائياً. التسجيلات التي أنشأها تبقى محفوظة. هل أنت متأكد؟` })));
+}
+
+};
+defs["src/lib/supabase.js"] = function(exports, require, module, React){
+
+const cfg = window.TILAWAT_CONFIG || (() => { try { return JSON.parse(localStorage.getItem('tilawat-config') || 'null') } catch { return null } })() || {}
+exports.isConfigured = Boolean(cfg.url && cfg.key)
+exports.supabase = window.supabase.createClient(cfg.url || 'http://localhost', cfg.key || 'missing-key', {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.localStorage, storageKey: 'tilawat-auth' },
+  realtime: { params: { eventsPerSecond: 10 } },
+})
+exports.saveConfig = (url, key) => { localStorage.setItem('tilawat-config', JSON.stringify({ url: url.trim().replace(/\/$/, ''), key: key.trim() })); window.location.reload() }
+exports.clearConfig = () => { localStorage.removeItem('tilawat-config'); window.location.reload() }
+exports.functionError = async function functionError(error) {
+  try { const body = await error.context.json(); if (body && body.error) return body.error } catch (e) {}
+  return (error && error.message) || 'حدث خطأ غير متوقع'
+}
+
+};
+defs["lucide-react"] = function(exports, require, module, React){
+
+const ICONS = {"BarChart3":"<path d=\"M3 3v16a2 2 0 0 0 2 2h16\"></path><path d=\"M18 17V9\"></path><path d=\"M13 17V5\"></path><path d=\"M8 17v-3\"></path>","BookOpen":"<path d=\"M12 7v14\"></path><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\"></path>","Building2":"<path d=\"M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z\"></path><path d=\"M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2\"></path><path d=\"M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2\"></path><path d=\"M10 6h4\"></path><path d=\"M10 10h4\"></path><path d=\"M10 14h4\"></path><path d=\"M10 18h4\"></path>","ClipboardList":"<rect width=\"8\" height=\"4\" x=\"8\" y=\"2\" rx=\"1\" ry=\"1\"></rect><path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\"></path><path d=\"M12 11h4\"></path><path d=\"M12 16h4\"></path><path d=\"M8 11h.01\"></path><path d=\"M8 16h.01\"></path>","LayoutDashboard":"<rect width=\"7\" height=\"9\" x=\"3\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"14\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"9\" x=\"14\" y=\"12\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"></rect>","LogOut":"<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"></path><polyline points=\"16 17 21 12 16 7\"></polyline><line x1=\"21\" x2=\"9\" y1=\"12\" y2=\"12\"></line>","Menu":"<line x1=\"4\" x2=\"20\" y1=\"12\" y2=\"12\"></line><line x1=\"4\" x2=\"20\" y1=\"6\" y2=\"6\"></line><line x1=\"4\" x2=\"20\" y1=\"18\" y2=\"18\"></line>","Users":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"></path><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"></path>","UserRound":"<circle cx=\"12\" cy=\"8\" r=\"5\"></circle><path d=\"M20 21a8 8 0 0 0-16 0\"></path>","X":"<path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path>","ChevronDown":"<path d=\"m6 9 6 6 6-6\"></path>","Search":"<circle cx=\"11\" cy=\"11\" r=\"8\"></circle><path d=\"m21 21-4.3-4.3\"></path>","UserPlus":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><line x1=\"19\" x2=\"19\" y1=\"8\" y2=\"14\"></line><line x1=\"22\" x2=\"16\" y1=\"11\" y2=\"11\"></line>","Loader2":"<path d=\"M21 12a9 9 0 1 1-6.219-8.56\"></path>","Wifi":"<path d=\"M12 20h.01\"></path><path d=\"M2 8.82a15 15 0 0 1 20 0\"></path><path d=\"M5 12.859a10 10 0 0 1 14 0\"></path><path d=\"M8.5 16.429a5 5 0 0 1 7 0\"></path>","WifiOff":"<path d=\"M12 20h.01\"></path><path d=\"M8.5 16.429a5 5 0 0 1 7 0\"></path><path d=\"M5 12.859a10 10 0 0 1 5.17-2.69\"></path><path d=\"M19 12.859a10 10 0 0 0-2.007-1.523\"></path><path d=\"M2 8.82a15 15 0 0 1 4.177-2.643\"></path><path d=\"M22 8.82a15 15 0 0 0-11.288-3.764\"></path><path d=\"m2 2 20 20\"></path>","Inbox":"<polyline points=\"22 12 16 12 14 15 10 15 8 12 2 12\"></polyline><path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path>","AlertTriangle":"<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"></path><path d=\"M12 9v4\"></path><path d=\"M12 17h.01\"></path>","CheckCircle2":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"m9 12 2 2 4-4\"></path>","Info":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M12 16v-4\"></path><path d=\"M12 8h.01\"></path>","XCircle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"m15 9-6 6\"></path><path d=\"m9 9 6 6\"></path>","Printer":"<path d=\"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2\"></path><path d=\"M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6\"></path><rect x=\"6\" y=\"14\" width=\"12\" height=\"8\" rx=\"1\"></rect>","Pencil":"<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"></path><path d=\"m15 5 4 4\"></path>","Save":"<path d=\"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\"></path><path d=\"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7\"></path><path d=\"M7 3v4a1 1 0 0 0 1 1h7\"></path>","Trash2":"<path d=\"M3 6h18\"></path><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"></path><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"></path><line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\"></line><line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\"></line>","LogIn":"<path d=\"M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4\"></path><polyline points=\"10 17 15 12 10 7\"></polyline><line x1=\"15\" x2=\"3\" y1=\"12\" y2=\"12\"></line>","Plus":"<path d=\"M5 12h14\"></path><path d=\"M12 5v14\"></path>","KeyRound":"<path d=\"M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z\"></path><circle cx=\"16.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"></circle>"}
+function make(name) {
+  const inner = ICONS[name]
+  return function Icon(props) {
+    const { className, ...rest } = props || {}
+    return React.createElement('svg', { xmlns: 'http://www.w3.org/2000/svg', width: 24, height: 24, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', className, 'aria-hidden': true, ...rest, dangerouslySetInnerHTML: { __html: inner } })
+  }
+}
+exports.BarChart3 = make('BarChart3')
+exports.BookOpen = make('BookOpen')
+exports.Building2 = make('Building2')
+exports.ClipboardList = make('ClipboardList')
+exports.LayoutDashboard = make('LayoutDashboard')
+exports.LogOut = make('LogOut')
+exports.Menu = make('Menu')
+exports.Users = make('Users')
+exports.UserRound = make('UserRound')
+exports.X = make('X')
+exports.ChevronDown = make('ChevronDown')
+exports.Search = make('Search')
+exports.UserPlus = make('UserPlus')
+exports.Loader2 = make('Loader2')
+exports.Wifi = make('Wifi')
+exports.WifiOff = make('WifiOff')
+exports.Inbox = make('Inbox')
+exports.AlertTriangle = make('AlertTriangle')
+exports.CheckCircle2 = make('CheckCircle2')
+exports.Info = make('Info')
+exports.XCircle = make('XCircle')
+exports.Printer = make('Printer')
+exports.Pencil = make('Pencil')
+exports.Save = make('Save')
+exports.Trash2 = make('Trash2')
+exports.LogIn = make('LogIn')
+exports.Plus = make('Plus')
+exports.KeyRound = make('KeyRound')
+
+};
+defs["react-router-dom"] = function(exports, require, module, React){
+
+const { createContext, useContext, useEffect, useState, Children } = React
+const cur = () => { const h = (window.location.hash || '').replace(/^#/, '').split('?')[0]; return h ? (h.length > 1 ? h.replace(/\/$/, '') : h) : '/' }
+const Loc = createContext('/')
+const OutletCtx = createContext(null)
+exports.HashRouter = function HashRouter({ children }) {
+  const [p, setP] = useState(cur())
+  useEffect(() => { const f = () => setP(cur()); window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f) }, [])
+  return React.createElement(Loc.Provider, { value: p }, children)
+}
+exports.useLocation = () => ({ pathname: useContext(Loc) })
+exports.Outlet = () => useContext(OutletCtx)
+exports.Route = () => null
+const join = (a, b) => ('/' + [a, b].filter(Boolean).join('/')).replace(/\/+/g, '/')
+function flatten(children, chain, base) {
+  const out = []
+  Children.toArray(children).forEach((r) => {
+    const { path, index, element, children: kids } = r.props
+    if (kids) out.push(...flatten(kids, [...chain, element], path ? join(base, path) : base))
+    else out.push({ chain: [...chain, element], full: index ? (base || '/') : path === '*' ? '*' : join(base, path) })
+  })
+  return out
+}
+exports.Routes = function Routes({ children }) {
+  const path = useContext(Loc)
+  const leaves = flatten(children, [], '')
+  const hit = leaves.find((l) => l.full === path) || leaves.find((l) => l.full === '*')
+  if (!hit) return null
+  return hit.chain.reduceRight((outlet, el) => (el ? React.createElement(OutletCtx.Provider, { value: outlet }, el) : outlet), null)
+}
+exports.Navigate = function Navigate({ to }) {
+  useEffect(() => { window.location.hash = to }, [to])
+  return null
+}
+function Anchor({ to, className, children, onClick, end, active }) {
+  return React.createElement('a', { href: '#' + to, className, onClick }, children)
+}
+exports.Link = function Link({ to, className, children, onClick }) { return Anchor({ to, className, children, onClick }) }
+exports.NavLink = function NavLink({ to, end, className, children, onClick }) {
+  const path = useContext(Loc)
+  const isActive = end ? path === to : path === to || path.startsWith(to + '/')
+  return Anchor({ to, onClick, children, className: typeof className === 'function' ? className({ isActive }) : className })
+}
+
+};
+require('src/main.jsx');
+})();
+</script>
+</body>
+</html>
