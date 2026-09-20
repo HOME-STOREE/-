@@ -177,7 +177,7 @@ begin
     raise exception 'user_not_found';
   end if;
 
-  if new_password is not null and length(new_password) < 4 then
+  if new_password is not null and length(new_password) < 6 then
     raise exception 'password_too_short';
   end if;
 
@@ -268,7 +268,9 @@ create trigger trg_cards_default_sort_order
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>البوابة الرئيسية للأنظمة</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗂️</text></svg>">
+<link rel="icon" type="image/png" sizes="32x32" href="./icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="./icon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#FAF9F6">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1404,7 +1406,7 @@ create trigger trg_cards_default_sort_order
             </div>
             <div>
               <label class="text-xs font-medium mb-1 block">كلمة المرور *</label>
-              <input required id="user-password" type="text" minlength="4" class="input-field w-full px-3 py-2 text-sm" placeholder="4 أحرف على الأقل" autocomplete="off">
+              <input required id="user-password" type="text" minlength="6" class="input-field w-full px-3 py-2 text-sm" placeholder="6 أحرف على الأقل" autocomplete="off">
             </div>
             <button type="submit" id="user-submit" class="btn-accent py-2.5 text-sm font-bold mt-1">إضافة الموظف</button>
           </form>
@@ -1456,7 +1458,7 @@ create trigger trg_cards_default_sort_order
       <div>
         <label for="account-new-password" class="text-sm font-medium mb-1.5 block">كلمة المرور الجديدة <span class="muted font-normal">(اختياري)</span></label>
         <div class="pw-wrap">
-          <input id="account-new-password" type="password" autocomplete="new-password" minlength="4" class="input-field w-full px-3.5 py-2.5 text-sm" placeholder="اتركها فارغة إن لم ترد تغييرها">
+          <input id="account-new-password" type="password" autocomplete="new-password" minlength="6" class="input-field w-full px-3.5 py-2.5 text-sm" placeholder="اتركها فارغة إن لم ترد تغييرها">
           <button type="button" class="pw-toggle" data-toggle-pw="account-new-password" aria-label="إظهار كلمة المرور">👁</button>
         </div>
       </div>
@@ -1575,7 +1577,7 @@ create trigger trg_cards_default_sort_order
       </div>
       <div>
         <label for="ue-password" class="text-sm font-medium mb-1.5 block">كلمة مرور جديدة <span class="muted font-normal">(اختياري)</span></label>
-        <input id="ue-password" type="text" minlength="4" autocomplete="off" class="input-field w-full px-3.5 py-2.5 text-sm" placeholder="اتركها فارغة بدون تغيير — 4 أحرف على الأقل">
+        <input id="ue-password" type="text" minlength="6" autocomplete="off" class="input-field w-full px-3.5 py-2.5 text-sm" placeholder="اتركها فارغة بدون تغيير — 6 أحرف على الأقل">
         <p class="muted text-[11px] mt-1">سيدخل الموظف بالبيانات الجديدة في المرة القادمة، فأبلغه بها.</p>
       </div>
 
@@ -2659,8 +2661,8 @@ el('user-form').addEventListener('submit', async (e) => {
     showToast('اسم المستخدم غير صالح (حروف عربية/إنجليزية وأرقام و . _ - فقط، 3 أحرف على الأقل)', 'error');
     return;
   }
-  if (password.length < 4) {
-    showToast('كلمة المرور يجب أن تكون 4 أحرف على الأقل', 'error');
+  if (password.length < 6) {
+    showToast('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'error');
     return;
   }
   if (state.allProfiles.some(p => p.username === username)) {
@@ -2812,7 +2814,7 @@ el('account-form').addEventListener('submit', async (e) => {
     return showFormError('account-error', 'اسم المستخدم غير صالح (حروف عربية/إنجليزية وأرقام و . _ - فقط، 3 أحرف على الأقل).');
   }
   if (wantsPassword) {
-    if (newPw.length < 4) return showFormError('account-error', 'كلمة المرور الجديدة يجب أن تكون 4 أحرف على الأقل.');
+    if (newPw.length < 6) return showFormError('account-error', 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل.');
     if (newPw !== confirmPw) return showFormError('account-error', 'تأكيد كلمة المرور غير مطابق.');
     if (newPw === currentPw) return showFormError('account-error', 'كلمة المرور الجديدة يجب أن تختلف عن الحالية.');
   }
@@ -2919,8 +2921,8 @@ el('user-edit-form').addEventListener('submit', async (e) => {
       return showFormError('user-edit-error', 'اسم المستخدم مستخدم مسبقاً، اختر اسماً آخر.');
     }
   }
-  if (wantsPassword && newPw.length < 4) {
-    return showFormError('user-edit-error', 'كلمة المرور يجب أن تكون 4 أحرف على الأقل.');
+  if (wantsPassword && newPw.length < 6) {
+    return showFormError('user-edit-error', 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.');
   }
 
   const btn = el('user-edit-submit');
