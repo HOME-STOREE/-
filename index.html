@@ -289,6 +289,7 @@ create trigger trg_cards_default_sort_order
 </script>
 <script src="https://cdn.tailwindcss.com" onerror="__portalFatalError()"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" onerror="__portalFatalError()"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
 <script>
   tailwind.config = {
@@ -749,19 +750,50 @@ create trigger trg_cards_default_sort_order
   .seg-btn.active { background: var(--surface-solid); color: var(--text); box-shadow: var(--shadow-sm); }
   .input-field:disabled { opacity: .45; cursor: not-allowed; }
 
-  /* ---- أزرار تحريك البطاقة (ترتيب العرض) ---- */
-  .card-move-btn {
-    width: 1.9rem; height: 1.55rem;
+  /* ---- مقبض سحب البطاقة (إعادة الترتيب بالسحب والإفلات) ---- */
+  .card-drag-handle {
+    width: 2rem; height: 2.25rem;
     display: flex; align-items: center; justify-content: center;
     border-radius: .5rem;
-    font-size: .65rem;
+    font-size: 1rem;
+    letter-spacing: -1px;
     color: var(--muted);
     background: var(--surface-2);
     border: 1px solid var(--border);
+    cursor: grab;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
     transition: background-color .15s ease, color .15s ease, border-color .15s ease;
   }
-  .card-move-btn:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); background: var(--surface-solid); }
-  .card-move-btn:disabled { opacity: .3; cursor: not-allowed; }
+  .card-drag-handle:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface-solid); }
+  .card-drag-handle:active { cursor: grabbing; }
+
+  /* ---- حالة العنصر أثناء السحب (Sortable.js) ---- */
+  .card-surface.list-row.card-drag-chosen {
+    box-shadow: var(--shadow-md), inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+    border-color: var(--border-strong);
+  }
+  .card-surface.list-row.card-drag-active { opacity: .9; }
+  .card-drag-ghost {
+    opacity: .5;
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    border: 1px dashed var(--accent) !important;
+  }
+
+  /* ---- تخطيط صف القائمة: يلتف على الجوال بدل أن يتزاحم أفقياً ---- */
+  .card-surface.list-row { flex-wrap: wrap; row-gap: .75rem; }
+  .list-row-main { display: flex; align-items: center; gap: 1rem; min-width: 0; flex: 1 1 auto; }
+  .list-row-actions { display: flex; align-items: center; gap: .5rem; flex: 0 0 auto; }
+  @media (max-width: 560px) {
+    .list-row-main { flex: 1 1 100%; }
+    .list-row-actions {
+      flex: 1 1 100%;
+      justify-content: flex-end;
+      padding-top: .65rem;
+      border-top: 1px solid var(--border);
+    }
+  }
 
   /* ---- حوارات الحساب وتعديل الموظف ---- */
   .modal-card { max-height: calc(100dvh - 2rem); overflow-y: auto; }
@@ -2227,38 +2259,36 @@ function renderCardsList() {
   }
   emptyMsg.classList.add('hidden');
 
-  state.cards.forEach((card, idx) => {
+  state.cards.forEach((card) => {
     const permCount = state.allPermissions.filter(p => p.card_id === card.id).length;
     const row = document.createElement('div');
     row.className = 'card-surface list-row p-4 flex items-center gap-4';
+    row.dataset.cardId = card.id;
     const cid = resolveCardIdentity(card);
     const chipColor = card.color || DEFAULT_CARD_COLOR;
-    const isFirst = idx === 0;
-    const isLast = idx === state.cards.length - 1;
     row.innerHTML = `
-      <div class="flex flex-col gap-1 flex-shrink-0" role="group" aria-label="ترتيب البطاقة">
-        <button type="button" class="card-move-btn" data-move-up="${card.id}" title="تحريك لأعلى" aria-label="تحريك «${escapeHtml(card.title)}» لأعلى"${isFirst ? ' disabled' : ''}>▲</button>
-        <button type="button" class="card-move-btn" data-move-down="${card.id}" title="تحريك لأسفل" aria-label="تحريك «${escapeHtml(card.title)}» لأسفل"${isLast ? ' disabled' : ''}>▼</button>
+      <div class="list-row-main">
+        <button type="button" class="card-drag-handle flex-shrink-0" title="اسحب لإعادة الترتيب" aria-label="اسحب لإعادة ترتيب «${escapeHtml(card.title)}»">⠿</button>
+        <div class="icon-chip${cid.isLetter ? ' font-display font-extrabold' : ''}${cid.isImage ? ' has-img' : ''}" style="${cid.isImage ? 'background:var(--surface-solid); border:1px solid var(--border);' : `background:${chipColor}22; color:${chipColor}; border:1px solid ${chipColor}33;`}">${iconInner(cid)}</div>
+        <div class="min-w-0 flex-1">
+          <h4 class="font-bold text-sm truncate">${escapeHtml(card.title)}</h4>
+          <p class="muted text-xs truncate" dir="ltr" style="text-align:right;">${escapeHtml(card.url)}</p>
+          <p class="muted text-[11px] mt-0.5">${permCount} موظف لديه صلاحية الوصول</p>
+        </div>
       </div>
-      <div class="icon-chip${cid.isLetter ? ' font-display font-extrabold' : ''}${cid.isImage ? ' has-img' : ''}" style="${cid.isImage ? 'background:var(--surface-solid); border:1px solid var(--border);' : `background:${chipColor}22; color:${chipColor}; border:1px solid ${chipColor}33;`}">${iconInner(cid)}</div>
-      <div class="min-w-0 flex-1">
-        <h4 class="font-bold text-sm truncate">${escapeHtml(card.title)}</h4>
-        <p class="muted text-xs truncate" dir="ltr" style="text-align:right;">${escapeHtml(card.url)}</p>
-        <p class="muted text-[11px] mt-0.5">${permCount} موظف لديه صلاحية الوصول</p>
-      </div>
-      <div class="flex items-center gap-2">
+      <div class="list-row-actions">
         <button class="btn-ghost px-3 py-1.5 text-xs font-bold whitespace-nowrap" data-edit-card="${card.id}">تعديل</button>
         <button class="btn-danger px-3 py-1.5 text-xs font-bold whitespace-nowrap" data-delete="${card.id}">حذف</button>
       </div>
     `;
-    row.querySelector('[data-move-up]').addEventListener('click', () => moveCard(card.id, 'up'));
-    row.querySelector('[data-move-down]').addEventListener('click', () => moveCard(card.id, 'down'));
     row.querySelector('[data-edit-card]').addEventListener('click', () => openCardEditModal(card.id));
     row.querySelector('[data-delete]').addEventListener('click', () => {
       openConfirm(`سيتم حذف بطاقة «${card.title}» وكل الصلاحيات المرتبطة بها نهائياً. هل تريد المتابعة؟`, () => deleteCard(card.id));
     });
     list.appendChild(row);
   });
+
+  initCardsSortable(list);
 }
 
 /* ============================================================
@@ -2285,17 +2315,28 @@ async function persistCardOrder() {
   }
 }
 
-function moveCard(cardId, direction) {
-  const idx = state.cards.findIndex(c => c.id === cardId);
-  if (idx < 0) return;
-  const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-  if (swapIdx < 0 || swapIdx >= state.cards.length) return;
+/* سحب وإفلات لإعادة الترتيب — أسرع وأسهل من أزرار الأسهم، ويعمل باللمس على الجوال */
+let cardsSortableInstance = null;
 
-  [state.cards[idx], state.cards[swapIdx]] = [state.cards[swapIdx], state.cards[idx]];
-  renderCardsList();
-  renderEmployeeGrid();
-  renderPermissionsMatrix(el('perm-search').value);
-  persistCardOrder();
+function initCardsSortable(list) {
+  if (cardsSortableInstance || typeof Sortable === 'undefined') return;
+  cardsSortableInstance = Sortable.create(list, {
+    handle: '.card-drag-handle',
+    animation: 180,
+    delay: 0,
+    ghostClass: 'card-drag-ghost',
+    chosenClass: 'card-drag-chosen',
+    dragClass: 'card-drag-active',
+    forceFallback: true, // يوحّد سلوك السحب بين الفأرة واللمس على كل الأجهزة
+    fallbackTolerance: 3,
+    onEnd: () => {
+      const newOrderIds = Array.from(list.children).map(row => row.dataset.cardId).filter(Boolean);
+      state.cards.sort((a, b) => newOrderIds.indexOf(a.id) - newOrderIds.indexOf(b.id));
+      renderEmployeeGrid();
+      renderPermissionsMatrix(el('perm-search').value);
+      persistCardOrder();
+    },
+  });
 }
 
 /* ============================================================
@@ -2592,13 +2633,15 @@ function renderUsersList() {
       row.className = 'card-surface list-row p-4 flex items-center gap-4';
       const displayName = profile.full_name || profile.username || '—';
       row.innerHTML = `
-        <div class="avatar${profile.is_admin ? ' is-admin' : ''}" style="width:2.9rem; height:2.9rem;" aria-hidden="true">${escapeHtml(initialOf(displayName))}</div>
-        <div class="min-w-0 flex-1">
-          <h4 class="font-bold text-sm truncate">${escapeHtml(displayName)}${profile.is_admin ? ' <span class="admin-pill">مدير</span>' : ''}</h4>
-          <p class="muted text-xs truncate">${escapeHtml(profile.username ? '@' + profile.username : (profile.email || ''))}</p>
-          <p class="muted text-[11px] mt-0.5">${permCount} صلاحية نظام</p>
+        <div class="list-row-main">
+          <div class="avatar${profile.is_admin ? ' is-admin' : ''}" style="width:2.9rem; height:2.9rem;" aria-hidden="true">${escapeHtml(initialOf(displayName))}</div>
+          <div class="min-w-0 flex-1">
+            <h4 class="font-bold text-sm truncate">${escapeHtml(displayName)}${profile.is_admin ? ' <span class="admin-pill">مدير</span>' : ''}</h4>
+            <p class="muted text-xs truncate">${escapeHtml(profile.username ? '@' + profile.username : (profile.email || ''))}</p>
+            <p class="muted text-[11px] mt-0.5">${permCount} صلاحية نظام</p>
+          </div>
         </div>
-        ${profile.id === state.session.user.id ? '' : `<div class="flex items-center gap-2">
+        ${profile.id === state.session.user.id ? '' : `<div class="list-row-actions">
           <button class="btn-ghost px-3 py-1.5 text-xs font-bold whitespace-nowrap" data-edit-user="${profile.id}">تعديل</button>
           <button class="btn-danger px-3 py-1.5 text-xs font-bold whitespace-nowrap" data-delete-user="${profile.id}">حذف</button>
         </div>`}
