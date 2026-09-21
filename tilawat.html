@@ -380,6 +380,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = PushToggle;
 const react_1 = require("react");
 const lucide_react_1 = require("lucide-react");
+const supabase_js_1 = require("src/lib/supabase.js");
 const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
 const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
 const push_js_1 = require("src/lib/push.js");
@@ -395,6 +396,7 @@ function PushToggle({ compact = false }) {
     const toast = (0, ToastContext_jsx_1.useToast)();
     const [state, setState] = (0, react_1.useState)('checking'); // checking | on | off | denied | unsupported | unconfigured
     const [busy, setBusy] = (0, react_1.useState)(false);
+    const [testing, setTesting] = (0, react_1.useState)(false);
     (0, react_1.useEffect)(() => {
         let alive = true;
         (async () => {
@@ -442,12 +444,30 @@ function PushToggle({ compact = false }) {
         }
         setBusy(false);
     };
+    // اختبار الحلقة كاملة: الموقع ← دالة send-push ← خدمة الإشعارات ← الجهاز
+    const test = async () => {
+        setTesting(true);
+        const { data, error } = await supabase_js_1.supabase.functions.invoke('send-push', { body: { test: true } });
+        setTesting(false);
+        if (error) {
+            const status = error.context?.status;
+            const msg = status === 404 || /not found/i.test(error.message) ? 'دالة send-push غير منشورة في Supabase (الخطوة 2).' : await (0, supabase_js_1.functionError)(error);
+            return toast.error('فشل الاختبار', msg);
+        }
+        if (data.sent > 0)
+            return toast.success('أُرسل الإشعار التجريبي', 'يجب أن يصلك الآن كإشعار من النظام. إن لم يظهر فتحقق من إعدادات الإشعارات في جهازك.');
+        const first = data.results?.find((r) => !r.ok);
+        toast.error('لم يُرسَل الإشعار', data.note || (first ? `${first.status ?? ''} ${first.error}` : 'سبب غير معروف'));
+    };
     const blocked = ['unconfigured', 'unsupported', 'denied'].includes(state);
     const control = blocked
         ? React.createElement("p", { className: "text-xs leading-6 text-ink-soft" }, NOTES[state])
         : (React.createElement("div", { className: "flex items-center gap-3" },
             React.createElement(ui_jsx_1.Switch, { checked: state === 'on', onChange: (v) => !busy && state !== 'checking' && toggle(v), label: state === 'on' ? 'الإشعارات مفعّلة على هذا الجهاز' : 'تفعيل الإشعارات' }),
-            (busy || state === 'checking') && React.createElement(ui_jsx_1.Spinner, { className: "h-4 w-4" })));
+            (busy || state === 'checking') && React.createElement(ui_jsx_1.Spinner, { className: "h-4 w-4" }),
+            state === 'on' && (React.createElement("button", { className: "btn-outline btn-sm", onClick: test, disabled: testing },
+                testing && React.createElement(ui_jsx_1.Spinner, { className: "h-3.5 w-3.5" }),
+                " \u0625\u0634\u0639\u0627\u0631 \u062A\u062C\u0631\u064A\u0628\u064A"))));
     if (compact)
         return React.createElement("div", null, control);
     return (React.createElement("div", { className: "no-print card card-pad mb-5 flex flex-wrap items-center justify-between gap-4" },
