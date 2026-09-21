@@ -98,16 +98,20 @@ tailwind.config = {
 
 </style>
 <script>
-/* يمكنك وضع بيانات الاتصال هنا مباشرة بدل شاشة الإعداد:
-   window.TILAWAT_CONFIG = { url: 'https://xxxx.supabase.co', key: 'ANON_PUBLIC_KEY' }
-   (اختياري) fakeDomain: 'tilawat.local' — نطاق البريد الداخلي الوهمي للمستخدمين */
+/* ===== بيانات الاتصال بـ Supabase — الصقها هنا مرة واحدة فيفتح الموقع مباشرة على تسجيل الدخول في كل الأجهزة =====
+   من Supabase ← Settings ← API: انسخ Project URL و anon public key (المفتاح العام، وليس service_role). */
+window.TILAWAT_CONFIG = {
+  url: 'https://lnftdfhdczxafeeqbktd.supabase.co',
+  key: 'sb_publishable_K67bAEgKNs--62IMXs9xDg_5gB2wRjZ',
+  fakeDomain: ''   // اختياري: نطاق البريد الداخلي الوهمي، الافتراضي tilawat.local
+}
 </script>
 </head>
 <body>
 <div id="root"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 (function(){
 var React = window.React;
@@ -150,7 +154,7 @@ function Setup() {
         React.createElement("div", { className: "card card-pad w-full max-w-lg space-y-4" },
             React.createElement("div", null,
                 React.createElement("h1", { className: "text-xl font-extrabold" }, "\u0631\u0628\u0637 \u0627\u0644\u0646\u0638\u0627\u0645 \u0628\u0640 Supabase"),
-                React.createElement("p", { className: "mt-1 text-sm leading-7 text-ink-soft" }, "\u0623\u062F\u062E\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0645\u0634\u0631\u0648\u0639\u0643 \u0645\u0646 Supabase \u2190 Settings \u2190 API. \u062A\u064F\u062D\u0641\u0638 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u0641\u0642\u0637.")),
+                React.createElement("p", { className: "mt-1 text-sm leading-7 text-ink-soft" }, "\u0623\u062F\u062E\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0645\u0634\u0631\u0648\u0639\u0643 \u0645\u0646 Supabase \u2190 Settings \u2190 API. \u062A\u064F\u062D\u0641\u0638 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u0641\u0642\u0637\u060C \u0648\u0644\u0641\u062A\u062D \u0627\u0644\u0645\u0648\u0642\u0639 \u0645\u0628\u0627\u0634\u0631\u0629 \u0639\u0644\u0649 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0641\u064A \u0643\u0644 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0636\u0639\u0647\u0627 \u062F\u0627\u062E\u0644 \u0645\u0644\u0641 \u0627\u0644\u0645\u0648\u0642\u0639 \u0641\u064A \u0627\u0644\u0645\u0648\u0636\u0639 \u0627\u0644\u0645\u0639\u0644\u064E\u0651\u0645 (window.TILAWAT_CONFIG).")),
             React.createElement("div", null,
                 React.createElement("label", { className: "label" }, "Project URL"),
                 React.createElement("input", { className: "input", dir: "ltr", placeholder: "https://xxxx.supabase.co", value: url, onChange: (e) => setUrl(e.target.value) })),
@@ -1310,16 +1314,18 @@ function DailyLog() {
     const mosque = mosqueById[mosqueId];
     const isNight = profile.role === 'night_supervisor';
     const mySlots = profile.slot_keys || [];
-    const scope = isAdmin ? 'both' : isNight ? 'night' : profile.scope;
+    const scope = isAdmin || isNight ? 'both' : profile.scope;
     const duty = isNight
-        ? mySlots.length === 1 ? `مشرف ${constants_js_1.SLOTS[mySlots[0]]?.label}` : `مشرف ليالي ${mySlots.map((k) => constants_js_1.SLOTS[k]?.short).join('، ')}`
+        ? mySlots.length === 1
+            ? mySlots[0] === 'fri' ? 'مشرف تلاوة الجمعة (النهارية)' : `مشرف ${constants_js_1.SLOTS[mySlots[0]]?.label}`
+            : `مشرف: ${mySlots.map((k) => constants_js_1.SLOTS[k]?.short).join('، ')}`
         : constants_js_1.SCOPE_DUTY[scope];
     const dutyPlace = !isAdmin && activeMosques.length > 1 ? `${activeMosques.length} مساجد` : mosque?.name;
     const allowedSlots = (0, react_1.useMemo)(() => {
         if (!mosque)
             return [];
         const s = [];
-        if (mosque.enable_friday && !isNight && (scope === 'both' || scope === 'friday'))
+        if (mosque.enable_friday && (!isNight || mySlots.includes('fri')) && (scope === 'both' || scope === 'friday'))
             s.push('fri');
         if (mosque.enable_night && (scope === 'both' || scope === 'night'))
             constants_js_1.NIGHT_KEYS.forEach((k) => mosque.night_days?.includes(k) && (!isNight || mySlots.includes(k)) && s.push(k));
@@ -2106,9 +2112,11 @@ function UsersPage() {
         if (form.role !== 'admin' && form.mosque_ids.length === 0)
             return toast.warn('اختر مسجداً واحداً على الأقل');
         if (form.role === 'night_supervisor' && form.slot_keys.length === 0)
-            return toast.warn('اختر الليلة', 'مشرف الليلة يحتاج ليلة واحدة على الأقل.');
-        const effScope = form.role === 'night_supervisor' ? 'night' : form.scope;
-        const effSlots = form.role === 'night_supervisor' ? constants_js_1.NIGHT_KEYS.filter((k) => form.slot_keys.includes(k)) : [];
+            return toast.warn('اختر الليلة أو الجمعة', 'يحتاج هذا الدور خانة واحدة على الأقل.');
+        const effSlots = form.role === 'night_supervisor' ? constants_js_1.SLOT_KEYS.filter((k) => form.slot_keys.includes(k)) : [];
+        const hasFri = effSlots.includes('fri');
+        const hasNight = effSlots.some((k) => k !== 'fri');
+        const effScope = form.role === 'night_supervisor' ? (hasFri && hasNight ? 'both' : hasFri ? 'friday' : 'night') : form.scope;
         if (!isNew) {
             setBusy(true);
             const { data, error } = await supabase_js_1.supabase.from('profiles')
@@ -2253,8 +2261,8 @@ function UsersPage() {
                 React.createElement("select", { className: "input", value: form.role, disabled: form.id === me, onChange: (e) => set({ role: e.target.value }) }, Object.entries(constants_js_1.ROLES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v)))),
             React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0645\u0633\u0627\u062C\u062F \u0627\u0644\u0645\u0633\u0646\u062F\u0629", hint: form.role === 'admin' ? 'المدير يرى كل المساجد؛ الاختيار هنا اختياري.' : form.role === 'night_supervisor' ? 'المسجد الذي يشرف على ليلته.' : 'يمكن اختيار مسجد واحد أو عدة مساجد.' },
                 React.createElement(ui_jsx_1.MultiSelect, { options: mosqueOptions, value: form.mosque_ids, onChange: (v) => set({ mosque_ids: v }) })),
-            form.role === 'night_supervisor' && (React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0644\u064A\u0644\u0629 \u0627\u0644\u0645\u0633\u0645\u0648\u062D\u0629", hint: "\u0644\u0627 \u064A\u0641\u062A\u062D \u0644\u0647 \u0627\u0644\u0646\u0638\u0627\u0645 \u0633\u0648\u0649 \u0647\u0630\u0647 \u0627\u0644\u0644\u064A\u0644\u0629 \u0648\u0641\u064A \u0627\u0644\u0645\u0633\u062C\u062F \u0627\u0644\u0645\u062D\u062F\u062F \u0641\u0642\u0637\u060C \u0648\u0644\u0627 \u064A\u0631\u0649 \u0623\u064A \u0635\u0641\u062D\u0629 \u0623\u062E\u0631\u0649 \u063A\u064A\u0631 \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A." },
-                React.createElement("div", { className: "flex flex-wrap gap-2" }, constants_js_1.NIGHT_KEYS.map((k) => {
+            form.role === 'night_supervisor' && (React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0644\u064A\u0644\u0629 / \u0627\u0644\u062A\u0644\u0627\u0648\u0629 \u0627\u0644\u0645\u0633\u0645\u0648\u062D\u0629", hint: "\u0644\u0627 \u064A\u0641\u062A\u062D \u0644\u0647 \u0627\u0644\u0646\u0638\u0627\u0645 \u0633\u0648\u0649 \u0647\u0630\u0647 \u0627\u0644\u062E\u0627\u0646\u0627\u062A \u0648\u0641\u064A \u0627\u0644\u0645\u0633\u062C\u062F \u0627\u0644\u0645\u062D\u062F\u062F \u0641\u0642\u0637\u060C \u0648\u0644\u0627 \u064A\u0631\u0649 \u0623\u064A \u0635\u0641\u062D\u0629 \u0623\u062E\u0631\u0649 \u063A\u064A\u0631 \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A. \u0627\u062E\u062A\u0631 \u00AB\u062A\u0644\u0627\u0648\u0629 \u0627\u0644\u062C\u0645\u0639\u0629\u00BB \u0644\u0645\u0646 \u064A\u0634\u0631\u0641 \u0639\u0644\u0649 \u0627\u0644\u062C\u0645\u0639\u0629 \u0641\u0642\u0637." },
+                React.createElement("div", { className: "flex flex-wrap gap-2" }, constants_js_1.SLOT_KEYS.map((k) => {
                     const on = form.slot_keys.includes(k);
                     return (React.createElement("button", { key: k, type: "button", "aria-pressed": on, onClick: () => set({ slot_keys: on ? form.slot_keys.filter((x) => x !== k) : [...form.slot_keys, k] }), className: `rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${on ? 'border-line bg-line text-white' : 'border-cardline bg-white text-ink hover:bg-hover'}` }, constants_js_1.SLOTS[k].label));
                 })))),
@@ -2276,7 +2284,9 @@ function UsersPage() {
 };
 defs["src/lib/supabase.js"] = function(exports, require, module, React){
 
-const cfg = window.TILAWAT_CONFIG || (() => { try { return JSON.parse(localStorage.getItem('tilawat-config') || 'null') } catch { return null } })() || {}
+const stored = (() => { try { return JSON.parse(localStorage.getItem('tilawat-config') || 'null') || {} } catch (e) { return {} } })()
+const fixed = Object.fromEntries(Object.entries(window.TILAWAT_CONFIG || {}).filter((e) => e[1]))
+const cfg = Object.assign({}, stored, fixed)
 exports.isConfigured = Boolean(cfg.url && cfg.key)
 exports.supabase = window.supabase.createClient(cfg.url || 'http://localhost', cfg.key || 'missing-key', {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.localStorage, storageKey: 'tilawat-auth' },
