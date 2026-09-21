@@ -184,9 +184,10 @@ function Blocked({ title, message }) {
             React.createElement("p", { className: "mt-2 text-sm leading-7 text-ink-soft" }, message),
             React.createElement("button", { className: "btn-primary mt-5", onClick: signOut }, "\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062E\u0631\u0648\u062C"))));
 }
-function AdminOnly({ children }) {
-    const { isAdmin } = (0, AuthContext_jsx_1.useAuth)();
-    return isAdmin ? children : React.createElement(react_router_dom_1.Navigate, { to: "/", replace: true });
+// حارس الصلاحيات: من لا يملك الدور يُعاد إلى صفحة التسجيل اليومي
+function Only({ roles, children }) {
+    const { profile } = (0, AuthContext_jsx_1.useAuth)();
+    return roles.includes(profile.role) ? children : React.createElement(react_router_dom_1.Navigate, { to: "/log", replace: true });
 }
 function App() {
     const { session, profile, loading } = (0, AuthContext_jsx_1.useAuth)();
@@ -203,14 +204,18 @@ function App() {
     return (React.createElement(DataContext_jsx_1.DataProvider, null,
         React.createElement(react_router_dom_1.Routes, null,
             React.createElement(react_router_dom_1.Route, { element: React.createElement(Layout_jsx_1.default, null) },
-                React.createElement(react_router_dom_1.Route, { index: true, element: React.createElement(Dashboard_jsx_1.default, null) }),
-                React.createElement(react_router_dom_1.Route, { path: "mosques", element: React.createElement(AdminOnly, null,
+                React.createElement(react_router_dom_1.Route, { index: true, element: React.createElement(react_router_dom_1.Navigate, { to: profile.role === 'admin' ? '/dashboard' : '/log', replace: true }) }),
+                React.createElement(react_router_dom_1.Route, { path: "dashboard", element: React.createElement(Only, { roles: ['admin', 'supervisor'] },
+                        React.createElement(Dashboard_jsx_1.default, null)) }),
+                React.createElement(react_router_dom_1.Route, { path: "mosques", element: React.createElement(Only, { roles: ['admin'] },
                         React.createElement(Mosques_jsx_1.default, null)) }),
-                React.createElement(react_router_dom_1.Route, { path: "users", element: React.createElement(AdminOnly, null,
+                React.createElement(react_router_dom_1.Route, { path: "users", element: React.createElement(Only, { roles: ['admin'] },
                         React.createElement(Users_jsx_1.default, null)) }),
                 React.createElement(react_router_dom_1.Route, { path: "log", element: React.createElement(DailyLog_jsx_1.default, null) }),
-                React.createElement(react_router_dom_1.Route, { path: "analytics", element: React.createElement(Analytics_jsx_1.default, null) }),
-                React.createElement(react_router_dom_1.Route, { path: "reciters", element: React.createElement(Reciters_jsx_1.default, null) }),
+                React.createElement(react_router_dom_1.Route, { path: "analytics", element: React.createElement(Only, { roles: ['admin', 'supervisor'] },
+                        React.createElement(Analytics_jsx_1.default, null)) }),
+                React.createElement(react_router_dom_1.Route, { path: "reciters", element: React.createElement(Only, { roles: ['admin', 'supervisor'] },
+                        React.createElement(Reciters_jsx_1.default, null)) }),
                 React.createElement(react_router_dom_1.Route, { path: "*", element: React.createElement(react_router_dom_1.Navigate, { to: "/", replace: true }) })))));
 }
 
@@ -226,13 +231,14 @@ const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
 const DataContext_jsx_1 = require("src/context/DataContext.jsx");
 const constants_js_1 = require("src/lib/constants.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
+const ALL = ['admin', 'supervisor', 'night_supervisor'];
 const NAV = [
-    { to: '/', label: 'لوحة التحكم', icon: lucide_react_1.LayoutDashboard, end: true },
-    { to: '/mosques', label: 'إدارة المساجد', icon: lucide_react_1.Building2, admin: true },
-    { to: '/users', label: 'المستخدمون والربط', icon: lucide_react_1.Users, admin: true },
-    { to: '/log', label: 'التسجيل اليومي', icon: lucide_react_1.ClipboardList },
-    { to: '/analytics', label: 'الإحصائيات والتقارير', icon: lucide_react_1.BarChart3 },
-    { to: '/reciters', label: 'دليل القراء', icon: lucide_react_1.UserRound },
+    { to: '/dashboard', label: 'لوحة التحكم', icon: lucide_react_1.LayoutDashboard, roles: ['admin', 'supervisor'] },
+    { to: '/mosques', label: 'إدارة المساجد', icon: lucide_react_1.Building2, roles: ['admin'] },
+    { to: '/users', label: 'المستخدمون والربط', icon: lucide_react_1.Users, roles: ['admin'] },
+    { to: '/log', label: 'التسجيل اليومي', icon: lucide_react_1.ClipboardList, roles: ALL },
+    { to: '/analytics', label: 'الإحصائيات والتقارير', icon: lucide_react_1.BarChart3, roles: ['admin', 'supervisor'] },
+    { to: '/reciters', label: 'دليل القراء', icon: lucide_react_1.UserRound, roles: ['admin', 'supervisor'] },
 ];
 function Logo() {
     return (React.createElement("div", { className: "flex items-center gap-3" },
@@ -247,7 +253,7 @@ function Layout() {
     const { sync, ready, loadError, refresh, mosqueById } = (0, DataContext_jsx_1.useData)();
     const [open, setOpen] = (0, react_1.useState)(false);
     const loc = (0, react_router_dom_1.useLocation)();
-    const items = NAV.filter((n) => !n.admin || isAdmin);
+    const items = NAV.filter((n) => n.roles.includes(profile?.role));
     const mine = (profile?.mosque_ids || []).map((id) => mosqueById[id]).filter(Boolean);
     const mosqueLabel = mine.length === 1 ? mine[0].name : mine.length > 1 ? `${mine.length} مساجد` : '';
     const sidebar = (React.createElement("div", { className: "flex h-full flex-col" },
@@ -854,7 +860,7 @@ exports.SCOPE_DUTY = {
     night: 'مسؤول التلاوة الليلية',
     both: 'مسؤول جميع التلاوات',
 };
-exports.ROLES = { admin: 'مدير النظام', supervisor: 'مشرف مسجد' };
+exports.ROLES = { admin: 'مدير النظام', supervisor: 'مشرف مسجد', night_supervisor: 'مشرف ليلة' };
 exports.REASONS = [
     { code: 'no_jamaa', label: 'عدم القراءة بسبب عدم وجود صلاة جماعة', short: 'بدون صلاة جماعة', color: '#7A5C4F' },
     { code: 'mawlid', label: 'عدم وجود قراءة بسبب إحياء المولد', short: 'إحياء مولد', color: '#B58F5B' },
@@ -1302,18 +1308,24 @@ function DailyLog() {
     const [pickedId, setMosqueId] = (0, react_1.useState)('');
     const mosqueId = activeMosques.some((m) => m.id === pickedId) ? pickedId : activeMosques[0]?.id || '';
     const mosque = mosqueById[mosqueId];
-    const scope = isAdmin ? 'both' : profile.scope;
+    const isNight = profile.role === 'night_supervisor';
+    const mySlots = profile.slot_keys || [];
+    const scope = isAdmin ? 'both' : isNight ? 'night' : profile.scope;
+    const duty = isNight
+        ? mySlots.length === 1 ? `مشرف ${constants_js_1.SLOTS[mySlots[0]]?.label}` : `مشرف ليالي ${mySlots.map((k) => constants_js_1.SLOTS[k]?.short).join('، ')}`
+        : constants_js_1.SCOPE_DUTY[scope];
     const dutyPlace = !isAdmin && activeMosques.length > 1 ? `${activeMosques.length} مساجد` : mosque?.name;
     const allowedSlots = (0, react_1.useMemo)(() => {
         if (!mosque)
             return [];
         const s = [];
-        if (mosque.enable_friday && (scope === 'both' || scope === 'friday'))
+        if (mosque.enable_friday && !isNight && (scope === 'both' || scope === 'friday'))
             s.push('fri');
         if (mosque.enable_night && (scope === 'both' || scope === 'night'))
-            constants_js_1.NIGHT_KEYS.forEach((k) => mosque.night_days?.includes(k) && s.push(k));
+            constants_js_1.NIGHT_KEYS.forEach((k) => mosque.night_days?.includes(k) && (!isNight || mySlots.includes(k)) && s.push(k));
         return s;
-    }, [mosque, scope]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mosque, scope, isNight, mySlots.join(',')]);
     // ----- حالة النموذج -----
     const [date, setDate] = (0, react_1.useState)((0, util_js_1.todayStr)());
     const [hijri, setHijri] = (0, react_1.useState)(() => (0, hijri_js_1.toHijri)((0, util_js_1.todayStr)()));
@@ -1460,14 +1472,14 @@ function DailyLog() {
     };
     // ----- عرض التسجيلات -----
     const sameSlot = (0, react_1.useMemo)(() => (mosque ? recitation_logs.filter((l) => l.mosque_id === mosque.id && l.log_date === date && l.slot_key === slot && l.id !== editing?.id) : []), [recitation_logs, mosque, date, slot, editing]);
-    const recent = (0, react_1.useMemo)(() => (mosque ? recitation_logs.filter((l) => l.mosque_id === mosque.id).slice(0, 25) : []), [recitation_logs, mosque]);
+    const recent = (0, react_1.useMemo)(() => (mosque ? recitation_logs.filter((l) => l.mosque_id === mosque.id && (!isNight || mySlots.includes(l.slot_key))).slice(0, 25) : []), [recitation_logs, mosque]);
     if (activeMosques.length === 0) {
         return (React.createElement(React.Fragment, null,
             React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A" }),
             React.createElement("div", { className: "card" },
                 React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0645 \u064A\u062A\u0645 \u0631\u0628\u0637\u0643 \u0628\u0623\u064A \u0645\u0633\u062C\u062F \u0628\u0639\u062F", hint: "\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u064A\u0633\u0646\u062F \u0625\u0644\u064A\u0643 \u0645\u0633\u062C\u062F\u0627\u064B \u0623\u0648 \u0623\u0643\u062B\u0631 \u0648\u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u0629." }))));
     }
-    const editable = (l) => isAdmin || (myIds.includes(l.mosque_id) && (scope === 'both' || (scope === 'friday') === (l.slot_key === 'fri')));
+    const editable = (l) => isAdmin || (myIds.includes(l.mosque_id) && (!isNight || mySlots.includes(l.slot_key)) && (scope === 'both' || (scope === 'friday') === (l.slot_key === 'fri')));
     return (React.createElement(React.Fragment, null,
         React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A", subtitle: "\u0633\u062C\u0651\u0644 \u0627\u0644\u0642\u0627\u0631\u0626 \u0623\u0648 \u0633\u0628\u0628 \u0639\u062F\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u0644\u0643\u0644 \u062E\u0627\u0646\u0629 \u062A\u0644\u0627\u0648\u0629." }),
         React.createElement("div", { className: "mb-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-line p-5 text-white" },
@@ -1476,7 +1488,7 @@ function DailyLog() {
                     "\u0645\u0631\u062D\u0628\u0627\u064B\u060C ",
                     profile.full_name),
                 React.createElement("p", { className: "mt-1 text-xl font-extrabold" },
-                    constants_js_1.SCOPE_DUTY[scope],
+                    duty,
                     dutyPlace ? ` - ${dutyPlace}` : '')),
             activeMosques.length > 1 && (React.createElement("div", { className: "w-full sm:w-72" },
                 React.createElement("label", { className: "mb-1.5 block text-xs font-semibold text-white/80" }, "\u0627\u0644\u0645\u0633\u062C\u062F \u0627\u0644\u0630\u064A \u062A\u0633\u062C\u0651\u0644 \u0644\u0647 \u0627\u0644\u0622\u0646"),
@@ -2044,7 +2056,7 @@ const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
 const constants_js_1 = require("src/lib/constants.js");
 const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
-const blank = { full_name: '', password: '', role: 'supervisor', mosque_ids: [], scope: 'both', is_active: true };
+const blank = { full_name: '', password: '', role: 'supervisor', mosque_ids: [], slot_keys: [], scope: 'both', is_active: true };
 const MIN_PASSWORD = 6;
 const authHint = (m = '') => {
     if (/already registered|already been registered/i.test(m))
@@ -2091,12 +2103,16 @@ function UsersPage() {
             return toast.warn('الاسم مطلوب');
         if (profiles.some((p) => p.id !== form.id && (0, util_js_1.normalizeAr)(p.full_name) === (0, util_js_1.normalizeAr)(name)))
             return toast.warn('الاسم مستخدم', 'يوجد مستخدم بنفس الاسم.');
-        if (form.role === 'supervisor' && form.mosque_ids.length === 0)
+        if (form.role !== 'admin' && form.mosque_ids.length === 0)
             return toast.warn('اختر مسجداً واحداً على الأقل');
+        if (form.role === 'night_supervisor' && form.slot_keys.length === 0)
+            return toast.warn('اختر الليلة', 'مشرف الليلة يحتاج ليلة واحدة على الأقل.');
+        const effScope = form.role === 'night_supervisor' ? 'night' : form.scope;
+        const effSlots = form.role === 'night_supervisor' ? constants_js_1.NIGHT_KEYS.filter((k) => form.slot_keys.includes(k)) : [];
         if (!isNew) {
             setBusy(true);
             const { data, error } = await supabase_js_1.supabase.from('profiles')
-                .update({ full_name: name, role: form.role, mosque_ids: form.mosque_ids, scope: form.scope, is_active: form.is_active })
+                .update({ full_name: name, role: form.role, mosque_ids: form.mosque_ids, slot_keys: effSlots, scope: effScope, is_active: form.is_active })
                 .eq('id', form.id).select().single();
             setBusy(false);
             if (error)
@@ -2119,7 +2135,7 @@ function UsersPage() {
             return toast.error('فعّل الدخول المباشر', 'عطّل «Confirm email» من Supabase ← Authentication ← Providers ← Email ثم أعد المحاولة.');
         }
         const { data: prof, error: e2 } = await supabase_js_1.supabase.from('profiles')
-            .insert({ id: su.user.id, full_name: name, email, role: form.role, mosque_ids: form.mosque_ids, scope: form.scope })
+            .insert({ id: su.user.id, full_name: name, email, role: form.role, mosque_ids: form.mosque_ids, slot_keys: effSlots, scope: effScope })
             .select().single();
         if (e2) {
             setBusy(false);
@@ -2196,7 +2212,7 @@ function UsersPage() {
                         React.createElement("th", { className: "th" }, "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645"),
                         React.createElement("th", { className: "th" }, "\u0627\u0644\u062F\u0648\u0631"),
                         React.createElement("th", { className: "th" }, "\u0627\u0644\u0645\u0633\u0627\u062C\u062F \u0627\u0644\u0645\u0633\u0646\u062F\u0629"),
-                        React.createElement("th", { className: "th" }, "\u0646\u0637\u0627\u0642 \u0627\u0644\u0645\u0633\u0624\u0648\u0644\u064A\u0629"),
+                        React.createElement("th", { className: "th" }, "\u0627\u0644\u0646\u0637\u0627\u0642 / \u0627\u0644\u0644\u064A\u0644\u0629"),
                         React.createElement("th", { className: "th" }, "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631"),
                         React.createElement("th", { className: "th" }, "\u0627\u0644\u062D\u0627\u0644\u0629"),
                         React.createElement("th", { className: "th w-32" }))),
@@ -2206,18 +2222,18 @@ function UsersPage() {
                         React.createElement("td", { className: "td font-bold" },
                             p.full_name,
                             p.id === me && React.createElement("span", { className: "badge-neutral ms-2" }, "\u0623\u0646\u062A")),
-                        React.createElement("td", { className: "td" }, p.role === 'admin' ? React.createElement("span", { className: "badge-brand" }, constants_js_1.ROLES.admin) : React.createElement("span", { className: "badge-neutral" }, constants_js_1.ROLES.supervisor)),
+                        React.createElement("td", { className: "td" }, p.role === 'admin' ? React.createElement("span", { className: "badge-brand" }, constants_js_1.ROLES.admin) : p.role === 'night_supervisor' ? React.createElement("span", { className: "badge-warn" }, constants_js_1.ROLES.night_supervisor) : React.createElement("span", { className: "badge-neutral" }, constants_js_1.ROLES.supervisor)),
                         React.createElement("td", { className: "td" }, p.role === 'admin' && ms.length === 0 ? React.createElement("span", { className: "text-xs text-ink-soft" }, "\u0643\u0644 \u0627\u0644\u0645\u0633\u0627\u062C\u062F")
                             : ms.length === 0 ? React.createElement("span", { className: "badge-warn" }, "\u0628\u0644\u0627 \u0645\u0633\u062C\u062F")
                                 : React.createElement("div", { className: "flex flex-wrap gap-1" }, ms.map((m) => React.createElement("span", { key: m.id, className: "badge-neutral" }, m.name)))),
-                        React.createElement("td", { className: "td text-sm" }, p.role === 'admin' ? 'كل التلاوات' : constants_js_1.SCOPES[p.scope]),
+                        React.createElement("td", { className: "td text-sm" }, p.role === 'admin' ? 'كل التلاوات' : p.role === 'night_supervisor' ? ((p.slot_keys || []).map((k) => constants_js_1.SLOTS[k]?.label).join('، ') || '—') : constants_js_1.SCOPES[p.scope]),
                         React.createElement("td", { className: "td" }, secrets[p.id] ? (React.createElement("span", { className: "flex items-center gap-2" },
                             React.createElement("code", { dir: "ltr", className: "rounded bg-hover px-2 py-0.5 text-xs" }, reveal[p.id] ? secrets[p.id] : '••••••••'),
                             React.createElement("button", { className: "text-ink-soft hover:text-ink", onClick: () => setReveal((r) => ({ ...r, [p.id]: !r[p.id] })), "aria-label": reveal[p.id] ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور' }, reveal[p.id] ? React.createElement(lucide_react_1.EyeOff, { className: "h-4 w-4" }) : React.createElement(lucide_react_1.Eye, { className: "h-4 w-4" })))) : React.createElement("span", { className: "text-xs text-ink-soft" }, "\u063A\u064A\u0631 \u0645\u062D\u0641\u0648\u0638\u0629")),
                         React.createElement("td", { className: "td" }, p.is_active ? React.createElement("span", { className: "badge-ok" }, "\u0645\u0641\u0639\u0651\u0644") : React.createElement("span", { className: "badge-bad" }, "\u0645\u0639\u0637\u0651\u0644")),
                         React.createElement("td", { className: "td" },
                             React.createElement("div", { className: "flex gap-1" },
-                                React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => setForm({ ...p, mosque_ids: p.mosque_ids || [] }), "aria-label": "\u062A\u0639\u062F\u064A\u0644" },
+                                React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => setForm({ ...p, mosque_ids: p.mosque_ids || [], slot_keys: p.slot_keys || [] }), "aria-label": "\u062A\u0639\u062F\u064A\u0644" },
                                     React.createElement(lucide_react_1.Pencil, { className: "h-4 w-4" })),
                                 React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => setPw({ user: p, password: '', old: '' }), "aria-label": "\u062A\u063A\u064A\u064A\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631" },
                                     React.createElement(lucide_react_1.KeyRound, { className: "h-4 w-4" })),
@@ -2235,10 +2251,15 @@ function UsersPage() {
                 React.createElement("input", { className: "input", dir: "ltr", value: form.password, onChange: (e) => set({ password: e.target.value }), autoComplete: "off" }))),
             React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u062F\u0648\u0631", hint: form.id === me ? 'لا يمكنك تغيير دورك أو تعطيل حسابك بنفسك.' : undefined },
                 React.createElement("select", { className: "input", value: form.role, disabled: form.id === me, onChange: (e) => set({ role: e.target.value }) }, Object.entries(constants_js_1.ROLES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v)))),
-            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0645\u0633\u0627\u062C\u062F \u0627\u0644\u0645\u0633\u0646\u062F\u0629", hint: form.role === 'admin' ? 'المدير يرى كل المساجد؛ الاختيار هنا اختياري.' : 'يمكن اختيار مسجد واحد أو عدة مساجد.' },
+            React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0645\u0633\u0627\u062C\u062F \u0627\u0644\u0645\u0633\u0646\u062F\u0629", hint: form.role === 'admin' ? 'المدير يرى كل المساجد؛ الاختيار هنا اختياري.' : form.role === 'night_supervisor' ? 'المسجد الذي يشرف على ليلته.' : 'يمكن اختيار مسجد واحد أو عدة مساجد.' },
                 React.createElement(ui_jsx_1.MultiSelect, { options: mosqueOptions, value: form.mosque_ids, onChange: (v) => set({ mosque_ids: v }) })),
-            React.createElement(ui_jsx_1.Field, { label: "\u0646\u0637\u0627\u0642 \u0627\u0644\u0645\u0633\u0624\u0648\u0644\u064A\u0629" },
-                React.createElement("select", { className: "input", value: form.scope, onChange: (e) => set({ scope: e.target.value }) }, Object.entries(constants_js_1.SCOPES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v)))),
+            form.role === 'night_supervisor' && (React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0644\u064A\u0644\u0629 \u0627\u0644\u0645\u0633\u0645\u0648\u062D\u0629", hint: "\u0644\u0627 \u064A\u0641\u062A\u062D \u0644\u0647 \u0627\u0644\u0646\u0638\u0627\u0645 \u0633\u0648\u0649 \u0647\u0630\u0647 \u0627\u0644\u0644\u064A\u0644\u0629 \u0648\u0641\u064A \u0627\u0644\u0645\u0633\u062C\u062F \u0627\u0644\u0645\u062D\u062F\u062F \u0641\u0642\u0637\u060C \u0648\u0644\u0627 \u064A\u0631\u0649 \u0623\u064A \u0635\u0641\u062D\u0629 \u0623\u062E\u0631\u0649 \u063A\u064A\u0631 \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A." },
+                React.createElement("div", { className: "flex flex-wrap gap-2" }, constants_js_1.NIGHT_KEYS.map((k) => {
+                    const on = form.slot_keys.includes(k);
+                    return (React.createElement("button", { key: k, type: "button", "aria-pressed": on, onClick: () => set({ slot_keys: on ? form.slot_keys.filter((x) => x !== k) : [...form.slot_keys, k] }), className: `rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${on ? 'border-line bg-line text-white' : 'border-cardline bg-white text-ink hover:bg-hover'}` }, constants_js_1.SLOTS[k].label));
+                })))),
+            form.role === 'supervisor' && (React.createElement(ui_jsx_1.Field, { label: "\u0646\u0637\u0627\u0642 \u0627\u0644\u062A\u0633\u062C\u064A\u0644", hint: "\u064A\u0631\u0649 \u0645\u0634\u0631\u0641 \u0627\u0644\u0645\u0633\u062C\u062F \u0643\u0644 \u0645\u0627 \u064A\u062E\u0635 \u0645\u0633\u0627\u062C\u062F\u0647 (\u0627\u0644\u0625\u062D\u0635\u0627\u0626\u064A\u0627\u062A \u0648\u063A\u064A\u0631\u0647\u0627)\u060C \u0648\u0647\u0630\u0627 \u0627\u0644\u062E\u064A\u0627\u0631 \u064A\u062D\u062F\u062F \u0645\u0627 \u064A\u0633\u062A\u0637\u064A\u0639 \u062A\u0633\u062C\u064A\u0644\u0647." },
+                React.createElement("select", { className: "input", value: form.scope, onChange: (e) => set({ scope: e.target.value }) }, Object.entries(constants_js_1.SCOPES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v))))),
             !isNew && form.id !== me && React.createElement(ui_jsx_1.Switch, { checked: form.is_active, onChange: (v) => set({ is_active: v }), label: "\u0627\u0644\u062D\u0633\u0627\u0628 \u0645\u0641\u0639\u0651\u0644" })))),
         React.createElement(ui_jsx_1.Modal, { open: Boolean(pw), onClose: () => setPw(null), title: `تغيير كلمة مرور: ${pw?.user.full_name ?? ''}`, size: "sm", footer: React.createElement(React.Fragment, null,
                 React.createElement("button", { className: "btn-outline", onClick: () => setPw(null) }, "\u0625\u0644\u063A\u0627\u0621"),
