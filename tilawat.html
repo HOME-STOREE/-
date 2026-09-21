@@ -1201,6 +1201,43 @@ async function disablePush() {
 }
 
 };
+defs["src/lib/slots.js"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.slotsForDate = slotsForDate;
+exports.suggestSlot = suggestSlot;
+exports.recordingDay = recordingDay;
+const util_js_1 = require("src/lib/util.js");
+// «ليلة الثلاثاء» = مساء الاثنين: الليلة تُسجَّل مساء اليوم الذي يسبقها.
+// مفتاح: يوم الأسبوع الميلادي (الأحد = 0) → الليلة التي تُقرأ مساءه
+const NIGHT_BY_WEEKDAY = { 5: 'sat', 6: 'sun', 0: 'mon', 1: 'tue', 3: 'thu' };
+/** خانات التلاوة التي تُسجَّل في هذا التاريخ (الجمعة تُقرأ نهاراً، والليالي مساءً) */
+function slotsForDate(dateStr) {
+    const dow = (0, util_js_1.weekdayOf)(dateStr);
+    const out = [];
+    if (dow === 5)
+        out.push('fri');
+    if (NIGHT_BY_WEEKDAY[dow])
+        out.push(NIGHT_BY_WEEKDAY[dow]);
+    return out;
+}
+/** الخانة المقترحة: أما يوم الجمعة فتكون «الجمعة» قبل العصر و«ليلة السبت» بعده */
+function suggestSlot(dateStr, allowed) {
+    const c = slotsForDate(dateStr).filter((k) => allowed.includes(k));
+    if (c.length > 1 && dateStr === (0, util_js_1.todayStr)() && new Date().getHours() >= 16)
+        return c[c.length - 1];
+    return c[0] || allowed[0] || '';
+}
+// اسم اليوم الذي تُسجَّل فيه الخانة
+const DAY_NAMES = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+function recordingDay(slot) {
+    if (slot === 'fri')
+        return 'الجمعة (نهاراً)';
+    const dow = Number(Object.keys(NIGHT_BY_WEEKDAY).find((d) => NIGHT_BY_WEEKDAY[d] === slot));
+    return `مساء ${DAY_NAMES[dow]}`;
+}
+
+};
 defs["src/lib/util.js"] = function(exports, require, module, React){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1600,6 +1637,7 @@ const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
 const DataContext_jsx_1 = require("src/context/DataContext.jsx");
 const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
 const constants_js_1 = require("src/lib/constants.js");
+const slots_js_1 = require("src/lib/slots.js");
 const hijri_js_1 = require("src/lib/hijri.js");
 const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
@@ -1638,9 +1676,13 @@ function DailyLog() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [mosque, scope, isNight, mySlots.join(',')]);
     // ----- حالة النموذج -----
+    const today = (0, util_js_1.todayStr)();
+    const todaySlots = (0, slots_js_1.slotsForDate)(today);
+    const wrongDay = isNight && !mySlots.some((k) => todaySlots.includes(k)); // مسؤول الليلة يسجّل في ليلته فقط
     const [date, setDate] = (0, react_1.useState)((0, util_js_1.todayStr)());
     const [hijri, setHijri] = (0, react_1.useState)(() => (0, hijri_js_1.toHijri)((0, util_js_1.todayStr)()));
     const [slot, setSlot] = (0, react_1.useState)('');
+    const [hijriTouched, setHijriTouched] = (0, react_1.useState)(false);
     const [status, setStatus] = (0, react_1.useState)('read');
     const [reciter, setReciter] = (0, react_1.useState)(null); // { id, name, confirmedFor }
     const [pending, setPending] = (0, react_1.useState)(null); // قارئ غير معتمد بانتظار تأكيد الاستثناء
@@ -1660,19 +1702,27 @@ function DailyLog() {
         setSlot((cur) => {
             if (allowedSlots.includes(cur))
                 return cur;
-            const sug = constants_js_1.SLOT_BY_WEEKDAY[(0, util_js_1.weekdayOf)(date)];
-            return allowedSlots.includes(sug) ? sug : allowedSlots[0];
+            return (0, slots_js_1.suggestSlot)(date, allowedSlots);
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [allowedSlots]);
+    (0, react_1.useEffect)(() => {
+        if (isNight && date !== today)
+            onDateChange(today);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isNight, today, date]);
+    // التاريخ الهجري تلقائي: الليلة تتبع اليوم التالي لمساءها (ليلة الثلاثاء = هجري الثلاثاء)
+    (0, react_1.useEffect)(() => {
+        if (editing || hijriTouched || !date || !slot)
+            return;
+        setHijri((0, hijri_js_1.toHijri)(slot === 'fri' ? date : (0, util_js_1.addDays)(date, 1)));
+    }, [date, slot, editing, hijriTouched]);
     const onDateChange = (v) => {
         setDate(v);
         if (!v)
             return;
-        setHijri((0, hijri_js_1.toHijri)(v));
-        const sug = constants_js_1.SLOT_BY_WEEKDAY[(0, util_js_1.weekdayOf)(v)];
-        if (sug && allowedSlots.includes(sug))
-            setSlot(sug);
+        if ((0, slots_js_1.slotsForDate)(v).some((k) => allowedSlots.includes(k)))
+            setSlot((0, slots_js_1.suggestSlot)(v, allowedSlots));
     };
     // ----- القراء المعتمدون لهذه الخانة -----
     const approved = (0, react_1.useMemo)(() => (slot ? approvedBySlot[slot] || [] : []), [approvedBySlot, slot]);
@@ -1681,6 +1731,7 @@ function DailyLog() {
     const hijriText = hijri.day && hijri.month ? `${hijri.day} ${constants_js_1.HIJRI_MONTHS[hijri.month - 1]} ${hijri.year || ''} هـ`.trim() : '';
     const slotWord = slot === 'fri' ? 'لهذه الجمعة' : 'لهذه الليلة';
     const resetEntry = () => {
+        setHijriTouched(false);
         setReciter(null);
         setPending(null);
         setSurah('');
@@ -1714,6 +1765,9 @@ function DailyLog() {
             return;
         if (!date)
             return toast.warn('اختر التاريخ');
+        if (isNight && (date !== (0, util_js_1.todayStr)() || !(0, slots_js_1.slotsForDate)((0, util_js_1.todayStr)()).includes(slot) || !mySlots.includes(slot))) {
+            return toast.error('اليوم يختلف عن ليلتك', 'لا يمكنك التسجيل إلا في ليلتك المحددة.');
+        }
         let isApproved = false;
         if (status === 'read') {
             if (!reciter)
@@ -1749,8 +1803,11 @@ function DailyLog() {
             : supabase_js_1.supabase.from('recitation_logs').insert(row);
         const { data: saved, error } = await q.select().single();
         setBusy(false);
-        if (error)
+        if (error) {
+            if (isNight && /row-level security/i.test(error.message))
+                return toast.error('اليوم يختلف عن ليلتك', 'لا يمكنك التسجيل إلا في ليلتك المحددة.');
             return toast.error('تعذّر الحفظ', error.message);
+        }
         upsertLocal('recitation_logs', saved);
         toast.success(editing ? 'تم تحديث التسجيل' : 'تم حفظ التسجيل', status === 'read' ? saved.reciter_name : 'سُجّل عدم القراءة');
         resetEntry();
@@ -1793,7 +1850,7 @@ function DailyLog() {
             React.createElement("div", { className: "card" },
                 React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0645 \u064A\u062A\u0645 \u0631\u0628\u0637\u0643 \u0628\u0623\u064A \u0645\u0633\u062C\u062F \u0628\u0639\u062F", hint: "\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u064A\u0633\u0646\u062F \u0625\u0644\u064A\u0643 \u0645\u0633\u062C\u062F\u0627\u064B \u0623\u0648 \u0623\u0643\u062B\u0631 \u0648\u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u0629." }))));
     }
-    const editable = (l) => isAdmin || (myIds.includes(l.mosque_id) && (!isNight || mySlots.includes(l.slot_key)) && (scope === 'both' || (scope === 'friday') === (l.slot_key === 'fri')));
+    const editable = (l) => isAdmin || (myIds.includes(l.mosque_id) && (!isNight || (mySlots.includes(l.slot_key) && todaySlots.includes(l.slot_key) && l.log_date === today)) && (scope === 'both' || (scope === 'friday') === (l.slot_key === 'fri')));
     return (React.createElement(React.Fragment, null,
         React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A", subtitle: "\u0633\u062C\u0651\u0644 \u0627\u0644\u0642\u0627\u0631\u0626 \u0623\u0648 \u0633\u0628\u0628 \u0639\u062F\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u0644\u0643\u0644 \u062E\u0627\u0646\u0629 \u062A\u0644\u0627\u0648\u0629." }),
         React.createElement("div", { className: "mb-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-line p-5 text-white" },
@@ -1808,7 +1865,19 @@ function DailyLog() {
                 React.createElement("label", { className: "mb-1.5 block text-xs font-semibold text-white/80" }, "\u0627\u0644\u0645\u0633\u062C\u062F \u0627\u0644\u0630\u064A \u062A\u0633\u062C\u0651\u0644 \u0644\u0647 \u0627\u0644\u0622\u0646"),
                 React.createElement("select", { className: "input !border-white/30", value: mosqueId, onChange: (e) => { setMosqueId(e.target.value); resetEntry(); } }, activeMosques.map((m) => React.createElement("option", { key: m.id, value: m.id }, m.name)))))),
         !allowedSlots.length ? (React.createElement("div", { className: "card" },
-            React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062E\u0627\u0646\u0627\u062A \u062A\u0644\u0627\u0648\u0629 \u0645\u0641\u0639\u0651\u0644\u0629", hint: "\u0644\u0627 \u064A\u0648\u062C\u062F \u062A\u0637\u0627\u0628\u0642 \u0628\u064A\u0646 \u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u062A\u0643 \u0648\u0627\u0644\u062E\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0641\u0639\u0651\u0644\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u062C\u062F. \u0631\u0627\u062C\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645." }))) : (React.createElement("div", { className: "card card-pad space-y-5" },
+            React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062E\u0627\u0646\u0627\u062A \u062A\u0644\u0627\u0648\u0629 \u0645\u0641\u0639\u0651\u0644\u0629", hint: "\u0644\u0627 \u064A\u0648\u062C\u062F \u062A\u0637\u0627\u0628\u0642 \u0628\u064A\u0646 \u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u062A\u0643 \u0648\u0627\u0644\u062E\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0641\u0639\u0651\u0644\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u062C\u062F. \u0631\u0627\u062C\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645." }))) : wrongDay ? (React.createElement("div", { className: "card card-pad flex items-start gap-4 border-warn/40 bg-warn/10" },
+            React.createElement(lucide_react_1.AlertTriangle, { className: "mt-1 h-7 w-7 shrink-0 text-warn" }),
+            React.createElement("div", null,
+                React.createElement("h2", { className: "text-lg font-extrabold text-warn" }, "\u0627\u0644\u064A\u0648\u0645 \u064A\u062E\u062A\u0644\u0641 \u0639\u0646 \u0644\u064A\u0644\u062A\u0643"),
+                React.createElement("p", { className: "mt-2 text-sm leading-7" },
+                    "\u0627\u0644\u064A\u0648\u0645 ",
+                    React.createElement("b", null, WEEKDAYS[(0, util_js_1.weekdayOf)(today)]),
+                    "\u060C \u0648\u0644\u064A\u0644\u062A\u0643 \u0627\u0644\u0645\u062D\u062F\u062F\u0629: ",
+                    React.createElement("b", null, mySlots.map((k) => constants_js_1.SLOTS[k]?.short).join('، ')),
+                    ' ',
+                    "(\u062A\u064F\u0633\u062C\u064E\u0651\u0644 ",
+                    mySlots.map((k) => (0, slots_js_1.recordingDay)(k)).join('، '),
+                    "). \u0644\u0627 \u064A\u0645\u0643\u0646\u0643 \u062A\u0633\u062C\u064A\u0644 \u062A\u0644\u0627\u0648\u0629 \u0641\u064A \u063A\u064A\u0631 \u0644\u064A\u0644\u062A\u0643.")))) : (React.createElement("div", { className: "card card-pad space-y-5" },
             editing && (React.createElement("div", { className: "flex items-center justify-between rounded-xl border border-warn/30 bg-warn/10 px-4 py-2.5 text-sm font-semibold text-warn" },
                 React.createElement("span", { className: "flex items-center gap-2" },
                     React.createElement(lucide_react_1.Pencil, { className: "h-4 w-4" }),
@@ -1826,19 +1895,19 @@ function DailyLog() {
                     React.createElement("p", { className: "mt-0.5 text-xs text-ink-soft" },
                         "\u0627\u0644\u062E\u0627\u0646\u0629: ",
                         React.createElement("b", { className: "text-ink" }, constants_js_1.SLOTS[slot]?.label))),
-                React.createElement("button", { type: "button", className: "btn-ghost btn-sm", onClick: () => setShowDate((v) => !v) }, showDate ? 'إخفاء' : 'تغيير التاريخ / الخانة')),
-            showDate && (React.createElement("div", { className: "grid gap-4 md:grid-cols-4" },
+                !isNight && (React.createElement("button", { type: "button", className: "btn-ghost btn-sm", onClick: () => setShowDate((v) => !v) }, showDate ? 'إخفاء' : 'تغيير التاريخ / الخانة'))),
+            showDate && !isNight && (React.createElement("div", { className: "grid gap-4 md:grid-cols-4" },
                 React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0645\u064A\u0644\u0627\u062F\u064A" },
                     React.createElement("input", { type: "date", className: "input", value: date, onChange: (e) => onDateChange(e.target.value) })),
                 React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u062E\u0627\u0646\u0629 (\u062C\u0645\u0639\u0629 / \u0644\u064A\u0644\u0629)" },
                     React.createElement("select", { className: "input", value: slot, onChange: (e) => { setSlot(e.target.value); setReciter(null); setComboKey((k) => k + 1); } }, [...new Set([...allowedSlots, ...(slot && !allowedSlots.includes(slot) ? [slot] : [])])].map((k) => React.createElement("option", { key: k, value: k }, constants_js_1.SLOTS[k].label)))),
                 React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0647\u062C\u0631\u064A (\u0631\u0642\u0645 \u0627\u0644\u0644\u064A\u0644\u0629 / \u0627\u0644\u064A\u0648\u0645)", className: "md:col-span-2", hint: "\u064A\u064F\u062D\u0633\u0628 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B (\u0623\u0645 \u0627\u0644\u0642\u0631\u0649) \u0648\u064A\u0645\u0643\u0646\u0643 \u062A\u0639\u062F\u064A\u0644\u0647 \u0644\u064A\u0648\u0627\u0641\u0642 \u0631\u0624\u064A\u0629 \u0627\u0644\u0647\u0644\u0627\u0644 \u0627\u0644\u0645\u062D\u0644\u064A\u0629." },
                     React.createElement("div", { className: "grid grid-cols-[4.5rem_1fr_5.5rem] gap-2" },
-                        React.createElement("input", { type: "number", min: "1", max: "30", className: "input", placeholder: "\u0627\u0644\u064A\u0648\u0645", value: hijri.day, onChange: (e) => setHijri({ ...hijri, day: e.target.value }), "aria-label": "\u0627\u0644\u064A\u0648\u0645 \u0627\u0644\u0647\u062C\u0631\u064A" }),
-                        React.createElement("select", { className: "input", value: hijri.month, onChange: (e) => setHijri({ ...hijri, month: e.target.value }), "aria-label": "\u0627\u0644\u0634\u0647\u0631 \u0627\u0644\u0647\u062C\u0631\u064A" },
+                        React.createElement("input", { type: "number", min: "1", max: "30", className: "input", placeholder: "\u0627\u0644\u064A\u0648\u0645", value: hijri.day, onChange: (e) => { setHijriTouched(true); setHijri({ ...hijri, day: e.target.value }); }, "aria-label": "\u0627\u0644\u064A\u0648\u0645 \u0627\u0644\u0647\u062C\u0631\u064A" }),
+                        React.createElement("select", { className: "input", value: hijri.month, onChange: (e) => { setHijriTouched(true); setHijri({ ...hijri, month: e.target.value }); }, "aria-label": "\u0627\u0644\u0634\u0647\u0631 \u0627\u0644\u0647\u062C\u0631\u064A" },
                             React.createElement("option", { value: "" }, "\u0627\u0644\u0634\u0647\u0631"),
                             constants_js_1.HIJRI_MONTHS.map((m, i) => React.createElement("option", { key: m, value: i + 1 }, m))),
-                        React.createElement("input", { type: "number", className: "input", placeholder: "\u0627\u0644\u0633\u0646\u0629", value: hijri.year, onChange: (e) => setHijri({ ...hijri, year: e.target.value }), "aria-label": "\u0627\u0644\u0633\u0646\u0629 \u0627\u0644\u0647\u062C\u0631\u064A\u0629" }))))),
+                        React.createElement("input", { type: "number", className: "input", placeholder: "\u0627\u0644\u0633\u0646\u0629", value: hijri.year, onChange: (e) => { setHijriTouched(true); setHijri({ ...hijri, year: e.target.value }); }, "aria-label": "\u0627\u0644\u0633\u0646\u0629 \u0627\u0644\u0647\u062C\u0631\u064A\u0629" }))))),
             sameSlot.length > 0 && (React.createElement("div", { className: "flex items-start gap-2 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-warn" },
                 React.createElement(lucide_react_1.Info, { className: "mt-0.5 h-4 w-4 shrink-0" }),
                 React.createElement("p", null,
@@ -1945,6 +2014,7 @@ const lucide_react_1 = require("lucide-react");
 const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
 const DataContext_jsx_1 = require("src/context/DataContext.jsx");
 const constants_js_1 = require("src/lib/constants.js");
+const slots_js_1 = require("src/lib/slots.js");
 const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
 const PushToggle_jsx_1 = __importDefault(require("src/components/PushToggle.jsx"));
@@ -1955,7 +2025,7 @@ function Coverage({ title, date, slot, mosques, logs }) {
     return (React.createElement("div", { className: "card overflow-hidden" },
         React.createElement("div", { className: "flex items-center justify-between border-b border-cardline px-5 py-3.5" },
             React.createElement("h2", { className: "font-extrabold" }, title),
-            React.createElement("span", { className: "text-xs font-semibold text-ink-soft" }, slot ? `${constants_js_1.SLOTS[slot].short} — ${(0, util_js_1.fmtDate)(date)}` : (0, util_js_1.fmtDate)(date))),
+            React.createElement("span", { className: "text-xs font-semibold text-ink-soft" }, (0, util_js_1.fmtDate)(date))),
         !slot ? (React.createElement("p", { className: "px-5 py-6 text-sm text-ink-soft" }, "\u0644\u0627 \u062A\u0648\u062C\u062F \u062A\u0644\u0627\u0648\u0629 \u0645\u0642\u0631\u0631\u0629 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u064A\u0648\u0645.")) : list.length === 0 ? (React.createElement("p", { className: "px-5 py-6 text-sm text-ink-soft" }, "\u0644\u0627 \u062A\u0648\u062C\u062F \u0645\u0633\u0627\u062C\u062F \u0645\u0641\u0639\u0651\u0644\u0629 \u0644\u0647\u0630\u0647 \u0627\u0644\u062E\u0627\u0646\u0629.")) : (React.createElement("ul", { className: "divide-y divide-cardline" }, list.map((m) => {
             const es = logs.filter((l) => l.mosque_id === m.id && l.log_date === date && l.slot_key === slot);
             return (React.createElement("li", { key: m.id, className: "flex items-center justify-between gap-3 px-5 py-3" },
@@ -1985,7 +2055,7 @@ function Dashboard() {
             max: Math.max(1, ...perMosque.map((x) => x.n)),
         };
     }, [logs, mosques, today]);
-    const todaySlot = constants_js_1.SLOT_BY_WEEKDAY[(0, util_js_1.weekdayOf)(today)] || null;
+    const todaySlots = (0, slots_js_1.slotsForDate)(today);
     return (React.createElement(React.Fragment, null,
         React.createElement(ui_jsx_1.PageHeader, { title: `مرحباً، ${profile.full_name}`, subtitle: "\u0646\u0638\u0631\u0629 \u0639\u0627\u0645\u0629 \u0639\u0644\u0649 \u0627\u0644\u062A\u0644\u0627\u0648\u0627\u062A \u0648\u062A\u063A\u0637\u064A\u0629 \u0627\u0644\u0645\u0633\u0627\u062C\u062F \u2014 \u062A\u062A\u062D\u062F\u062B \u0644\u062D\u0638\u064A\u0627\u064B.", actions: React.createElement(react_router_dom_1.Link, { to: "/log", className: "btn-primary" },
                 React.createElement(lucide_react_1.ClipboardList, { className: "h-4 w-4" }),
@@ -1997,7 +2067,9 @@ function Dashboard() {
             React.createElement(ui_jsx_1.StatCard, { label: "\u0644\u0645 \u062A\u062A\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629 (\u0622\u062E\u0631 30 \u064A\u0648\u0645\u0627\u064B)", value: s.missed, tone: s.missed ? 'bad' : undefined }),
             React.createElement(ui_jsx_1.StatCard, { label: "\u0642\u0631\u0627\u0621 \u0645\u0633\u062C\u0644\u0648\u0646 / \u0627\u0633\u062A\u062B\u0646\u0627\u0621\u0627\u062A", value: `${reciters.filter((r) => r.is_active).length} / ${s.exceptions}`, hint: "\u0627\u0644\u0627\u0633\u062A\u062B\u0646\u0627\u0621\u0627\u062A \u0641\u064A \u0622\u062E\u0631 30 \u064A\u0648\u0645\u0627\u064B", tone: s.exceptions ? 'warn' : undefined })),
         React.createElement("div", { className: "mt-5 grid gap-5 lg:grid-cols-2" },
-            React.createElement(Coverage, { title: "\u062A\u063A\u0637\u064A\u0629 \u0627\u0644\u064A\u0648\u0645", date: today, slot: todaySlot, mosques: mosques, logs: logs }),
+            todaySlots.length === 0
+                ? React.createElement(Coverage, { title: "\u062A\u063A\u0637\u064A\u0629 \u0627\u0644\u064A\u0648\u0645", date: today, slot: null, mosques: mosques, logs: logs })
+                : todaySlots.map((k) => React.createElement(Coverage, { key: k, title: `تغطية ${constants_js_1.SLOTS[k].label}`, date: today, slot: k, mosques: mosques, logs: logs })),
             React.createElement(Coverage, { title: "\u062A\u063A\u0637\u064A\u0629 \u0622\u062E\u0631 \u062C\u0645\u0639\u0629", date: (0, util_js_1.lastFriday)(today), slot: "fri", mosques: mosques, logs: logs })),
         React.createElement("div", { className: "mt-5 grid gap-5 lg:grid-cols-2" },
             React.createElement("div", { className: "card card-pad" },
