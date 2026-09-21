@@ -422,6 +422,13 @@
     display:flex; align-items:center; justify-content:center; padding:20px;
   }
   #rbacLoginScreen.hidden{ display:none; }
+  #appLoadingScreen{
+    position:fixed; inset:0; z-index:9997;
+    background:linear-gradient(160deg, var(--bg), var(--sand));
+    display:flex; align-items:center; justify-content:center; padding:20px;
+    text-align:center; font-family:'Cairo',sans-serif; color:var(--text-dim); font-size:14px;
+  }
+  #appLoadingScreen.hidden{ display:none; }
   .rbac-login-card{
     background:var(--panel); border-radius:var(--r-card); padding:28px 24px;
     width:100%; max-width:360px; box-shadow:0 10px 30px rgba(74,48,32,0.22);
@@ -494,6 +501,10 @@
     <p class="rbac-login-hint" id="rbacLoginHint"></p>
   </div>
 </div>
+
+<!-- Shown briefly after login while we fetch the real data from Supabase,
+     so the app never flashes an empty/newly-invented circle first. -->
+<div id="appLoadingScreen" class="hidden">جارٍ تحميل بيانات الحلقات...</div>
 
 <div class="wrap">
 
@@ -1188,6 +1199,17 @@
       // post-reset data" apart from "a device that hasn't heard about the
       // reset yet" — see mergeGroup().
       recordsResetAt: 0,
+      // Marks the moment this group's todayEntries were last deliberately
+      // cleared (submitDay's "إرسال جماعي", or a "بدء شهر جديد" reset).
+      // Without this, a stale copy (another device, or this device's own
+      // localStorage snapshot taken a moment before the clear finished
+      // syncing) still holding yesterday's checked items would win a plain
+      // union-merge back in — the cleared side has no entry for a given
+      // student at all, so there's nothing to compare timestamps against
+      // and the stale entry always "wins" by default. Gating todayEntries
+      // freshness by this timestamp (see mergeGroup()) makes the clear
+      // itself the authoritative, dated action, like resetAt/recordsResetAt.
+      todayEntriesResetAt: 0,
       // Monotonic "day slot" counter for the streak system — bumped by +1
       // every single time "احتساب النقاط" is pressed, regardless of the
       // real-world calendar/clock, and NEVER reset by "بدء شهر جديد" (a
@@ -1263,6 +1285,7 @@
     if(!g.deletedStudentIds || typeof g.deletedStudentIds !== 'object') g.deletedStudentIds = {};
     if(!g.deletedItemIds || typeof g.deletedItemIds !== 'object') g.deletedItemIds = {};
     if(typeof g.recordsResetAt !== 'number') g.recordsResetAt = 0;
+    if(typeof g.todayEntriesResetAt !== 'number') g.todayEntriesResetAt = 0;
     if(!g.currentDay) g.currentDay = 1;
     if(typeof g.streakDayCounter !== 'number') g.streakDayCounter = 0;
     g.students.forEach(s => ensureStudentStreakShape(s, g.streakDayCounter));
@@ -1440,12 +1463,31 @@
     if(!state.deletedGroupIds || typeof state.deletedGroupIds !== 'object') state.deletedGroupIds = {};
     if(!state.deletedTemplateIds || typeof state.deletedTemplateIds !== 'object') state.deletedTemplateIds = {};
     state.groups.forEach(ensureGroupShape);
-    if(state.groups.length === 0) state.groups.push(newGroup('الحلقة الأولى'));
+    // NOTE: we deliberately do NOT invent a default "الحلقة الأولى" group
+    // here just because THIS device's local cache happens to be empty (a
+    // fresh browser, a cleared cache, a new deploy, etc). Doing that here —
+    // before the first Supabase pull — used to mean the freshly-invented
+    // empty group got merged with the real remote data a few seconds later
+    // and pushed back up, permanently creating a duplicate/extra circle
+    // every time the app was opened on an "empty" device. See
+    // ensureAtLeastOneGroupIfStillEmpty() below, which only runs AFTER
+    // connectSync() has actually asked Supabase for the real data.
     // strip any legacy group-id pointers that might exist in old saved data —
     // those now live only in uiState, not in the synced state object.
     delete state.evalGroupId; delete state.resultsGroupId; delete state.archiveGroupId; delete state.settingsGroupId;
 
     await saveState();
+  }
+
+  // Only invents a brand-new default circle if there is truly nothing —
+  // neither cached locally nor found on Supabase. This must be called AFTER
+  // the initial connectSync() pull/merge has had a chance to run, never
+  // before it, otherwise it recreates the exact bug described above.
+  function ensureAtLeastOneGroupIfStillEmpty(){
+    if(state.groups.length === 0){
+      state.groups.push(newGroup('الحلقة الأولى'));
+      saveState();
+    }
   }
 
   async function saveState(){
@@ -1629,14 +1671,28 @@
     const recordsResetAt = Math.max(a.recordsResetAt||0, b.recordsResetAt||0);
     const aFresh = (a.recordsResetAt||0) >= recordsResetAt;
     const bFresh = (b.recordsResetAt||0) >= recordsResetAt;
-    const aTE = aFresh ? a.todayEntries : {};
-    const bTE = bFresh ? b.todayEntries : {};
     const aRec = aFresh ? a.records : {};
     const bRec = bFresh ? b.records : {};
     const aReset = aFresh ? a.resetAt : {};
     const bReset = bFresh ? b.resetAt : {};
     const aDay = aFresh ? (a.currentDay||1) : 1;
     const bDay = bFresh ? (b.currentDay||1) : 1;
+
+    // todayEntries gets its OWN freshness gate, separate from records/
+    // resetAt/currentDay above. Those three should still union/merge
+    // normally on an ordinary "إرسال جماعي" (day submit) — only a month
+    // reset should wipe them. But todayEntries must ALSO be treated as
+    // wiped the moment a day is submitted (not just on month reset), or a
+    // stale copy's leftover checked items keep resurrecting after every
+    // submit (see todayEntriesResetAt's definition above). The floor of
+    // recordsResetAt is kept for old saved data from before this field
+    // existed, where a month reset already happened but todayEntriesResetAt
+    // was never set.
+    const teResetAt = Math.max(a.todayEntriesResetAt||0, b.todayEntriesResetAt||0, recordsResetAt);
+    const aTEFresh = Math.max(a.todayEntriesResetAt||0, a.recordsResetAt||0) >= teResetAt;
+    const bTEFresh = Math.max(b.todayEntriesResetAt||0, b.recordsResetAt||0) >= teResetAt;
+    const aTE = aTEFresh ? a.todayEntries : {};
+    const bTE = bTEFresh ? b.todayEntries : {};
 
     return {
       id: a.id,
@@ -1658,7 +1714,8 @@
       archives: mergeArchivesArray(a.archives, b.archives),
       deletedStudentIds: deletedStudentIds,
       deletedItemIds: deletedItemIds,
-      recordsResetAt: recordsResetAt
+      recordsResetAt: recordsResetAt,
+      todayEntriesResetAt: teResetAt
     };
   }
 
@@ -2436,6 +2493,10 @@
       group.records[s.id][group.currentDay] = group.todayEntries[s.id] || {};
     });
     group.todayEntries = {};
+    // Dated so a merge against a stale copy (this device's own pre-sync
+    // cache, or another device) can't silently bring today's marks back —
+    // see todayEntriesResetAt's definition above and mergeGroup() below.
+    group.todayEntriesResetAt = Date.now();
     group.currentDay += 1;
     selectedDay = maxReachableDay(group);
     await saveState();
@@ -3017,6 +3078,7 @@ alter publication supabase_realtime add table ${RBAC_SYNC_TABLE};</div>
       archiveGroupMonth(group, finalLabel);
       group.records = {}; group.todayEntries = {}; group.resetAt = {}; group.currentDay = 1;
       group.recordsResetAt = Date.now();
+      group.todayEntriesResetAt = group.recordsResetAt;
       selectedDay = null;
       saveState(); renderAll();
       flashStatus('settingsStatus', `تم حفظ أرشيف "${finalLabel}" وبدء شهر جديد ✓`);
@@ -3087,13 +3149,22 @@ alter publication supabase_realtime add table ${RBAC_SYNC_TABLE};</div>
 
   async function startAppAfterLogin(){
     if(!storageAvailable()) showStorageWarning();
-    await loadState();     // DATA — will also be synced with Supabase
+    const loadingScreen = document.getElementById('appLoadingScreen');
+    if(loadingScreen) loadingScreen.classList.remove('hidden');
+    await loadState();     // local cache only — does NOT invent a default circle yet
+    // Wait for the real data from Supabase BEFORE deciding whether a default
+    // circle is actually needed, and before the first render. This is what
+    // stops a fresh/slow device from flashing an empty "الحلقة الأولى" and
+    // then permanently syncing it up as a duplicate — see loadState() and
+    // ensureAtLeastOneGroupIfStillEmpty() for the full explanation.
+    await connectSync();
+    ensureAtLeastOneGroupIfStillEmpty();
+    if(loadingScreen) loadingScreen.classList.add('hidden');
     loadUiState();          // NAVIGATION — local to this device only, restores last tab/group viewed here
     const allowed = rbacAllowedTabs();
     const startTab = allowed.includes(uiState.currentTab) ? uiState.currentTab : (allowed[0] || 'eval');
     setTab(startTab || 'eval');
     renderAll();
-    connectSync();
   }
 
   (async function init(){
