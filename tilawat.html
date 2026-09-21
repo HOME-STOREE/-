@@ -1132,7 +1132,7 @@ async function enablePush(userId) {
     const perm = await Notification.requestPermission();
     if (perm !== 'granted')
         throw new Error('denied');
-    const reg = await navigator.serviceWorker.register('sw.js');
+    const reg = await navigator.serviceWorker.register('tilawat-sw.js');
     await navigator.serviceWorker.ready;
     // اشتراك جديد دائماً: يمنع تعارض جهاز سبق استخدامه بحساب مدير آخر
     const old = await reg.pushManager.getSubscription();
