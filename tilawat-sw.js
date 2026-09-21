@@ -9,9 +9,6 @@ self.addEventListener('push', (event) => {
   try { d = event.data ? event.data.json() : {} } catch (e) { d = { title: 'تلاوات', body: event.data ? event.data.text() : '' } }
 
   event.waitUntil((async () => {
-    // إن كانت الصفحة مفتوحة أمامك فالتنبيه يظهر داخلها، فلا نكرره كإشعار نظام
-    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-    if (!d.force && wins.some((w) => w.visibilityState === 'visible')) return
     await self.registration.showNotification(d.title || 'تلاوات', {
       body: d.body || '',
       icon: ICON,
