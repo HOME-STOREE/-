@@ -964,13 +964,25 @@ function DataProvider({ children }) {
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [uid]);
+    // المسؤول يرى مساجده فقط (ومسؤول الليلة ليالِيه فقط) — إضافة إلى صلاحيات قاعدة البيانات
+    const scoped = (0, react_1.useMemo)(() => {
+        if (!profile || profile.role === 'admin')
+            return data;
+        const ids = new Set(profile.mosque_ids || []);
+        const slots = profile.role === 'night_supervisor' ? new Set(profile.slot_keys || []) : null;
+        return {
+            ...data,
+            mosques: data.mosques.filter((m) => ids.has(m.id)),
+            recitation_logs: data.recitation_logs.filter((l) => ids.has(l.mosque_id) && (!slots || slots.has(l.slot_key))),
+        };
+    }, [data, profile]);
     const derived = (0, react_1.useMemo)(() => {
-        const mosqueById = Object.fromEntries(data.mosques.map((m) => [m.id, m]));
-        const reciterById = Object.fromEntries(data.reciters.map((r) => [r.id, r]));
-        const profileById = Object.fromEntries(data.profiles.map((p) => [p.id, p]));
+        const mosqueById = Object.fromEntries(scoped.mosques.map((m) => [m.id, m]));
+        const reciterById = Object.fromEntries(scoped.reciters.map((r) => [r.id, r]));
+        const profileById = Object.fromEntries(scoped.profiles.map((p) => [p.id, p]));
         const slotsByReciter = {};
         const approvedBySlot = {};
-        data.reciter_slots.forEach((s) => {
+        scoped.reciter_slots.forEach((s) => {
             var _a, _b;
             ;
             (slotsByReciter[_a = s.reciter_id] || (slotsByReciter[_a] = [])).push(s);
@@ -980,8 +992,8 @@ function DataProvider({ children }) {
         });
         Object.values(approvedBySlot).forEach((a) => a.sort((x, y) => (0, util_js_1.byArabic)(x.name, y.name)));
         return { mosqueById, reciterById, profileById, slotsByReciter, approvedBySlot };
-    }, [data]);
-    const value = (0, react_1.useMemo)(() => ({ ...data, ...derived, ready, loadError, sync, refresh, upsertLocal, removeLocal }), [data, derived, ready, loadError, sync, refresh, upsertLocal, removeLocal]);
+    }, [scoped]);
+    const value = (0, react_1.useMemo)(() => ({ ...scoped, ...derived, ready, loadError, sync, refresh, upsertLocal, removeLocal }), [scoped, derived, ready, loadError, sync, refresh, upsertLocal, removeLocal]);
     return React.createElement(DataCtx.Provider, { value: value }, children);
 }
 
@@ -1055,11 +1067,12 @@ exports.SCOPE_DUTY = {
     night: 'مسؤول التلاوة الليلية',
     both: 'مسؤول جميع التلاوات',
 };
-exports.ROLES = { admin: 'مدير النظام', supervisor: 'مشرف مسجد', night_supervisor: 'مشرف ليلة' };
+exports.ROLES = { admin: 'مدير النظام', supervisor: 'مسؤول مسجد', night_supervisor: 'مسؤول ليلة' };
 exports.REASONS = [
     { code: 'no_jamaa', label: 'عدم القراءة بسبب عدم وجود صلاة جماعة', short: 'بدون صلاة جماعة', color: '#7A5C4F' },
     { code: 'mawlid', label: 'عدم وجود قراءة بسبب إحياء المولد', short: 'إحياء مولد', color: '#B58F5B' },
     { code: 'funeral', label: 'عدم وجود قراءة بسبب قراءة مأتم', short: 'قراءة مأتم', color: '#8FA08A' },
+    { code: 'absent', label: 'لم يحضر القارئ', short: 'لم يحضر القارئ', color: '#6F8FAF' },
     { code: 'other', label: 'سبب آخر', short: 'أسباب أخرى', color: '#C4B5A2' },
 ];
 exports.REASON_BY_CODE = Object.fromEntries(exports.REASONS.map((r) => [r.code, r]));
@@ -1274,6 +1287,7 @@ exports.default = Analytics;
 const react_1 = require("react");
 const react_dom_1 = require("react-dom");
 const lucide_react_1 = require("lucide-react");
+const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
 const DataContext_jsx_1 = require("src/context/DataContext.jsx");
 const constants_js_1 = require("src/lib/constants.js");
 const util_js_1 = require("src/lib/util.js");
@@ -1286,6 +1300,7 @@ const RANGES = [
     { value: 'custom', label: 'فترة مخصصة' },
 ];
 function Analytics() {
+    const { isAdmin } = (0, AuthContext_jsx_1.useAuth)();
     const { mosques, recitation_logs: logs, mosqueById } = (0, DataContext_jsx_1.useData)();
     // ----- الفلاتر -----
     const [q, setQ] = (0, react_1.useState)('');
@@ -1379,7 +1394,7 @@ function Analytics() {
     const shown = showAll || printAll ? board : board.slice(0, 15);
     const single = q.trim() && board.length === 1 ? board[0] : null;
     const summary = [
-        ['المسجد', mosqueId === 'all' ? 'جميع المساجد' : mosqueById[mosqueId]?.name],
+        ['المسجد', mosqueId === 'all' ? (isAdmin ? 'جميع المساجد' : mosques.length > 1 ? 'جميع المساجد المسندة إليك' : mosques[0]?.name || '—') : mosqueById[mosqueId]?.name],
         ['الخانة', slot === 'all' ? 'الكل' : slot === 'nights' ? 'كل الليالي' : constants_js_1.SLOTS[slot].label],
         ['رقم الليلة (هجري)', night === 'all' ? 'الكل' : night],
         ['الفترة', period.from || period.to ? `${(0, util_js_1.fmtDate)(period.from) === '—' ? 'البداية' : (0, util_js_1.fmtDate)(period.from)} ← ${(0, util_js_1.fmtDate)(period.to) === '—' ? 'اليوم' : (0, util_js_1.fmtDate)(period.to)}` : 'كل الفترات'],
@@ -1414,7 +1429,7 @@ function Analytics() {
                 React.createElement("div", null,
                     React.createElement("label", { className: "label" }, "\u0627\u0644\u0645\u0633\u062C\u062F"),
                     React.createElement("select", { className: "input", value: mosqueId, onChange: (e) => setMosqueId(e.target.value) },
-                        React.createElement("option", { value: "all" }, "\u062C\u0645\u064A\u0639 \u0627\u0644\u0645\u0633\u0627\u062C\u062F"),
+                        React.createElement("option", { value: "all" }, isAdmin ? 'جميع المساجد' : 'جميع مساجدي'),
                         mosques.map((m) => React.createElement("option", { key: m.id, value: m.id }, m.name)))),
                 React.createElement("div", null,
                     React.createElement("label", { className: "label" }, "\u0627\u0644\u062E\u0627\u0646\u0629"),
@@ -1543,7 +1558,7 @@ function Analytics() {
                             " \u062D\u0627\u0644\u0629")),
                     React.createElement("div", { className: "flex h-4 overflow-hidden rounded-full bg-page" }, constants_js_1.REASONS.map((r) => counts[r.code] > 0 && (React.createElement("div", { key: r.code, title: `${r.short}: ${counts[r.code]}`, style: { width: `${(counts[r.code] / total) * 100}%`, background: r.color } })))))))),
                 React.createElement("div", { className: "overflow-x-auto rounded-xl border border-cardline" },
-                    React.createElement("table", { className: "w-full min-w-[560px]" },
+                    React.createElement("table", { className: "w-full min-w-[680px]" },
                         React.createElement("thead", null,
                             React.createElement("tr", null,
                                 React.createElement("th", { className: "th" }, "\u0627\u0644\u0645\u0633\u062C\u062F"),
@@ -1589,6 +1604,7 @@ const hijri_js_1 = require("src/lib/hijri.js");
 const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
 const ReciterCombobox_jsx_1 = __importDefault(require("src/components/ReciterCombobox.jsx"));
+const WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 function DailyLog() {
     const { profile, isAdmin } = (0, AuthContext_jsx_1.useAuth)();
     const { mosques, mosqueById, approvedBySlot, reciters, recitation_logs, profileById, upsertLocal, removeLocal } = (0, DataContext_jsx_1.useData)();
@@ -1606,8 +1622,8 @@ function DailyLog() {
     const scope = isAdmin || isNight ? 'both' : profile.scope;
     const duty = isNight
         ? mySlots.length === 1
-            ? mySlots[0] === 'fri' ? 'مشرف تلاوة الجمعة (النهارية)' : `مشرف ${constants_js_1.SLOTS[mySlots[0]]?.label}`
-            : `مشرف: ${mySlots.map((k) => constants_js_1.SLOTS[k]?.short).join('، ')}`
+            ? mySlots[0] === 'fri' ? 'مسؤول تلاوة الجمعة (النهارية)' : `مسؤول ${constants_js_1.SLOTS[mySlots[0]]?.label}`
+            : `مسؤول: ${mySlots.map((k) => constants_js_1.SLOTS[k]?.short).join('، ')}`
         : constants_js_1.SCOPE_DUTY[scope];
     const dutyPlace = !isAdmin && activeMosques.length > 1 ? `${activeMosques.length} مساجد` : mosque?.name;
     const allowedSlots = (0, react_1.useMemo)(() => {
@@ -1636,6 +1652,7 @@ function DailyLog() {
     const [reasonText, setReasonText] = (0, react_1.useState)('');
     const [editing, setEditing] = (0, react_1.useState)(null);
     const [busy, setBusy] = (0, react_1.useState)(false);
+    const [showDate, setShowDate] = (0, react_1.useState)(false);
     const [delTarget, setDelTarget] = (0, react_1.useState)(null);
     (0, react_1.useEffect)(() => {
         if (!allowedSlots.length)
@@ -1661,6 +1678,7 @@ function DailyLog() {
     const approved = (0, react_1.useMemo)(() => (slot ? approvedBySlot[slot] || [] : []), [approvedBySlot, slot]);
     const approvedIds = (0, react_1.useMemo)(() => new Set(approved.map((r) => r.id)), [approved]);
     const others = (0, react_1.useMemo)(() => reciters.filter((r) => r.is_active && !approvedIds.has(r.id)), [reciters, approvedIds]);
+    const hijriText = hijri.day && hijri.month ? `${hijri.day} ${constants_js_1.HIJRI_MONTHS[hijri.month - 1]} ${hijri.year || ''} هـ`.trim() : '';
     const slotWord = slot === 'fri' ? 'لهذه الجمعة' : 'لهذه الليلة';
     const resetEntry = () => {
         setReciter(null);
@@ -1739,6 +1757,7 @@ function DailyLog() {
     };
     const startEdit = (l) => {
         setEditing(l);
+        setShowDate(true);
         setDate(l.log_date);
         setHijri({ day: l.hijri_day ?? '', month: l.hijri_month ?? '', year: l.hijri_year ?? '' });
         setSlot(l.slot_key);
@@ -1797,7 +1816,18 @@ function DailyLog() {
                 React.createElement("button", { className: "btn-ghost btn-sm", onClick: resetEntry },
                     React.createElement(lucide_react_1.X, { className: "h-4 w-4" }),
                     " \u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u062A\u0639\u062F\u064A\u0644"))),
-            React.createElement("div", { className: "grid gap-4 md:grid-cols-4" },
+            React.createElement("div", { className: "flex flex-wrap items-center justify-between gap-3 rounded-xl bg-hover px-4 py-3" },
+                React.createElement("div", null,
+                    React.createElement("p", { className: "font-extrabold" },
+                        WEEKDAYS[(0, util_js_1.weekdayOf)(date)],
+                        " ",
+                        (0, util_js_1.fmtDate)(date),
+                        hijriText && React.createElement("span", { className: "ms-2 text-[11px] font-semibold text-ink-soft" }, hijriText)),
+                    React.createElement("p", { className: "mt-0.5 text-xs text-ink-soft" },
+                        "\u0627\u0644\u062E\u0627\u0646\u0629: ",
+                        React.createElement("b", { className: "text-ink" }, constants_js_1.SLOTS[slot]?.label))),
+                React.createElement("button", { type: "button", className: "btn-ghost btn-sm", onClick: () => setShowDate((v) => !v) }, showDate ? 'إخفاء' : 'تغيير التاريخ / الخانة')),
+            showDate && (React.createElement("div", { className: "grid gap-4 md:grid-cols-4" },
                 React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0645\u064A\u0644\u0627\u062F\u064A" },
                     React.createElement("input", { type: "date", className: "input", value: date, onChange: (e) => onDateChange(e.target.value) })),
                 React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u062E\u0627\u0646\u0629 (\u062C\u0645\u0639\u0629 / \u0644\u064A\u0644\u0629)" },
@@ -1808,7 +1838,7 @@ function DailyLog() {
                         React.createElement("select", { className: "input", value: hijri.month, onChange: (e) => setHijri({ ...hijri, month: e.target.value }), "aria-label": "\u0627\u0644\u0634\u0647\u0631 \u0627\u0644\u0647\u062C\u0631\u064A" },
                             React.createElement("option", { value: "" }, "\u0627\u0644\u0634\u0647\u0631"),
                             constants_js_1.HIJRI_MONTHS.map((m, i) => React.createElement("option", { key: m, value: i + 1 }, m))),
-                        React.createElement("input", { type: "number", className: "input", placeholder: "\u0627\u0644\u0633\u0646\u0629", value: hijri.year, onChange: (e) => setHijri({ ...hijri, year: e.target.value }), "aria-label": "\u0627\u0644\u0633\u0646\u0629 \u0627\u0644\u0647\u062C\u0631\u064A\u0629" })))),
+                        React.createElement("input", { type: "number", className: "input", placeholder: "\u0627\u0644\u0633\u0646\u0629", value: hijri.year, onChange: (e) => setHijri({ ...hijri, year: e.target.value }), "aria-label": "\u0627\u0644\u0633\u0646\u0629 \u0627\u0644\u0647\u062C\u0631\u064A\u0629" }))))),
             sameSlot.length > 0 && (React.createElement("div", { className: "flex items-start gap-2 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-warn" },
                 React.createElement(lucide_react_1.Info, { className: "mt-0.5 h-4 w-4 shrink-0" }),
                 React.createElement("p", null,
@@ -2503,7 +2533,7 @@ function UsersPage() {
     };
     const mosquesOf = (p) => (p.mosque_ids || []).map((id) => mosqueById[id]).filter(Boolean);
     return (React.createElement(React.Fragment, null,
-        React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646 \u0648\u0627\u0644\u0631\u0628\u0637", subtitle: "\u0623\u0636\u0641 \u0627\u0644\u0645\u0634\u0631\u0641\u064A\u0646 \u0628\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0648\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631\u060C \u0648\u0623\u0633\u0646\u062F \u0644\u0643\u0644 \u0645\u0634\u0631\u0641 \u0645\u0633\u062C\u062F\u0627\u064B \u0623\u0648 \u0623\u0643\u062B\u0631.", actions: React.createElement("button", { className: "btn-primary", onClick: () => setForm({ ...blank }) },
+        React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646 \u0648\u0627\u0644\u0631\u0628\u0637", subtitle: "\u0623\u0636\u0641 \u0627\u0644\u0645\u0633\u0624\u0648\u0644\u064A\u0646 \u0628\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0648\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631\u060C \u0648\u0623\u0633\u0646\u062F \u0644\u0643\u0644 \u0645\u0633\u0624\u0648\u0644 \u0645\u0633\u062C\u062F\u0627\u064B \u0623\u0648 \u0623\u0643\u062B\u0631.", actions: React.createElement("button", { className: "btn-primary", onClick: () => setForm({ ...blank }) },
                 React.createElement(lucide_react_1.Plus, { className: "h-4 w-4" }),
                 " \u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062A\u062E\u062F\u0645") }),
         React.createElement("div", { className: "card overflow-hidden" }, profiles.length === 0 ? React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u064A\u0648\u062C\u062F \u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646" }) : (React.createElement("div", { className: "overflow-x-auto" },
@@ -2559,7 +2589,7 @@ function UsersPage() {
                     const on = form.slot_keys.includes(k);
                     return (React.createElement("button", { key: k, type: "button", "aria-pressed": on, onClick: () => set({ slot_keys: on ? form.slot_keys.filter((x) => x !== k) : [...form.slot_keys, k] }), className: `rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${on ? 'border-line bg-line text-white' : 'border-cardline bg-white text-ink hover:bg-hover'}` }, constants_js_1.SLOTS[k].label));
                 })))),
-            form.role === 'supervisor' && (React.createElement(ui_jsx_1.Field, { label: "\u0646\u0637\u0627\u0642 \u0627\u0644\u062A\u0633\u062C\u064A\u0644", hint: "\u064A\u0631\u0649 \u0645\u0634\u0631\u0641 \u0627\u0644\u0645\u0633\u062C\u062F \u0643\u0644 \u0645\u0627 \u064A\u062E\u0635 \u0645\u0633\u0627\u062C\u062F\u0647 (\u0627\u0644\u0625\u062D\u0635\u0627\u0626\u064A\u0627\u062A \u0648\u063A\u064A\u0631\u0647\u0627)\u060C \u0648\u0647\u0630\u0627 \u0627\u0644\u062E\u064A\u0627\u0631 \u064A\u062D\u062F\u062F \u0645\u0627 \u064A\u0633\u062A\u0637\u064A\u0639 \u062A\u0633\u062C\u064A\u0644\u0647." },
+            form.role === 'supervisor' && (React.createElement(ui_jsx_1.Field, { label: "\u0646\u0637\u0627\u0642 \u0627\u0644\u062A\u0633\u062C\u064A\u0644", hint: "\u064A\u0631\u0649 \u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u0645\u0633\u062C\u062F \u0643\u0644 \u0645\u0627 \u064A\u062E\u0635 \u0645\u0633\u0627\u062C\u062F\u0647 (\u0627\u0644\u0625\u062D\u0635\u0627\u0626\u064A\u0627\u062A \u0648\u063A\u064A\u0631\u0647\u0627)\u060C \u0648\u0647\u0630\u0627 \u0627\u0644\u062E\u064A\u0627\u0631 \u064A\u062D\u062F\u062F \u0645\u0627 \u064A\u0633\u062A\u0637\u064A\u0639 \u062A\u0633\u062C\u064A\u0644\u0647." },
                 React.createElement("select", { className: "input", value: form.scope, onChange: (e) => set({ scope: e.target.value }) }, Object.entries(constants_js_1.SCOPES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v))))),
             !isNew && form.id !== me && React.createElement(ui_jsx_1.Switch, { checked: form.is_active, onChange: (v) => set({ is_active: v }), label: "\u0627\u0644\u062D\u0633\u0627\u0628 \u0645\u0641\u0639\u0651\u0644" })))),
         React.createElement(ui_jsx_1.Modal, { open: Boolean(pw), onClose: () => setPw(null), title: `تغيير كلمة مرور: ${pw?.user.full_name ?? ''}`, size: "sm", footer: React.createElement(React.Fragment, null,
