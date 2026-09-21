@@ -652,6 +652,18 @@
   let syncChannel = null;
   let syncSaveTimer = null;
   let lastPushedJSON = null;   // used to ignore realtime echoes of our own writes
+  // Tapping several items quickly queues several pushes in a row (see
+  // queueSyncPush/firePush). Each push overwrites lastPushedJSON with its
+  // own snapshot, but the *echo* for an EARLIER push can still be in
+  // flight and arrive after a later push has already moved lastPushedJSON
+  // on — so comparing only against the single latest value made every
+  // earlier-but-still-in-flight echo look like a genuine remote change.
+  // That falsely triggered a full merge + renderAll() on the item's own
+  // tap, which is what showed up as an intermittent "press, then a beat
+  // of lag" on quick successive taps. Keeping every still-unconfirmed
+  // push snapshot (not just the latest) lets each echo be recognized and
+  // silently dropped, however late it arrives.
+  let pendingPushJSONs = [];
   let isApplyingRemote = false;
   let pushInFlight = false;    // true while a push request is on the wire
   let pushRetryTimer = null;   // timer handle for auto-retry after a failed push
@@ -1804,6 +1816,8 @@
     if(!supabaseClient || !cfg) return false;
     try{
       lastPushedJSON = stableStringify(state);
+      pendingPushJSONs.push(lastPushedJSON);
+      if(pendingPushJSONs.length > 10) pendingPushJSONs.shift(); // safety cap only
       const { error } = await supabaseClient
         .from(SYNC_TABLE)
         .upsert({ sync_id: cfg.syncId, data: state, updated_at: new Date().toISOString() }, { onConflict: 'sync_id' });
@@ -1848,7 +1862,13 @@
         const incoming = payload.new && payload.new.data;
         if(!incoming) return;
         const incomingJSON = stableStringify(incoming);
-        if(incomingJSON === lastPushedJSON) return; // our own write echoed back
+        const echoIdx = pendingPushJSONs.indexOf(incomingJSON);
+        if(echoIdx !== -1){
+          // Matches a push THIS device made (whichever one — not
+          // necessarily the latest) that hasn't been echoed back yet.
+          pendingPushJSONs.splice(echoIdx, 1);
+          return;
+        }
 
         // Merge instead of replace: keep anything this device already has
         // that the incoming update doesn't know about yet (e.g. an edit
