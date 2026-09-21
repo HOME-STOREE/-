@@ -445,9 +445,11 @@ function PushToggle({ compact = false }) {
         setBusy(false);
     };
     // اختبار الحلقة كاملة: الموقع ← دالة send-push ← خدمة الإشعارات ← الجهاز
-    const test = async () => {
+    const test = async (delay = 0) => {
         setTesting(true);
-        const { data, error } = await supabase_js_1.supabase.functions.invoke('send-push', { body: { test: true } });
+        if (delay)
+            toast.info('اقفل شاشة الجوال الآن', `سيصلك الإشعار بعد ${delay} ثانية.`);
+        const { data, error } = await supabase_js_1.supabase.functions.invoke('send-push', { body: { test: true, delay } });
         setTesting(false);
         if (error) {
             const status = error.context?.status;
@@ -465,9 +467,11 @@ function PushToggle({ compact = false }) {
         : (React.createElement("div", { className: "flex items-center gap-3" },
             React.createElement(ui_jsx_1.Switch, { checked: state === 'on', onChange: (v) => !busy && state !== 'checking' && toggle(v), label: state === 'on' ? 'الإشعارات مفعّلة على هذا الجهاز' : 'تفعيل الإشعارات' }),
             (busy || state === 'checking') && React.createElement(ui_jsx_1.Spinner, { className: "h-4 w-4" }),
-            state === 'on' && (React.createElement("button", { className: "btn-outline btn-sm", onClick: test, disabled: testing },
-                testing && React.createElement(ui_jsx_1.Spinner, { className: "h-3.5 w-3.5" }),
-                " \u0625\u0634\u0639\u0627\u0631 \u062A\u062C\u0631\u064A\u0628\u064A"))));
+            state === 'on' && (React.createElement(React.Fragment, null,
+                React.createElement("button", { className: "btn-outline btn-sm", onClick: () => test(0), disabled: testing },
+                    testing && React.createElement(ui_jsx_1.Spinner, { className: "h-3.5 w-3.5" }),
+                    " \u0625\u0634\u0639\u0627\u0631 \u062A\u062C\u0631\u064A\u0628\u064A"),
+                React.createElement("button", { className: "btn-outline btn-sm", onClick: () => test(15), disabled: testing, title: "\u0627\u0636\u063A\u0637 \u062B\u0645 \u0627\u0642\u0641\u0644 \u0634\u0627\u0634\u0629 \u0627\u0644\u062C\u0648\u0627\u0644" }, "\u0627\u062E\u062A\u0628\u0627\u0631 \u0628\u0639\u062F 15 \u062B")))));
     if (compact)
         return React.createElement("div", null, control);
     return (React.createElement("div", { className: "no-print card card-pad mb-5 flex flex-wrap items-center justify-between gap-4" },
