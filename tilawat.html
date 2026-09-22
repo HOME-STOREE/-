@@ -2856,10 +2856,9 @@ const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
 const ReciterHistoryModal_jsx_1 = __importDefault(require("src/components/ReciterHistoryModal.jsx"));
 /**
- * قراء الليلة — نسخة مصغّرة من «دليل القراء» مخصّصة لمسؤول الليلة (والجمعة):
- * تعرض فقط القراء المعتمدين لليلته الحالية (بحسب تاريخ اليوم)، مع عدد تلاواتهم
- * خلال الشهرين الهجريين: الحالي + الماضي. تعتمد على البيانات المصفّاة أصلاً
- * حسب مسجده وخانته في DataContext.
+ * قراء الليلة — نسخة من «دليل القراء» مخصّصة لمسؤول الليلة (والجمعة):
+ * تعرض دائماً القراء المعتمدين لليلته/ليالِيه المسندة إليه (بصرف النظر عن تاريخ اليوم)،
+ * مع عدد تلاواتهم خلال الشهرين الهجريين: الحالي + الماضي، وبحث بالاسم وترتيب بعدد التلاوات.
  */
 function NightReciters() {
     const { profile } = (0, AuthContext_jsx_1.useAuth)();
@@ -2867,13 +2866,11 @@ function NightReciters() {
     const [q, setQ] = (0, react_1.useState)('');
     const [sortOrder, setSortOrder] = (0, react_1.useState)('desc');
     const [hist, setHist] = (0, react_1.useState)(null);
-    const mySlots = profile.slot_keys || [];
-    const today = (0, util_js_1.todayStr)();
-    const nowHijri = (0, react_1.useMemo)(() => (0, hijri_js_1.toHijri)(today), [today]);
-    // الخانة/الخانات التي تُقرأ الليلة (بحسب تاريخ اليوم) وتقع ضمن مسؤوليتك
-    const tonightSlots = (0, react_1.useMemo)(() => (0, slots_js_1.slotsForDate)(today).filter((k) => mySlots.includes(k)), 
+    // الخانات/الليالي المسندة إلى هذا المسؤول (بصرف النظر عن كونها الليلة أم لا)
+    const mySlots = (0, react_1.useMemo)(() => constants_js_1.SLOT_KEYS.filter((k) => (profile.slot_keys || []).includes(k)), 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [today, mySlots.join(',')]);
+    [(profile.slot_keys || []).join(',')]);
+    const nowHijri = (0, react_1.useMemo)(() => (0, hijri_js_1.toHijri)((0, util_js_1.todayStr)()), []);
     // عدد التلاوات المقروءة لكل قارئ خلال الشهرين الهجريين: الحالي + الماضي
     const counts = (0, react_1.useMemo)(() => {
         const map = {};
@@ -2916,15 +2913,9 @@ function NightReciters() {
             .sort((a, b) => (sortOrder === 'asc' ? a.count - b.count : b.count - a.count));
     };
     return (React.createElement(React.Fragment, null,
-        React.createElement(ui_jsx_1.PageHeader, { title: "\u0642\u0631\u0627\u0621 \u0627\u0644\u0644\u064A\u0644\u0629", subtitle: "\u0627\u0644\u0642\u0631\u0627\u0621 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0648\u0646 \u0627\u0644\u0645\u062A\u0627\u062D\u0648\u0646 \u0641\u064A \u0644\u064A\u0644\u062A\u0643\u060C \u0648\u0639\u062F\u062F \u062A\u0644\u0627\u0648\u0627\u062A\u0647\u0645 \u062E\u0644\u0627\u0644 \u0627\u0644\u0634\u0647\u0631\u064A\u0646 \u0627\u0644\u0647\u062C\u0631\u064A\u064A\u0646 \u0627\u0644\u0623\u062E\u064A\u0631\u064A\u0646." }),
-        !tonightSlots.length ? (React.createElement("div", { className: "card card-pad flex items-start gap-4 border-warn/40 bg-warn/10" },
-            React.createElement(lucide_react_1.AlertTriangle, { className: "mt-1 h-7 w-7 shrink-0 text-warn" }),
-            React.createElement("div", null,
-                React.createElement("h2", { className: "text-lg font-extrabold text-warn" }, "\u0644\u0627 \u062A\u0648\u062C\u062F \u0645\u0633\u0624\u0648\u0644\u064A\u0651\u0629 \u0639\u0644\u064A\u0643 \u0627\u0644\u064A\u0648\u0645"),
-                React.createElement("p", { className: "mt-2 text-sm leading-7" },
-                    "\u0644\u064A\u0644\u062A\u0643 \u0627\u0644\u0645\u062D\u062F\u062F\u0629: ",
-                    React.createElement("b", null, mySlots.map((k) => constants_js_1.SLOTS[k]?.short).join('\u060C ') || '\u2014'),
-                    ". \u0633\u062A\u0637\u0647\u0631 \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0642\u0631\u0627\u0621 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0641\u064A \u0644\u064A\u0644\u062A\u0643 \u0627\u0644\u062A\u0627\u0644\u064A\u0629.")))) : (React.createElement(React.Fragment, null,
+        React.createElement(ui_jsx_1.PageHeader, { title: "\u0642\u0631\u0627\u0621 \u0627\u0644\u0644\u064A\u0644\u0629", subtitle: "\u0627\u0644\u0642\u0631\u0627\u0621 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0648\u0646 \u0644\u0644\u064A\u0644\u062A\u0643\u060C \u0648\u0639\u062F\u062F \u062A\u0644\u0627\u0648\u0627\u062A\u0647\u0645 \u062E\u0644\u0627\u0644 \u0627\u0644\u0634\u0647\u0631\u064A\u0646 \u0627\u0644\u0647\u062C\u0631\u064A\u064A\u0646 \u0627\u0644\u0623\u062E\u064A\u0631\u064A\u0646. \u0627\u0636\u063A\u0637 \u0639\u0644\u0649 \u0642\u0627\u0631\u0626 \u0644\u0639\u0631\u0636 \u0633\u062C\u0644 \u062A\u0644\u0627\u0648\u0627\u062A\u0647 \u0627\u0644\u0643\u0627\u0645\u0644." }),
+        !mySlots.length ? (React.createElement("div", { className: "card" },
+            React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062E\u0627\u0646\u0629 \u0645\u0633\u0646\u062F\u0629 \u0625\u0644\u064A\u0643", hint: "\u0631\u0627\u062C\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u0625\u0633\u0646\u0627\u062F \u0644\u064A\u0644\u062A\u0643 \u0625\u0644\u064A\u0643." }))) : (React.createElement(React.Fragment, null,
             React.createElement("div", { className: "card card-pad mb-4 flex flex-wrap items-end gap-3" },
                 React.createElement("div", { className: "relative min-w-56 flex-1" },
                     React.createElement(lucide_react_1.Search, { className: "pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" }),
@@ -2932,13 +2923,13 @@ function NightReciters() {
                 React.createElement("select", { className: "input w-auto", value: sortOrder, onChange: (e) => setSortOrder(e.target.value), "aria-label": "\u062A\u0631\u062A\u064A\u0628 \u0627\u0644\u0642\u0627\u0626\u0645\u0629" },
                     React.createElement("option", { value: "desc" }, "\u0627\u0644\u0623\u0643\u062B\u0631 \u062A\u0644\u0627\u0648\u0629"),
                     React.createElement("option", { value: "asc" }, "\u0627\u0644\u0623\u0642\u0644 \u062A\u0644\u0627\u0648\u0629"))),
-            tonightSlots.map((slotKey) => {
+            mySlots.map((slotKey) => {
                 const rows = buildRows(slotKey);
                 return (React.createElement("div", { key: slotKey, className: "card mb-4 overflow-hidden" },
                     React.createElement("div", { className: "flex items-center justify-between border-b border-cardline px-5 py-3.5" },
                         React.createElement("h2", { className: "font-extrabold" }, constants_js_1.SLOTS[slotKey]?.label),
-                        React.createElement("span", { className: "text-sm font-semibold text-ink-soft" }, `${rows.length} \u0642\u0627\u0631\u0626\u0627\u064B \u0645\u062A\u0627\u062D\u0627\u064B`)),
-                    rows.length === 0 ? (React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u064A\u0648\u062C\u062F \u0642\u0631\u0627\u0621 \u0645\u0639\u062A\u0645\u062F\u0648\u0646", hint: "\u0631\u0627\u062C\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u0625\u0636\u0627\u0641\u0629 \u0642\u0631\u0627\u0621 \u0644\u0647\u0630\u0647 \u0627\u0644\u062E\u0627\u0646\u0629." })) : (React.createElement("div", { className: "overflow-x-auto" },
+                        React.createElement("span", { className: "text-sm font-semibold text-ink-soft" }, `${rows.length} \u0642\u0627\u0631\u0626\u0627\u064B`)),
+                    rows.length === 0 ? (React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u0642\u0631\u0627\u0621 \u0645\u0639\u062A\u0645\u062F\u0648\u0646", hint: "\u0631\u0627\u062C\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u0625\u0636\u0627\u0641\u0629 \u0642\u0631\u0627\u0621 \u0644\u0647\u0630\u0647 \u0627\u0644\u062E\u0627\u0646\u0629." })) : (React.createElement("div", { className: "overflow-x-auto" },
                         React.createElement("table", { className: "w-full min-w-[520px]" },
                             React.createElement("thead", null,
                                 React.createElement("tr", null,
