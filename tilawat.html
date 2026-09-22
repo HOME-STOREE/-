@@ -197,10 +197,12 @@ function Blocked({ title, message }) {
             React.createElement("p", { className: "mt-2 text-sm leading-7 text-ink-soft" }, message),
             React.createElement("button", { className: "btn-primary mt-5", onClick: signOut }, "\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062E\u0631\u0648\u062C"))));
 }
-// حارس الصلاحيات: من لا يملك الدور يُعاد إلى صفحة التسجيل اليومي
+// الصفحة الافتراضية لكل دور — تُستخدم كصفحة أولى وكوجهة عند رفض صلاحية الوصول
+const defaultPathFor = (role) => (role === 'admin' ? '/dashboard' : role === 'night_supervisor' ? '/reciters-tonight' : '/log');
+// حارس الصلاحيات: من لا يملك الدور يُعاد إلى صفحته الافتراضية
 function Only({ roles, children }) {
     const { profile } = (0, AuthContext_jsx_1.useAuth)();
-    return roles.includes(profile.role) ? children : React.createElement(react_router_dom_1.Navigate, { to: "/log", replace: true });
+    return roles.includes(profile.role) ? children : React.createElement(react_router_dom_1.Navigate, { to: defaultPathFor(profile.role), replace: true });
 }
 function App() {
     const { session, profile, loading } = (0, AuthContext_jsx_1.useAuth)();
@@ -217,7 +219,7 @@ function App() {
     return (React.createElement(DataContext_jsx_1.DataProvider, null,
         React.createElement(react_router_dom_1.Routes, null,
             React.createElement(react_router_dom_1.Route, { element: React.createElement(Layout_jsx_1.default, null) },
-                React.createElement(react_router_dom_1.Route, { index: true, element: React.createElement(react_router_dom_1.Navigate, { to: profile.role === 'admin' ? '/dashboard' : '/log', replace: true }) }),
+                React.createElement(react_router_dom_1.Route, { index: true, element: React.createElement(react_router_dom_1.Navigate, { to: defaultPathFor(profile.role), replace: true }) }),
                 React.createElement(react_router_dom_1.Route, { path: "dashboard", element: React.createElement(Only, { roles: ['admin', 'supervisor'] },
                         React.createElement(Dashboard_jsx_1.default, null)) }),
                 React.createElement(react_router_dom_1.Route, { path: "mosques", element: React.createElement(Only, { roles: ['admin'] },
@@ -226,7 +228,8 @@ function App() {
                         React.createElement(DataManagement_jsx_1.default, null)) }),
                 React.createElement(react_router_dom_1.Route, { path: "users", element: React.createElement(Only, { roles: ['admin'] },
                         React.createElement(Users_jsx_1.default, null)) }),
-                React.createElement(react_router_dom_1.Route, { path: "log", element: React.createElement(DailyLog_jsx_1.default, null) }),
+                React.createElement(react_router_dom_1.Route, { path: "log", element: React.createElement(Only, { roles: ['admin', 'supervisor'] },
+                        React.createElement(DailyLog_jsx_1.default, null)) }),
                 React.createElement(react_router_dom_1.Route, { path: "analytics", element: React.createElement(Only, { roles: ['admin', 'supervisor'] },
                         React.createElement(Analytics_jsx_1.default, null)) }),
                 React.createElement(react_router_dom_1.Route, { path: "reciters", element: React.createElement(Only, { roles: ['admin', 'supervisor'] },
@@ -252,12 +255,11 @@ const DataContext_jsx_1 = require("src/context/DataContext.jsx");
 const constants_js_1 = require("src/lib/constants.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
 const NotificationBell_jsx_1 = __importDefault(require("src/components/NotificationBell.jsx"));
-const ALL = ['admin', 'supervisor', 'night_supervisor'];
 const NAV = [
     { to: '/dashboard', label: 'لوحة التحكم', icon: lucide_react_1.LayoutDashboard, roles: ['admin', 'supervisor'] },
     { to: '/mosques', label: 'إدارة المساجد', icon: lucide_react_1.Building2, roles: ['admin'] },
     { to: '/users', label: 'المستخدمون والربط', icon: lucide_react_1.Users, roles: ['admin'] },
-    { to: '/log', label: 'التسجيل اليومي', icon: lucide_react_1.ClipboardList, roles: ALL },
+    { to: '/log', label: 'التسجيل اليومي', icon: lucide_react_1.ClipboardList, roles: ['admin', 'supervisor'] },
     { to: '/analytics', label: 'الإحصائيات والتقارير', icon: lucide_react_1.BarChart3, roles: ['admin', 'supervisor'] },
     { to: '/reciters', label: 'دليل القراء', icon: lucide_react_1.UserRound, roles: ['admin', 'supervisor'] },
     { to: '/reciters-tonight', label: 'قراء الليلة', icon: lucide_react_1.Clock, roles: ['night_supervisor'] },
