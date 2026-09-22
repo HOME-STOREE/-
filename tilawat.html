@@ -149,6 +149,7 @@ const react_1 = require("react");
 const Login_jsx_1 = __importDefault(require("src/pages/Login.jsx"));
 const Dashboard_jsx_1 = __importDefault(require("src/pages/Dashboard.jsx"));
 const Mosques_jsx_1 = __importDefault(require("src/pages/Mosques.jsx"));
+const DataManagement_jsx_1 = __importDefault(require("src/pages/DataManagement.jsx"));
 const Users_jsx_1 = __importDefault(require("src/pages/Users.jsx"));
 const DailyLog_jsx_1 = __importDefault(require("src/pages/DailyLog.jsx"));
 const Analytics_jsx_1 = __importDefault(require("src/pages/Analytics.jsx"));
@@ -220,6 +221,8 @@ function App() {
                         React.createElement(Dashboard_jsx_1.default, null)) }),
                 React.createElement(react_router_dom_1.Route, { path: "mosques", element: React.createElement(Only, { roles: ['admin'] },
                         React.createElement(Mosques_jsx_1.default, null)) }),
+                React.createElement(react_router_dom_1.Route, { path: "data-management", element: React.createElement(Only, { roles: ['admin'] },
+                        React.createElement(DataManagement_jsx_1.default, null)) }),
                 React.createElement(react_router_dom_1.Route, { path: "users", element: React.createElement(Only, { roles: ['admin'] },
                         React.createElement(Users_jsx_1.default, null)) }),
                 React.createElement(react_router_dom_1.Route, { path: "log", element: React.createElement(DailyLog_jsx_1.default, null) }),
@@ -254,6 +257,7 @@ const NAV = [
     { to: '/log', label: 'التسجيل اليومي', icon: lucide_react_1.ClipboardList, roles: ALL },
     { to: '/analytics', label: 'الإحصائيات والتقارير', icon: lucide_react_1.BarChart3, roles: ['admin', 'supervisor'] },
     { to: '/reciters', label: 'دليل القراء', icon: lucide_react_1.UserRound, roles: ['admin', 'supervisor'] },
+    { to: '/data-management', label: 'إدارة البيانات', icon: lucide_react_1.Database, roles: ['admin'] },
 ];
 function Logo() {
     return (React.createElement("div", { className: "flex items-center gap-3" },
@@ -562,6 +566,54 @@ function ReciterCombobox({ approved, others, initial = '', onPick, onEdit, place
                             "\u00BB \u0643\u0627\u0633\u0645 \u064A\u062F\u0648\u064A") : it.name),
                     it.kind === 'approved' && React.createElement("span", { className: "badge-ok" }, "\u0645\u0639\u062A\u0645\u062F"),
                     it.kind === 'other' && React.createElement("span", { className: "badge-warn" }, "\u062E\u0627\u0631\u062C \u0627\u0644\u062C\u062F\u0648\u0644")))))))));
+}
+
+};
+defs["src/components/ReciterAvailableList.jsx"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = ReciterAvailableList;
+const react_1 = require("react");
+const lucide_react_1 = require("lucide-react");
+const util_js_1 = require("src/lib/util.js");
+/**
+ * قائمة القراء المتاحين (المعتمدين) لهذه الخانة فقط — لمسؤول الليلة ومسؤول تلاوة الجمعة.
+ * أمام كل قارئ عدد مشاركاته (تلاوات مقروءة) خلال الشهرين الهجريين: الحالي + الماضي.
+ * تتحدّث تلقائياً مع أي تسجيل جديد لأنها محسوبة من recitation_logs الحيّة (متزامنة عبر Realtime).
+ */
+function ReciterAvailableList({ approved, recitation_logs, hijriNow, selectedId, onPick }) {
+    const counts = (0, react_1.useMemo)(() => {
+        const map = {};
+        if (!hijriNow?.month || !hijriNow?.year)
+            return map;
+        const curM = hijriNow.month, curY = hijriNow.year;
+        const prevM = curM === 1 ? 12 : curM - 1;
+        const prevY = curM === 1 ? curY - 1 : curY;
+        recitation_logs.forEach((l) => {
+            if (l.status !== 'read')
+                return;
+            const inWindow = (l.hijri_month === curM && l.hijri_year === curY) || (l.hijri_month === prevM && l.hijri_year === prevY);
+            if (!inWindow)
+                return;
+            const k = (0, util_js_1.reciterKey)(l);
+            map[k] = (map[k] || 0) + 1;
+        });
+        return map;
+    }, [recitation_logs, hijriNow]);
+    if (!approved.length) {
+        return React.createElement("p", { className: "rounded-xl border border-dashed border-cardline bg-hover px-4 py-6 text-center text-sm text-ink-soft" }, "لا يوجد قراء معتمدون لهذه الخانة بعد. راجع مدير النظام لإضافة قراء.");
+    }
+    const cards = approved.map((r) => {
+        const count = counts[(0, util_js_1.reciterKey)({ reciter_id: r.id, reciter_name: r.name })] || 0;
+        const active = selectedId === r.id;
+        const icon = active
+            ? React.createElement(lucide_react_1.CheckCircle2, { className: "h-4 w-4 shrink-0" })
+            : React.createElement(lucide_react_1.UserRound, { className: "h-4 w-4 shrink-0 text-ink-soft" });
+        const nameSpan = React.createElement("span", { className: "flex items-center gap-2" }, icon, r.name);
+        const countSpan = React.createElement("span", { className: `shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold ${count > 0 ? 'bg-brand/10 text-brand' : 'bg-hover text-ink-soft'}`, title: "\u0639\u062F\u062F \u0627\u0644\u0645\u0634\u0627\u0631\u0643\u0627\u062A \u062E\u0644\u0627\u0644 \u0627\u0644\u0634\u0647\u0631\u064A\u0646 \u0627\u0644\u0623\u062E\u064A\u0631\u064A\u0646" }, count);
+        return React.createElement("button", { type: "button", key: r.id, onClick: () => onPick({ id: r.id, name: r.name, approved: true, kind: 'approved' }), className: `flex items-center justify-between gap-2 rounded-xl border-2 px-4 py-3 text-start font-semibold transition-colors ${active ? 'border-ok bg-ok/10 text-ok' : 'border-cardline bg-white text-ink hover:bg-hover'}` }, nameSpan, countSpan);
+    });
+    return React.createElement("div", { className: "grid gap-2 sm:grid-cols-2" }, cards);
 }
 
 };
@@ -1642,6 +1694,7 @@ const hijri_js_1 = require("src/lib/hijri.js");
 const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
 const ReciterCombobox_jsx_1 = __importDefault(require("src/components/ReciterCombobox.jsx"));
+const ReciterAvailableList_jsx_1 = __importDefault(require("src/components/ReciterAvailableList.jsx"));
 const WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 function DailyLog() {
     const { profile, isAdmin } = (0, AuthContext_jsx_1.useAuth)();
@@ -1681,6 +1734,8 @@ function DailyLog() {
     const wrongDay = isNight && !mySlots.some((k) => todaySlots.includes(k)); // مسؤول الليلة يسجّل في ليلته فقط
     const [date, setDate] = (0, react_1.useState)((0, util_js_1.todayStr)());
     const [hijri, setHijri] = (0, react_1.useState)(() => (0, hijri_js_1.toHijri)((0, util_js_1.todayStr)()));
+    // مرجع الشهر الهجري الحالي (اليوم الفعلي) لحساب مشاركات القراء خلال الشهرين الحالي والماضي
+    const nowHijri = (0, react_1.useMemo)(() => (0, hijri_js_1.toHijri)((0, util_js_1.todayStr)()), []);
     const [slot, setSlot] = (0, react_1.useState)('');
     const [hijriTouched, setHijriTouched] = (0, react_1.useState)(false);
     const [status, setStatus] = (0, react_1.useState)('read');
@@ -1850,7 +1905,7 @@ function DailyLog() {
             React.createElement("div", { className: "card" },
                 React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0645 \u064A\u062A\u0645 \u0631\u0628\u0637\u0643 \u0628\u0623\u064A \u0645\u0633\u062C\u062F \u0628\u0639\u062F", hint: "\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u064A\u0633\u0646\u062F \u0625\u0644\u064A\u0643 \u0645\u0633\u062C\u062F\u0627\u064B \u0623\u0648 \u0623\u0643\u062B\u0631 \u0648\u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u0629." }))));
     }
-    const editable = (l) => isAdmin || (myIds.includes(l.mosque_id) && (!isNight || (mySlots.includes(l.slot_key) && todaySlots.includes(l.slot_key) && l.log_date === today)) && (scope === 'both' || (scope === 'friday') === (l.slot_key === 'fri')));
+    const editable = (l) => !isNight && (isAdmin || (myIds.includes(l.mosque_id) && (scope === 'both' || (scope === 'friday') === (l.slot_key === 'fri'))));
     return (React.createElement(React.Fragment, null,
         React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A", subtitle: "\u0633\u062C\u0651\u0644 \u0627\u0644\u0642\u0627\u0631\u0626 \u0623\u0648 \u0633\u0628\u0628 \u0639\u062F\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u0644\u0643\u0644 \u062E\u0627\u0646\u0629 \u062A\u0644\u0627\u0648\u0629." }),
         React.createElement("div", { className: "mb-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-line p-5 text-white" },
@@ -1864,7 +1919,9 @@ function DailyLog() {
             activeMosques.length > 1 && (React.createElement("div", { className: "w-full sm:w-72" },
                 React.createElement("label", { className: "mb-1.5 block text-xs font-semibold text-white/80" }, "\u0627\u0644\u0645\u0633\u062C\u062F \u0627\u0644\u0630\u064A \u062A\u0633\u062C\u0651\u0644 \u0644\u0647 \u0627\u0644\u0622\u0646"),
                 React.createElement("select", { className: "input !border-white/30", value: mosqueId, onChange: (e) => { setMosqueId(e.target.value); resetEntry(); } }, activeMosques.map((m) => React.createElement("option", { key: m.id, value: m.id }, m.name)))))),
-        !allowedSlots.length ? (React.createElement("div", { className: "card" },
+        isNight ? (React.createElement("div", { className: "card card-pad flex items-start gap-3 text-ink-soft" },
+            React.createElement(lucide_react_1.Info, { className: "mt-0.5 h-5 w-5 shrink-0" }),
+            React.createElement("p", { className: "text-sm leading-7" }, "\u062D\u0633\u0627\u0628\u0643 \u0645\u062E\u0635\u0635\u0651 \u0644\u0644\u0639\u0631\u0636 \u0641\u0642\u0637\u060C \u0648\u0644\u0627 \u064A\u0645\u0643\u0646\u0643 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062A\u0644\u0627\u0648\u0629. \u064A\u0645\u0643\u0646\u0643 \u0645\u062A\u0627\u0628\u0639\u0629 \u0622\u062E\u0631 \u062A\u0633\u062C\u064A\u0644\u0627\u062A \u0627\u0644\u0645\u0633\u062C\u062F \u0623\u062F\u0646\u0627\u0647."))) : (!allowedSlots.length ? (React.createElement("div", { className: "card" },
             React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062E\u0627\u0646\u0627\u062A \u062A\u0644\u0627\u0648\u0629 \u0645\u0641\u0639\u0651\u0644\u0629", hint: "\u0644\u0627 \u064A\u0648\u062C\u062F \u062A\u0637\u0627\u0628\u0642 \u0628\u064A\u0646 \u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u062A\u0643 \u0648\u0627\u0644\u062E\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0641\u0639\u0651\u0644\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u062C\u062F. \u0631\u0627\u062C\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645." }))) : wrongDay ? (React.createElement("div", { className: "card card-pad flex items-start gap-4 border-warn/40 bg-warn/10" },
             React.createElement(lucide_react_1.AlertTriangle, { className: "mt-1 h-7 w-7 shrink-0 text-warn" }),
             React.createElement("div", null,
@@ -1925,8 +1982,12 @@ function DailyLog() {
                     React.createElement(lucide_react_1.XCircle, { className: "h-5 w-5" }),
                     " \u0644\u0645 \u062A\u062A\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629")),
             status === 'read' ? (React.createElement("div", { className: "grid gap-4 md:grid-cols-2" },
-                React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0642\u0627\u0631\u0626", className: "md:col-span-2", hint: `${approved.length} قارئاً معتمداً في «${constants_js_1.SLOTS[slot]?.label}». يمكنك أيضاً كتابة اسم غير موجود.` },
-                    React.createElement(ReciterCombobox_jsx_1.default, { key: comboKey, approved: approved, others: others, initial: reciter?.name || '', onPick: handlePick, onEdit: () => setReciter(null) }),
+                React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0642\u0627\u0631\u0626", className: "md:col-span-2", hint: isNight
+                        ? `${approved.length} قارئاً متاحاً ${slot === 'fri' ? 'لهذه الجمعة' : 'لهذه الليلة'}. الرقم أمام كل اسم هو عدد مشاركاته خلال الشهرين الهجريين الحالي والماضي.`
+                        : `${approved.length} قارئاً معتمداً في «${constants_js_1.SLOTS[slot]?.label}». يمكنك أيضاً كتابة اسم غير موجود.` },
+                    isNight
+                        ? React.createElement(ReciterAvailableList_jsx_1.default, { approved: approved, recitation_logs: recitation_logs, hijriNow: nowHijri, selectedId: reciter?.id, onPick: handlePick })
+                        : React.createElement(ReciterCombobox_jsx_1.default, { key: comboKey, approved: approved, others: others, initial: reciter?.name || '', onPick: handlePick, onEdit: () => setReciter(null) }),
                     reciter && (React.createElement("p", { className: "mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-ok" },
                         React.createElement(lucide_react_1.CheckCircle2, { className: "h-3.5 w-3.5" }),
                         " \u062A\u0645 \u0627\u062E\u062A\u064A\u0627\u0631: ",
@@ -1954,7 +2015,7 @@ function DailyLog() {
                 React.createElement("button", { className: "btn-primary min-w-40", onClick: save, disabled: busy },
                     busy ? React.createElement(ui_jsx_1.Spinner, { className: "!text-white h-4 w-4" }) : React.createElement(lucide_react_1.Save, { className: "h-4 w-4" }),
                     " ",
-                    editing ? 'حفظ التعديل' : 'حفظ التسجيل')))),
+                    editing ? 'حفظ التعديل' : 'حفظ التسجيل'))))),
         React.createElement("div", { className: "card mt-6 overflow-hidden" },
             React.createElement("div", { className: "border-b border-cardline px-5 py-3.5" },
                 React.createElement("h2", { className: "font-extrabold" }, "\u0622\u062E\u0631 \u062A\u0633\u062C\u064A\u0644\u0627\u062A \u0627\u0644\u0645\u0633\u062C\u062F")),
@@ -2187,6 +2248,260 @@ function Login() {
 }
 
 };
+defs["src/pages/DataManagement.jsx"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = DataManagement;
+const react_1 = require("react");
+const lucide_react_1 = require("lucide-react");
+const DataContext_jsx_1 = require("src/context/DataContext.jsx");
+const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
+const supabase_js_1 = require("src/lib/supabase.js");
+const constants_js_1 = require("src/lib/constants.js");
+const ui_jsx_1 = require("src/components/ui.jsx");
+
+const BACKUP_TABLES = ['mosques', 'reciters', 'reciter_slots', 'profiles', 'recitation_logs'];
+const AUTO_BACKUP_KEY = 'tilawat_auto_backup_pref_v1';
+const STATUS_LABEL = { read: 'تمت القراءة', not_read: 'لم تتم القراءة' };
+
+function pad(n) { return String(n).padStart(2, '0'); }
+function fileTimestamp() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+}
+function downloadBlob(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+function csvCell(value) {
+  const s = value === null || value === undefined ? '' : String(value);
+  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+function readAutoPref() {
+  try {
+    const raw = localStorage.getItem(AUTO_BACKUP_KEY);
+    return raw ? JSON.parse(raw) : { enabled: false, frequency: 'weekly', lastRun: null };
+  } catch (e) { return { enabled: false, frequency: 'weekly', lastRun: null }; }
+}
+
+function DataManagement() {
+  const { mosques, mosqueById, recitation_logs, reciters, reciter_slots, profiles, refresh } = (0, DataContext_jsx_1.useData)();
+  const toast = (0, ToastContext_jsx_1.useToast)();
+
+  const exportCsv = () => {
+    const header = ['التاريخ', 'التاريخ الهجري', 'المسجد', 'الخانة/الفترة', 'اسم القارئ', 'حالة التلاوة', 'السورة', 'عدد الصفحات', 'الملاحظات'];
+    const rows = recitation_logs.map((l) => {
+      const hijri = l.hijri_day && l.hijri_month ? `${l.hijri_day}/${l.hijri_month}/${l.hijri_year || ''}` : '';
+      return [
+        l.log_date || '', hijri, mosqueById[l.mosque_id]?.name || '',
+        constants_js_1.SLOTS[l.slot_key]?.label || l.slot_key || '',
+        l.reciter_name || '', STATUS_LABEL[l.status] || l.status || '',
+        l.surah || '', l.pages ?? '', l.notes || '',
+      ];
+    });
+    const csv = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\n');
+    downloadBlob('\uFEFF' + csv, `tilawat-export-${fileTimestamp()}.csv`, 'text/csv;charset=utf-8;');
+    toast.success('تم تصدير الملف', `${rows.length} سجل`);
+  };
+
+  const [purgeOpen, setPurgeOpen] = (0, react_1.useState)(false);
+  const [purgeText, setPurgeText] = (0, react_1.useState)('');
+  const [purgeBusy, setPurgeBusy] = (0, react_1.useState)(false);
+  const purgeAll = async () => {
+    setPurgeBusy(true);
+    const { error } = await supabase_js_1.supabase.from('recitation_logs').delete().not('id', 'is', null);
+    setPurgeBusy(false);
+    if (error) return toast.error('تعذّر حذف البيانات', error.message);
+    setPurgeOpen(false); setPurgeText('');
+    toast.success('تم حذف جميع سجلات التلاوة');
+    refresh();
+  };
+
+  const [mosqueId, setMosqueId] = (0, react_1.useState)('');
+  const [delMosqueOpen, setDelMosqueOpen] = (0, react_1.useState)(false);
+  const [delMosqueBusy, setDelMosqueBusy] = (0, react_1.useState)(false);
+  const mosqueLogCount = recitation_logs.filter((l) => l.mosque_id === mosqueId).length;
+  const deleteMosqueData = async () => {
+    setDelMosqueBusy(true);
+    const { error } = await supabase_js_1.supabase.from('recitation_logs').delete().eq('mosque_id', mosqueId);
+    setDelMosqueBusy(false);
+    if (error) return toast.error('تعذّر حذف بيانات المسجد', error.message);
+    setDelMosqueOpen(false);
+    toast.success('تم حذف بيانات المسجد المحدد');
+    refresh();
+  };
+
+  const buildBackupPayload = () => ({
+    meta: { app: 'tilawat', version: 1, exported_at: new Date().toISOString() },
+    data: { mosques, reciters, reciter_slots, profiles, recitation_logs },
+  });
+  const instantBackup = () => {
+    const payload = buildBackupPayload();
+    downloadBlob(JSON.stringify(payload, null, 2), `tilawat-backup-${fileTimestamp()}.json`, 'application/json;charset=utf-8;');
+    toast.success('تم إنشاء النسخة الاحتياطية');
+  };
+
+  const [autoPref, setAutoPref] = (0, react_1.useState)(readAutoPref);
+  const saveAutoPref = (patch) => {
+    setAutoPref((prev) => {
+      const next = { ...prev, ...patch };
+      try { localStorage.setItem(AUTO_BACKUP_KEY, JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+  };
+  const runAutoBackupIfDue = () => {
+    const pref = readAutoPref();
+    if (!pref.enabled) return;
+    const intervalMs = (pref.frequency === 'daily' ? 1 : 7) * 24 * 60 * 60 * 1000;
+    const last = pref.lastRun ? new Date(pref.lastRun).getTime() : 0;
+    if (Date.now() - last < intervalMs) return;
+    const payload = buildBackupPayload();
+    downloadBlob(JSON.stringify(payload, null, 2), `tilawat-auto-backup-${fileTimestamp()}.json`, 'application/json;charset=utf-8;');
+    saveAutoPref({ lastRun: new Date().toISOString() });
+    toast.info('تم إنشاء نسخة احتياطية تلقائية على هذا الجهاز');
+  };
+  (0, react_1.useEffect)(() => {
+    if (mosques.length || recitation_logs.length) runAutoBackupIfDue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mosques.length, recitation_logs.length]);
+
+  const fileInputRef = (0, react_1.useRef)(null);
+  const [restoreOpen, setRestoreOpen] = (0, react_1.useState)(false);
+  const [restoreBusy, setRestoreBusy] = (0, react_1.useState)(false);
+  const [pendingFile, setPendingFile] = (0, react_1.useState)(null);
+  const onPickFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setPendingFile(file);
+    setRestoreOpen(true);
+  };
+  const runRestore = async () => {
+    if (!pendingFile) return;
+    setRestoreBusy(true);
+    try {
+      const text = await pendingFile.text();
+      let parsed;
+      try { parsed = JSON.parse(text); } catch (e) { throw new Error('الملف ليس بصيغة JSON صالحة'); }
+      const data = parsed && parsed.data;
+      if (!data || typeof data !== 'object') throw new Error('صيغة النسخة الاحتياطية غير صحيحة أو غير مدعومة');
+      const results = [];
+      for (const table of BACKUP_TABLES) {
+        const rows = Array.isArray(data[table]) ? data[table] : null;
+        if (!rows || !rows.length) continue;
+        const { error } = await supabase_js_1.supabase.from(table).upsert(rows, { onConflict: 'id' });
+        results.push({ table, ok: !error, error: error && error.message });
+      }
+      if (!results.length) throw new Error('لم يتم العثور على أي بيانات صالحة داخل الملف');
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length) {
+        toast.error('اكتملت الاستعادة مع بعض الأخطاء', failed.map((f) => `${f.table}: ${f.error}`).join(' — '));
+      } else {
+        toast.success('تمت استعادة النسخة الاحتياطية بنجاح');
+      }
+      await refresh();
+    } catch (e) {
+      toast.error('تعذّرت الاستعادة', e.message || 'ملف غير صالح');
+    } finally {
+      setRestoreBusy(false);
+      setRestoreOpen(false);
+      setPendingFile(null);
+    }
+  };
+
+  return (React.createElement(React.Fragment, null,
+    React.createElement(ui_jsx_1.PageHeader, { title: 'إدارة البيانات', subtitle: 'أدوات صيانة متقدّمة: تصدير، نسخ احتياطي، واستعادة أو حذف بيانات النظام.' }),
+    React.createElement('div', { className: 'grid gap-5 md:grid-cols-2' },
+      React.createElement('div', { className: 'card card-pad' },
+        React.createElement('div', { className: 'flex items-center gap-2' },
+          React.createElement(lucide_react_1.Save, { className: 'h-5 w-5 text-line' }),
+          React.createElement('h2', { className: 'font-extrabold' }, 'تصدير البيانات (CSV)')),
+        React.createElement('p', { className: 'mt-1 text-sm text-ink-soft' }, 'تصدير جميع سجلات التلاوة اليومية إلى ملف متوافق مع Excel (ترميز UTF-8 مع BOM).'),
+        React.createElement('button', { className: 'btn-primary mt-4', onClick: exportCsv, disabled: !recitation_logs.length },
+          React.createElement(lucide_react_1.Save, { className: 'h-4 w-4' }), ' تصدير CSV (' + recitation_logs.length + ' سجل)')),
+      React.createElement('div', { className: 'card card-pad' },
+        React.createElement('div', { className: 'flex items-center gap-2' },
+          React.createElement(lucide_react_1.Database, { className: 'h-5 w-5 text-line' }),
+          React.createElement('h2', { className: 'font-extrabold' }, 'نسخة احتياطية فورية')),
+        React.createElement('p', { className: 'mt-1 text-sm text-ink-soft' }, 'تنزيل نسخة JSON شاملة لكل بيانات النظام (المساجد، المستخدمون، القراء، التلاوات)، أو استعادة نسخة سابقة.'),
+        React.createElement('div', { className: 'mt-4 flex flex-wrap gap-2' },
+          React.createElement('button', { className: 'btn-primary', onClick: instantBackup },
+            React.createElement(lucide_react_1.Database, { className: 'h-4 w-4' }), ' تنزيل نسخة احتياطية الآن'),
+          React.createElement('button', { className: 'btn-outline', onClick: () => fileInputRef.current && fileInputRef.current.click() },
+            React.createElement(lucide_react_1.LogIn, { className: 'h-4 w-4' }), ' استعادة من ملف'),
+          React.createElement('input', { ref: fileInputRef, type: 'file', accept: 'application/json', className: 'hidden', onChange: onPickFile }))),
+      React.createElement('div', { className: 'card card-pad' },
+        React.createElement('div', { className: 'flex items-center gap-2' },
+          React.createElement(lucide_react_1.Clock, { className: 'h-5 w-5 text-line' }),
+          React.createElement('h2', { className: 'font-extrabold' }, 'نسخ احتياطي تلقائي محلي')),
+        React.createElement('p', { className: 'mt-1 text-sm text-ink-soft' }, 'يحفظ نسخة على متصفح هذا الجهاز فقط عند فتح النظام إذا حان موعدها.'),
+        React.createElement('div', { className: 'mt-4 flex flex-wrap items-center gap-4' },
+          React.createElement(ui_jsx_1.Switch, { checked: autoPref.enabled, onChange: (v) => saveAutoPref({ enabled: v }), label: autoPref.enabled ? 'مُفعّل' : 'مُعطّل' }),
+          React.createElement(ui_jsx_1.Field, { label: 'التكرار', className: 'w-40' },
+            React.createElement('select', { className: 'input', value: autoPref.frequency, disabled: !autoPref.enabled, onChange: (e) => saveAutoPref({ frequency: e.target.value }) },
+              React.createElement('option', { value: 'daily' }, 'يومي'),
+              React.createElement('option', { value: 'weekly' }, 'أسبوعي')))),
+        autoPref.lastRun ? React.createElement('p', { className: 'mt-3 text-xs text-ink-soft' }, 'آخر نسخة تلقائية: ' + new Date(autoPref.lastRun).toLocaleString('ar')) : null),
+      React.createElement('div', { className: 'card card-pad border-warn/40' },
+        React.createElement('div', { className: 'flex items-center gap-2' },
+          React.createElement(lucide_react_1.Building2, { className: 'h-5 w-5 text-warn' }),
+          React.createElement('h2', { className: 'font-extrabold' }, 'حذف بيانات مسجد معيّن')),
+        React.createElement('p', { className: 'mt-1 text-sm text-ink-soft' }, 'حذف كل سجلات التلاوة الخاصة بمسجد محدد فقط، دون حذف المسجد نفسه.'),
+        React.createElement('div', { className: 'mt-4' },
+          React.createElement('select', { className: 'input', value: mosqueId, onChange: (e) => setMosqueId(e.target.value) },
+            React.createElement('option', { value: '' }, 'اختر مسجداً…'),
+            mosques.map((m) => React.createElement('option', { key: m.id, value: m.id }, m.name)))),
+        mosqueId ? React.createElement('button', { className: 'btn-danger mt-4', onClick: () => setDelMosqueOpen(true) },
+          React.createElement(lucide_react_1.Trash2, { className: 'h-4 w-4' }), ' حذف بيانات هذا المسجد (' + mosqueLogCount + ' سجل)') : null)),
+    React.createElement('div', { className: 'card card-pad mt-5 border-bad/40' },
+      React.createElement('div', { className: 'flex items-center gap-2' },
+        React.createElement(lucide_react_1.AlertTriangle, { className: 'h-5 w-5 text-bad' }),
+        React.createElement('h2', { className: 'font-extrabold text-bad' }, 'منطقة خطر: حذف جميع البيانات')),
+      React.createElement('p', { className: 'mt-1 text-sm text-ink-soft' }, 'سيتم حذف جميع سجلات التلاوة اليومية نهائياً من جميع المساجد. هذا الإجراء لا يمكن التراجع عنه — يُفضّل أخذ نسخة احتياطية أولاً.'),
+      React.createElement('button', { className: 'btn-danger mt-4', onClick: () => setPurgeOpen(true) },
+        React.createElement(lucide_react_1.Trash2, { className: 'h-4 w-4' }), ' تفريغ كل بيانات التلاوات (' + recitation_logs.length + ' سجل)')),
+    React.createElement(ui_jsx_1.Modal, {
+      open: purgeOpen,
+      onClose: () => { setPurgeOpen(false); setPurgeText(''); },
+      title: 'تأكيد حذف جميع البيانات',
+      size: 'sm',
+      footer: React.createElement(React.Fragment, null,
+        React.createElement('button', { className: 'btn-outline', onClick: () => { setPurgeOpen(false); setPurgeText(''); } }, 'إلغاء'),
+        React.createElement('button', { className: 'btn-danger', disabled: purgeText !== 'حذف' || purgeBusy, onClick: purgeAll },
+          purgeBusy ? React.createElement(ui_jsx_1.Spinner, { className: '!text-white h-4 w-4' }) : null, ' تأكيد الحذف نهائياً')),
+    },
+      React.createElement('p', { className: 'text-sm leading-7' }, 'هذا الإجراء سيحذف ', React.createElement('b', null, recitation_logs.length), ' سجل تلاوة من جميع المساجد نهائياً ولا يمكن التراجع عنه.'),
+      React.createElement('p', { className: 'mt-3 text-sm font-bold' }, 'اكتب كلمة «حذف» في الحقل أدناه للتأكيد:'),
+      React.createElement('input', { className: 'input mt-2', value: purgeText, onChange: (e) => setPurgeText(e.target.value), placeholder: 'حذف', autoFocus: true })),
+    React.createElement(ui_jsx_1.ConfirmDialog, {
+      open: delMosqueOpen,
+      title: 'حذف بيانات المسجد',
+      message: `سيتم حذف ${mosqueLogCount} سجل تلاوة تابع لمسجد "${mosqueById[mosqueId]?.name || ''}" نهائياً، دون حذف المسجد نفسه. هل تريد المتابعة؟`,
+      confirmLabel: 'حذف البيانات',
+      danger: true,
+      busy: delMosqueBusy,
+      onConfirm: deleteMosqueData,
+      onClose: () => setDelMosqueOpen(false),
+    }),
+    React.createElement(ui_jsx_1.ConfirmDialog, {
+      open: restoreOpen,
+      title: 'استعادة نسخة احتياطية',
+      message: `سيتم دمج البيانات الموجودة في الملف "${pendingFile?.name || ''}" مع البيانات الحالية (تحديث السجلات المتطابقة بالمعرّف، وإضافة الجديد منها). هل تريد المتابعة؟`,
+      confirmLabel: 'استعادة',
+      danger: true,
+      busy: restoreBusy,
+      onConfirm: runRestore,
+      onClose: () => { setRestoreOpen(false); setPendingFile(null); },
+    })
+  ));
+}
+};
+
 defs["src/pages/Mosques.jsx"] = function(exports, require, module, React){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -2322,6 +2637,7 @@ function Reciters() {
     const [q, setQ] = (0, react_1.useState)('');
     const [slotFilter, setSlotFilter] = (0, react_1.useState)('all');
     const [showInactive, setShowInactive] = (0, react_1.useState)(false);
+    const [sortOrder, setSortOrder] = (0, react_1.useState)('desc');
     const [hist, setHist] = (0, react_1.useState)(null);
     const [form, setForm] = (0, react_1.useState)(null);
     const [del, setDel] = (0, react_1.useState)(null);
@@ -2339,9 +2655,16 @@ function Reciters() {
         });
         return m;
     }, [recitation_logs]);
-    const rows = (0, react_1.useMemo)(() => reciters.filter((r) => (showInactive || r.is_active) &&
-        (!q || (0, util_js_1.matchesQuery)(r.name, q)) &&
-        (slotFilter === 'all' || (slotsByReciter[r.id] || []).some((s) => s.slot_key === slotFilter))), [reciters, q, slotFilter, showInactive, slotsByReciter]);
+    const rows = (0, react_1.useMemo)(() => {
+        const list = reciters.filter((r) => (showInactive || r.is_active) &&
+            (!q || (0, util_js_1.matchesQuery)(r.name, q)) &&
+            (slotFilter === 'all' || (slotsByReciter[r.id] || []).some((s) => s.slot_key === slotFilter)));
+        return list.sort((a, b) => {
+            const ca = stats[a.id]?.count ?? 0;
+            const cb = stats[b.id]?.count ?? 0;
+            return sortOrder === 'asc' ? ca - cb : cb - ca;
+        });
+    }, [reciters, q, slotFilter, showInactive, slotsByReciter, stats, sortOrder]);
     const save = async () => {
         if (!form.name.trim())
             return toast.warn('اسم القارئ مطلوب');
@@ -2393,6 +2716,9 @@ function Reciters() {
             React.createElement("select", { className: "input w-auto", value: slotFilter, onChange: (e) => setSlotFilter(e.target.value), "aria-label": "\u0641\u0644\u062A\u0631 \u0627\u0644\u062E\u0627\u0646\u0629" },
                 React.createElement("option", { value: "all" }, "\u0643\u0644 \u0627\u0644\u062E\u0627\u0646\u0627\u062A"),
                 constants_js_1.SLOT_KEYS.map((k) => React.createElement("option", { key: k, value: k }, constants_js_1.SLOTS[k].label))),
+            React.createElement("select", { className: "input w-auto", value: sortOrder, onChange: (e) => setSortOrder(e.target.value), "aria-label": "\u062A\u0631\u062A\u064A\u0628 \u0627\u0644\u0642\u0627\u0626\u0645\u0629" },
+                React.createElement("option", { value: "desc" }, "\u0627\u0644\u0623\u0643\u062B\u0631 \u062A\u0644\u0627\u0648\u0629"),
+                React.createElement("option", { value: "asc" }, "\u0627\u0644\u0623\u0642\u0644 \u062A\u0644\u0627\u0648\u0629")),
             isAdmin && React.createElement(ui_jsx_1.Switch, { checked: showInactive, onChange: setShowInactive, label: "\u0639\u0631\u0636 \u0627\u0644\u0645\u0639\u0637\u0651\u0644\u064A\u0646" }),
             React.createElement("span", { className: "text-sm font-semibold text-ink-soft" },
                 rows.length,
@@ -2701,7 +3027,7 @@ exports.functionError = async function functionError(error) {
 };
 defs["lucide-react"] = function(exports, require, module, React){
 
-const ICONS = {"BarChart3":"<path d=\"M3 3v16a2 2 0 0 0 2 2h16\"></path><path d=\"M18 17V9\"></path><path d=\"M13 17V5\"></path><path d=\"M8 17v-3\"></path>","BookOpen":"<path d=\"M12 7v14\"></path><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\"></path>","Building2":"<path d=\"M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z\"></path><path d=\"M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2\"></path><path d=\"M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2\"></path><path d=\"M10 6h4\"></path><path d=\"M10 10h4\"></path><path d=\"M10 14h4\"></path><path d=\"M10 18h4\"></path>","ClipboardList":"<rect width=\"8\" height=\"4\" x=\"8\" y=\"2\" rx=\"1\" ry=\"1\"></rect><path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\"></path><path d=\"M12 11h4\"></path><path d=\"M12 16h4\"></path><path d=\"M8 11h.01\"></path><path d=\"M8 16h.01\"></path>","LayoutDashboard":"<rect width=\"7\" height=\"9\" x=\"3\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"14\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"9\" x=\"14\" y=\"12\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"></rect>","LogOut":"<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"></path><polyline points=\"16 17 21 12 16 7\"></polyline><line x1=\"21\" x2=\"9\" y1=\"12\" y2=\"12\"></line>","Menu":"<line x1=\"4\" x2=\"20\" y1=\"12\" y2=\"12\"></line><line x1=\"4\" x2=\"20\" y1=\"6\" y2=\"6\"></line><line x1=\"4\" x2=\"20\" y1=\"18\" y2=\"18\"></line>","Users":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"></path><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"></path>","UserRound":"<circle cx=\"12\" cy=\"8\" r=\"5\"></circle><path d=\"M20 21a8 8 0 0 0-16 0\"></path>","X":"<path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path>","Bell":"<path d=\"M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9\"></path><path d=\"M10.3 21a1.94 1.94 0 0 0 3.4 0\"></path>","ChevronDown":"<path d=\"m6 9 6 6 6-6\"></path>","Search":"<circle cx=\"11\" cy=\"11\" r=\"8\"></circle><path d=\"m21 21-4.3-4.3\"></path>","UserPlus":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><line x1=\"19\" x2=\"19\" y1=\"8\" y2=\"14\"></line><line x1=\"22\" x2=\"16\" y1=\"11\" y2=\"11\"></line>","Loader2":"<path d=\"M21 12a9 9 0 1 1-6.219-8.56\"></path>","Wifi":"<path d=\"M12 20h.01\"></path><path d=\"M2 8.82a15 15 0 0 1 20 0\"></path><path d=\"M5 12.859a10 10 0 0 1 14 0\"></path><path d=\"M8.5 16.429a5 5 0 0 1 7 0\"></path>","WifiOff":"<path d=\"M12 20h.01\"></path><path d=\"M8.5 16.429a5 5 0 0 1 7 0\"></path><path d=\"M5 12.859a10 10 0 0 1 5.17-2.69\"></path><path d=\"M19 12.859a10 10 0 0 0-2.007-1.523\"></path><path d=\"M2 8.82a15 15 0 0 1 4.177-2.643\"></path><path d=\"M22 8.82a15 15 0 0 0-11.288-3.764\"></path><path d=\"m2 2 20 20\"></path>","Inbox":"<polyline points=\"22 12 16 12 14 15 10 15 8 12 2 12\"></polyline><path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path>","AlertTriangle":"<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"></path><path d=\"M12 9v4\"></path><path d=\"M12 17h.01\"></path>","CheckCircle2":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"m9 12 2 2 4-4\"></path>","Info":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M12 16v-4\"></path><path d=\"M12 8h.01\"></path>","XCircle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"m15 9-6 6\"></path><path d=\"m9 9 6 6\"></path>","Printer":"<path d=\"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2\"></path><path d=\"M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6\"></path><rect x=\"6\" y=\"14\" width=\"12\" height=\"8\" rx=\"1\"></rect>","Pencil":"<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"></path><path d=\"m15 5 4 4\"></path>","Save":"<path d=\"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\"></path><path d=\"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7\"></path><path d=\"M7 3v4a1 1 0 0 0 1 1h7\"></path>","Trash2":"<path d=\"M3 6h18\"></path><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"></path><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"></path><line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\"></line><line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\"></line>","LogIn":"<path d=\"M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4\"></path><polyline points=\"10 17 15 12 10 7\"></polyline><line x1=\"15\" x2=\"3\" y1=\"12\" y2=\"12\"></line>","Plus":"<path d=\"M5 12h14\"></path><path d=\"M12 5v14\"></path>","Eye":"<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>","EyeOff":"<path d=\"M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143\"></path><path d=\"m2 2 20 20\"></path>","KeyRound":"<path d=\"M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z\"></path><circle cx=\"16.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"></circle>"}
+const ICONS = {"BarChart3":"<path d=\"M3 3v16a2 2 0 0 0 2 2h16\"></path><path d=\"M18 17V9\"></path><path d=\"M13 17V5\"></path><path d=\"M8 17v-3\"></path>","BookOpen":"<path d=\"M12 7v14\"></path><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\"></path>","Building2":"<path d=\"M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z\"></path><path d=\"M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2\"></path><path d=\"M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2\"></path><path d=\"M10 6h4\"></path><path d=\"M10 10h4\"></path><path d=\"M10 14h4\"></path><path d=\"M10 18h4\"></path>","ClipboardList":"<rect width=\"8\" height=\"4\" x=\"8\" y=\"2\" rx=\"1\" ry=\"1\"></rect><path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\"></path><path d=\"M12 11h4\"></path><path d=\"M12 16h4\"></path><path d=\"M8 11h.01\"></path><path d=\"M8 16h.01\"></path>","LayoutDashboard":"<rect width=\"7\" height=\"9\" x=\"3\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"14\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"9\" x=\"14\" y=\"12\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"></rect>","LogOut":"<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"></path><polyline points=\"16 17 21 12 16 7\"></polyline><line x1=\"21\" x2=\"9\" y1=\"12\" y2=\"12\"></line>","Menu":"<line x1=\"4\" x2=\"20\" y1=\"12\" y2=\"12\"></line><line x1=\"4\" x2=\"20\" y1=\"6\" y2=\"6\"></line><line x1=\"4\" x2=\"20\" y1=\"18\" y2=\"18\"></line>","Users":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"></path><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"></path>","UserRound":"<circle cx=\"12\" cy=\"8\" r=\"5\"></circle><path d=\"M20 21a8 8 0 0 0-16 0\"></path>","X":"<path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path>","Bell":"<path d=\"M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9\"></path><path d=\"M10.3 21a1.94 1.94 0 0 0 3.4 0\"></path>","ChevronDown":"<path d=\"m6 9 6 6 6-6\"></path>","Search":"<circle cx=\"11\" cy=\"11\" r=\"8\"></circle><path d=\"m21 21-4.3-4.3\"></path>","UserPlus":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><line x1=\"19\" x2=\"19\" y1=\"8\" y2=\"14\"></line><line x1=\"22\" x2=\"16\" y1=\"11\" y2=\"11\"></line>","Loader2":"<path d=\"M21 12a9 9 0 1 1-6.219-8.56\"></path>","Wifi":"<path d=\"M12 20h.01\"></path><path d=\"M2 8.82a15 15 0 0 1 20 0\"></path><path d=\"M5 12.859a10 10 0 0 1 14 0\"></path><path d=\"M8.5 16.429a5 5 0 0 1 7 0\"></path>","WifiOff":"<path d=\"M12 20h.01\"></path><path d=\"M8.5 16.429a5 5 0 0 1 7 0\"></path><path d=\"M5 12.859a10 10 0 0 1 5.17-2.69\"></path><path d=\"M19 12.859a10 10 0 0 0-2.007-1.523\"></path><path d=\"M2 8.82a15 15 0 0 1 4.177-2.643\"></path><path d=\"M22 8.82a15 15 0 0 0-11.288-3.764\"></path><path d=\"m2 2 20 20\"></path>","Inbox":"<polyline points=\"22 12 16 12 14 15 10 15 8 12 2 12\"></polyline><path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path>","AlertTriangle":"<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"></path><path d=\"M12 9v4\"></path><path d=\"M12 17h.01\"></path>","CheckCircle2":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"m9 12 2 2 4-4\"></path>","Info":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M12 16v-4\"></path><path d=\"M12 8h.01\"></path>","XCircle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"m15 9-6 6\"></path><path d=\"m9 9 6 6\"></path>","Printer":"<path d=\"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2\"></path><path d=\"M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6\"></path><rect x=\"6\" y=\"14\" width=\"12\" height=\"8\" rx=\"1\"></rect>","Pencil":"<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"></path><path d=\"m15 5 4 4\"></path>","Save":"<path d=\"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\"></path><path d=\"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7\"></path><path d=\"M7 3v4a1 1 0 0 0 1 1h7\"></path>","Trash2":"<path d=\"M3 6h18\"></path><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"></path><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"></path><line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\"></line><line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\"></line>","LogIn":"<path d=\"M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4\"></path><polyline points=\"10 17 15 12 10 7\"></polyline><line x1=\"15\" x2=\"3\" y1=\"12\" y2=\"12\"></line>","Plus":"<path d=\"M5 12h14\"></path><path d=\"M12 5v14\"></path>","Eye":"<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>","EyeOff":"<path d=\"M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143\"></path><path d=\"m2 2 20 20\"></path>","Database":"<ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"></ellipse><path d=\"M3 5V19A9 3 0 0 0 21 19V5\"></path><path d=\"M3 12A9 3 0 0 0 21 12\"></path>","Clock":"<path d=\"M12 6v6l4 2\"></path><circle cx=\"12\" cy=\"12\" r=\"10\"></circle>","KeyRound":"<path d=\"M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z\"></path><circle cx=\"16.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"></circle>"}
 function make(name) {
   const inner = ICONS[name]
   return function Icon(props) {
@@ -2740,6 +3066,8 @@ exports.Plus = make('Plus')
 exports.Eye = make('Eye')
 exports.EyeOff = make('EyeOff')
 exports.KeyRound = make('KeyRound')
+exports.Database = make('Database')
+exports.Clock = make('Clock')
 
 };
 defs["react-router-dom"] = function(exports, require, module, React){
