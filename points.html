@@ -128,6 +128,8 @@
   .day-chip.current{ border-color:var(--mint); color:var(--mint); }
   .day-chip.selected{ background:var(--gold); color:var(--espresso); border-color:var(--gold); }
   .day-chip.disabled{ opacity:.3; cursor:not-allowed; }
+  .day-chip.vacation{ background:var(--gold-soft); color:var(--cinnamon); border-color:var(--latte); }
+  .day-chip.vacation.selected{ background:var(--gold); color:var(--espresso); border-color:var(--gold); }
 
   /* ---------- Tabs ---------- */
   .tabs{
@@ -961,7 +963,7 @@
     // 3) gray out / disable data-editing controls for users without "edit"/"delete"
     const canEdit = rbacHasPerm('edit');
     const canDelete = rbacHasPerm('delete');
-    document.querySelectorAll('#submitDayBtn, .item-row').forEach(el=>{
+    document.querySelectorAll('#submitDayBtn, #vacationDayBtn, .item-row').forEach(el=>{
       el.setAttribute('data-perm-locked', canEdit ? 'false' : 'true');
     });
     document.querySelectorAll('.btn-danger, [id^="remove"], [data-remove-group], [data-remove-item], [data-remove-student]').forEach(el=>{
@@ -1227,7 +1229,14 @@
       // real-world calendar/clock, and NEVER reset by "بدء شهر جديد" (a
       // student's real-world daily habit streak should survive month
       // archiving). See the Streak section below.
-      streakDayCounter: 0
+      streakDayCounter: 0,
+      // Days (by day-number, 1..16) that were deliberately marked as
+      // "إجازة" via submitVacationDay() instead of the normal "احتساب
+      // النقاط" flow: { day: ts }. A vacation day gets no records at all
+      // (so it never counts toward any student's totals/percentages) and,
+      // crucially, does NOT bump streakDayCounter — so no student's streak
+      // is broken by it. See submitVacationDay() below.
+      vacationDays: {}
     };
   }
 
@@ -1300,6 +1309,7 @@
     if(typeof g.todayEntriesResetAt !== 'number') g.todayEntriesResetAt = 0;
     if(!g.currentDay) g.currentDay = 1;
     if(typeof g.streakDayCounter !== 'number') g.streakDayCounter = 0;
+    if(!g.vacationDays || typeof g.vacationDays !== 'object') g.vacationDays = {};
     g.students.forEach(s => ensureStudentStreakShape(s, g.streakDayCounter));
     // Migrate any old-format day entries — plain arrays of "on" item ids —
     // into the new toggle-map format { itemId: {on, ts} }. Old data has no
@@ -1525,6 +1535,32 @@
     const txt = document.getElementById('syncText');
     if(dot) dot.className = 'sync-dot' + (kind ? ' ' + kind : '');
     if(txt) txt.textContent = text;
+    updateSyncWarnBar(kind, text);
+  }
+
+  // The small dot in the header is easy to miss — and while sync is failing,
+  // this device is silently working in local-only mode: anything it saves
+  // (including a freshly-invented default circle, see
+  // ensureAtLeastOneGroupIfStillEmpty()) stays stuck on this one device and
+  // never reaches any other device until the connection issue is fixed. This
+  // is the #1 cause of "a new circle appeared on my phone instead of my real
+  // data" — so surface it with an impossible-to-miss banner, not just the dot.
+  function updateSyncWarnBar(kind, text){
+    let bar = document.getElementById('syncWarnBar');
+    const host = document.getElementById('warnHost');
+    if(kind === 'err'){
+      if(!bar){
+        bar = document.createElement('div');
+        bar.id = 'syncWarnBar';
+        bar.className = 'warn-bar';
+        if(host) host.appendChild(bar);
+      }
+      bar.innerHTML = `⚠️ تعذّر الاتصال بالمزامنة — أي شيء تضيفه الآن محفوظ على هذا الجهاز فقط ولن يظهر على بقية الأجهزة حتى يُحل الاتصال (${escapeHtml(text||'')}). <button class="sync-link" id="syncWarnFixBtn" style="margin-inline-start:6px;">كيف أصلحه؟</button>`;
+      const fixBtn = document.getElementById('syncWarnFixBtn');
+      if(fixBtn) fixBtn.addEventListener('click', ()=> setTab('settings'));
+    } else if(bar){
+      bar.remove();
+    }
   }
 
   // ================= Merge (never-lose-data sync) =================
@@ -1689,6 +1725,12 @@
     const bReset = bFresh ? b.resetAt : {};
     const aDay = aFresh ? (a.currentDay||1) : 1;
     const bDay = bFresh ? (b.currentDay||1) : 1;
+    // vacationDays is keyed by day-number within the current cycle, so it
+    // rides the same freshness gate as records/resetAt/currentDay above —
+    // a stale pre-reset copy's vacation marks shouldn't resurrect after a
+    // "بدء شهر جديد".
+    const aVac = aFresh ? a.vacationDays : {};
+    const bVac = bFresh ? b.vacationDays : {};
 
     // todayEntries gets its OWN freshness gate, separate from records/
     // resetAt/currentDay above. Those three should still union/merge
@@ -1723,6 +1765,7 @@
       todayEntries: mergeToggleEntryMap(aTE, bTE),
       records: mergeRecordsMap(aRec, bRec),
       resetAt: mergeResetAtMap(aReset, bReset),
+      vacationDays: mergeTombstoneMap(aVac, bVac),
       archives: mergeArchivesArray(a.archives, b.archives),
       deletedStudentIds: deletedStudentIds,
       deletedItemIds: deletedItemIds,
@@ -2076,6 +2119,7 @@
   function maxReachableDay(group){ return Math.min(group.currentDay, 16); }
   function isStagingDay(group, day){ return day === group.currentDay && group.currentDay <= 16; }
   function dayLabel(day){ return `الأسبوع ${weekOf(day)} · اليوم ${dayInWeekOf(day)} من ٤ (اليوم ${day} من ١٦)`; }
+  function isVacationDay(group, day){ return !!(group.vacationDays && group.vacationDays[day]); }
 
   // ---- Day-entry storage format ----
   // Each student's marks for a given day are stored as a "toggle map":
@@ -2369,11 +2413,14 @@
     for(let d=1; d<=16; d++){
       const reachable = d <= maxReachableDay(group);
       const isCur = d === group.currentDay && group.currentDay<=16;
+      const isVac = isVacationDay(group, d);
       const cls = ['day-chip'];
       if(!reachable) cls.push('disabled');
       if(isCur) cls.push('current');
       if(d===selectedDay) cls.push('selected');
-      dayChipsHtml += `<button type="button" class="${cls.join(' ')}" data-day="${d}" ${reachable?'':'disabled'} title="${dayLabel(d)}">${d}</button>`;
+      if(isVac) cls.push('vacation');
+      const chipTitle = isVac ? `${dayLabel(d)} — إجازة` : dayLabel(d);
+      dayChipsHtml += `<button type="button" class="${cls.join(' ')}" data-day="${d}" ${reachable?'':'disabled'} title="${chipTitle}">${isVac?'🌴':d}</button>`;
     }
 
     let rosterHtml = group.students.map(s => {
@@ -2383,15 +2430,21 @@
       </button>`;
     }).join('');
 
-    let itemsHtml = group.items.length ? group.items.map(it => {
-      const on = staged.includes(it.id);
-      const neg = it.points < 0;
-      return `<div class="item-row ${on?'on':''} ${neg?'negative':''}" data-item="${it.id}">
-        <div class="check-circle">${on?'✓':''}</div>
-        <div style="flex:1; padding:0 12px;"><div class="item-name">${escapeHtml(it.name)}${neg?'<span class="type-tag neg">خصم</span>':''}</div></div>
-        <div class="item-points">${it.points>0?'+':''}${it.points} نقطة</div>
-      </div>`;
-    }).join('') : `<p class="empty-state">لا توجد بنود بعد لهذه الحلقة — أضفها من الإعدادات.</p>`;
+    const dayIsVacation = isVacationDay(group, selectedDay);
+    let itemsHtml;
+    if(dayIsVacation){
+      itemsHtml = `<p class="empty-state">🌴 هذا اليوم مسجّل كإجازة — لا توجد بنود ولا نقاط لهذا اليوم، ولم يتأثر تتابع أي مشارك بسببه.</p>`;
+    } else {
+      itemsHtml = group.items.length ? group.items.map(it => {
+        const on = staged.includes(it.id);
+        const neg = it.points < 0;
+        return `<div class="item-row ${on?'on':''} ${neg?'negative':''}" data-item="${it.id}">
+          <div class="check-circle">${on?'✓':''}</div>
+          <div style="flex:1; padding:0 12px;"><div class="item-name">${escapeHtml(it.name)}${neg?'<span class="type-tag neg">خصم</span>':''}</div></div>
+          <div class="item-points">${it.points>0?'+':''}${it.points} نقطة</div>
+        </div>`;
+      }).join('') : `<p class="empty-state">لا توجد بنود بعد لهذه الحلقة — أضفها من الإعدادات.</p>`;
+    }
 
     html += `
       <div class="card">
@@ -2423,7 +2476,12 @@
         ${staging ? `
         <div class="submit-bar">
           <span class="submit-note">تم تقييم ${markedCount} من ${group.students.length} اليوم</span>
+          <button class="btn btn-ghost" id="vacationDayBtn">🌴 تسجيل اليوم إجازة</button>
           <button class="btn btn-mint" id="submitDayBtn">إرسال جماعي — احتساب نقاط اليوم</button>
+        </div>` : dayIsVacation ? `
+        <div class="submit-bar">
+          <span class="submit-note">🌴 هذا اليوم مسجّل كإجازة — للعرض فقط، لا يمكن تعديله</span>
+          <button class="btn btn-ghost" id="backTodayBtn">${group.currentDay>16?'العودة لآخر يوم':'العودة لليوم الحالي'}</button>
         </div>` : `
         <div class="submit-bar">
           <span class="submit-note">وضع تعديل يوم سابق — كل تغيير يُحفظ تلقائيًا فورًا، ويُحدَّث الترتيب مباشرة</span>
@@ -2475,6 +2533,8 @@
 
     const submitBtn = document.getElementById('submitDayBtn');
     if(submitBtn) submitBtn.addEventListener('click', ()=> submitDay(group));
+    const vacationBtn = document.getElementById('vacationDayBtn');
+    if(vacationBtn) vacationBtn.addEventListener('click', ()=> submitVacationDay(group));
     const backBtn = document.getElementById('backTodayBtn');
     if(backBtn) backBtn.addEventListener('click', ()=>{ selectedDay = maxReachableDay(group); renderEval(); });
 
@@ -2523,6 +2583,32 @@
     renderAll();
     const statusEl = document.getElementById('evalStatus');
     if(statusEl) statusEl.textContent = 'تم احتساب النقاط بنجاح ✓';
+  }
+
+  // Marks the group's current day as "إجازة" instead of finalizing it
+  // normally: no points are calculated for anyone (any staged marks for
+  // today are discarded, nothing is written to group.records), and —
+  // unlike submitDay() — group.streakDayCounter is intentionally left
+  // untouched. Since checkStreakInactivity() only zeroes a student's streak
+  // once group.streakDayCounter has moved past their last active slot,
+  // not bumping it here means a vacation day can never break anyone's
+  // streak. The day is just skipped over: group.currentDay still advances
+  // so the group moves on to the next real day.
+  async function submitVacationDay(group){
+    if(group.currentDay > 16) return;
+    if(!confirm(`سيتم تسجيل اليوم ${group.currentDay} كإجازة لحلقة "${group.name}".\nلن تُحتسب أي نقاط لهذا اليوم ولن يتأثر تتابع أي مشارك (الستريك) بسببه.\n\nهل تريد المتابعة؟`)) return;
+
+    group.vacationDays[group.currentDay] = Date.now();
+    group.todayEntries = {};
+    // Same reasoning as in submitDay(): dates the clear so a merge against
+    // a stale copy can't resurrect today's staged marks.
+    group.todayEntriesResetAt = Date.now();
+    group.currentDay += 1;
+    selectedDay = maxReachableDay(group);
+    await saveState();
+    renderAll();
+    const statusEl = document.getElementById('evalStatus');
+    if(statusEl) statusEl.textContent = 'تم تسجيل اليوم كإجازة ✓';
   }
 
   // ---------- results tab ----------
@@ -2993,7 +3079,7 @@ alter publication supabase_realtime add table ${RBAC_SYNC_TABLE};</div>
         b.classList.add('on'); if(newItemType==='neg') b.classList.add('neg');
       });
     });
-    document.getElementById('addItemBtn').addEventListener('click', ()=>{
+    function submitNewItem(){
       const nameEl = document.getElementById('newItemName');
       const ptsEl = document.getElementById('newItemPoints');
       const name = nameEl.value.trim();
@@ -3001,10 +3087,21 @@ alter publication supabase_realtime add table ${RBAC_SYNC_TABLE};</div>
       if(!name || magnitude===0) return;
       const points = newItemType === 'neg' ? -magnitude : magnitude;
       group.items.push({ id: uid(), name, points });
-      nameEl.value=''; ptsEl.value=5;
-      newItemType='pos'; segBtns.forEach(x=>x.classList.remove('on','neg')); segBtns[0].classList.add('on');
+      newItemType='pos';
       saveState(); renderAll();
       flashStatus('settingsStatus', 'تمت إضافة البند ✓');
+      // Re-select the (freshly re-rendered) field and put the cursor back in
+      // it, so adding several items in a row doesn't lose focus / close the
+      // keyboard after each one.
+      const freshNameEl = document.getElementById('newItemName');
+      if(freshNameEl) freshNameEl.focus();
+    }
+    document.getElementById('addItemBtn').addEventListener('click', submitNewItem);
+    document.getElementById('newItemName').addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){ e.preventDefault(); submitNewItem(); }
+    });
+    document.getElementById('newItemPoints').addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){ e.preventDefault(); submitNewItem(); }
     });
 
     document.getElementById('saveTemplateBtn').addEventListener('click', ()=>{
@@ -3097,6 +3194,7 @@ alter publication supabase_realtime add table ${RBAC_SYNC_TABLE};</div>
       if(!confirm('سيتم حفظ نتائج هذا الشهر في أرشيف هذه الحلقة، ثم تفريغ سجلات الأيام الحالية للبدء من جديد. هذا لا يمكن التراجع عنه. متابعة؟')) return;
       archiveGroupMonth(group, finalLabel);
       group.records = {}; group.todayEntries = {}; group.resetAt = {}; group.currentDay = 1;
+      group.vacationDays = {};
       group.recordsResetAt = Date.now();
       group.todayEntriesResetAt = group.recordsResetAt;
       selectedDay = null;
