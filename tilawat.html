@@ -273,6 +273,17 @@ function Logo() {
             React.createElement("p", { className: "text-xl font-extrabold text-ink" }, "\u062A\u0644\u0627\u0648\u0627\u062A"),
             React.createElement("p", { className: "text-[11px] font-semibold text-ink-soft" }, "\u0625\u062F\u0627\u0631\u0629 \u0642\u0631\u0627\u0621 \u0627\u0644\u0645\u0633\u0627\u062C\u062F"))));
 }
+// وصف الصفة مع الليلة المسندة: «مسؤول ليلة الاثنين» أو «مسؤول ليالي: الأحد، الاثنين»
+const dutyLabel = (role, keys = []) => {
+    if (role !== 'night_supervisor')
+        return constants_js_1.ROLES[role] || role || '';
+    const ks = constants_js_1.SLOT_KEYS.filter((k) => (keys || []).includes(k));
+    if (!ks.length)
+        return constants_js_1.ROLES.night_supervisor;
+    if (ks.length === 1)
+        return ks[0] === 'fri' ? 'مسؤول تلاوة الجمعة' : `مسؤول ${constants_js_1.SLOTS[ks[0]].label}`;
+    return `${ks.includes('fri') ? 'مسؤول' : 'مسؤول ليالي'}: ${ks.map((k) => constants_js_1.SLOTS[k].short).join('، ')}`;
+};
 function Layout() {
     const { profile, signOut, isAdmin, duties, personaKey, setPersona, hasDualRole } = (0, AuthContext_jsx_1.useAuth)();
     const { sync, ready, loadError, refresh, mosqueById } = (0, DataContext_jsx_1.useData)();
@@ -286,14 +297,14 @@ function Layout() {
             React.createElement(Logo, null)),
         hasDualRole && (React.createElement("div", { className: "border-b border-cardline px-4 py-3.5" },
             React.createElement("p", { className: "mb-2 text-[11px] font-bold text-ink-soft" }, "\u0627\u0644\u062F\u062E\u0648\u0644 \u0628\u0635\u0641\u0629:"),
-            React.createElement(ui_jsx_1.Segmented, { options: duties.map((d) => ({ value: d.key, label: constants_js_1.ROLES[d.role] || d.role })), value: personaKey, onChange: setPersona }))),
+            React.createElement(ui_jsx_1.Segmented, { options: duties.map((d) => ({ value: d.key, label: dutyLabel(d.role, d.slot_keys) })), value: personaKey, onChange: setPersona }))),
         React.createElement("nav", { className: "flex-1 space-y-1 overflow-y-auto p-3" }, items.map(({ to, label, icon: Icon, end }) => (React.createElement(react_router_dom_1.NavLink, { key: to, to: to, end: end, onClick: () => setOpen(false), className: ({ isActive }) => `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-colors ${isActive ? 'bg-line text-white' : 'text-ink hover:bg-hover'}` },
             React.createElement(Icon, { className: "h-[18px] w-[18px]" }),
             label)))),
         React.createElement("div", { className: "border-t border-cardline p-4" },
             React.createElement("p", { className: "truncate text-sm font-bold" }, profile?.full_name),
             React.createElement("p", { className: "mt-0.5 truncate text-xs text-ink-soft" },
-                constants_js_1.ROLES[profile?.role],
+                dutyLabel(profile?.role, profile?.slot_keys),
                 mosqueLabel ? ` — ${mosqueLabel}` : ''),
             React.createElement("button", { onClick: signOut, className: "btn-outline btn-sm mt-3 w-full" },
                 React.createElement(lucide_react_1.LogOut, { className: "h-4 w-4" }),
@@ -310,7 +321,7 @@ function Layout() {
             React.createElement("header", { className: "no-print sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-cardline bg-page/90 px-4 py-3 backdrop-blur sm:px-6" },
                 React.createElement("button", { className: "btn-outline btn-sm lg:hidden", onClick: () => setOpen(true), "aria-label": "\u0641\u062A\u062D \u0627\u0644\u0642\u0627\u0626\u0645\u0629" },
                     React.createElement(lucide_react_1.Menu, { className: "h-4 w-4" })),
-                React.createElement("div", { className: "hidden lg:block" }),
+                React.createElement("div", { className: profile && profile.role !== 'admin' ? "min-w-0 flex-1 truncate text-sm font-extrabold" : "hidden lg:block" }, profile && profile.role !== 'admin' ? dutyLabel(profile.role, profile.slot_keys) + (mosqueLabel ? ` — ${mosqueLabel}` : '') : null),
                 React.createElement("div", { className: "flex items-center gap-2" },
                     isAdmin && ready && React.createElement(NotificationBell_jsx_1.default, null),
                     React.createElement(ui_jsx_1.SyncBadge, { status: sync }))),
@@ -893,8 +904,16 @@ function AuthProvider({ children }) {
                 return { message: 'Invalid login credentials' };
             email = data;
         }
-        const { error } = await supabase_js_1.supabase.auth.signInWithPassword({ email, password });
-        return error;
+        let lastErr = null;
+        for (const pw of supabase_js_1.passwordCandidates(password)) {
+            const { error } = await supabase_js_1.supabase.auth.signInWithPassword({ email, password: pw });
+            if (!error)
+                return null;
+            lastErr = error;
+            if (!/invalid login/i.test(error.message || ''))
+                break;
+        }
+        return lastErr;
     }, []);
     const signOut = (0, react_1.useCallback)(() => supabase_js_1.supabase.auth.signOut(), []);
     // ----- الصفة النشطة: تدعم امتلاك مستخدم واحد لدورين مختلفين في نفس الوقت -----
@@ -2269,11 +2288,11 @@ function Login() {
         setError('');
         if (!name.trim())
             return setError('اكتب اسم المدير');
-        if (password.length < 6)
+        if (supabase_js_1.normPassword(password).length < 6)
             return setError('كلمة المرور 6 خانات على الأقل');
         setBusy(true);
         const email = (0, supabase_js_1.makeFakeEmail)();
-        const { data, error: e1 } = await supabase_js_1.supabase.auth.signUp({ email, password, options: { data: { full_name: name.trim() } } });
+        const { data, error: e1 } = await supabase_js_1.supabase.auth.signUp({ email, password: supabase_js_1.normPassword(password), options: { data: { full_name: name.trim() } } });
         if (e1) {
             setBusy(false);
             return setError(e1.message);
@@ -2727,7 +2746,7 @@ function Reciters() {
     const rows = (0, react_1.useMemo)(() => {
         const list = reciters.filter((r) => (showInactive || r.is_active) &&
             (!q || (0, util_js_1.matchesQuery)(r.name, q)) &&
-            (slotFilter === 'all' || (slotsByReciter[r.id] || []).some((s) => s.slot_key === slotFilter)));
+            (slotFilter === 'all' || (slotsByReciter[r.id] || []).some((s) => slotFilter === 'nights' ? constants_js_1.NIGHT_KEYS.includes(s.slot_key) : s.slot_key === slotFilter)));
         return list.sort((a, b) => {
             const ca = stats[a.id]?.count ?? 0;
             const cb = stats[b.id]?.count ?? 0;
@@ -2784,6 +2803,7 @@ function Reciters() {
                 React.createElement("input", { className: "input ps-9", placeholder: "\u0627\u0628\u062D\u062B \u0628\u0627\u0633\u0645 \u0627\u0644\u0642\u0627\u0631\u0626\u2026", value: q, onChange: (e) => setQ(e.target.value) })),
             React.createElement("select", { className: "input w-auto", value: slotFilter, onChange: (e) => setSlotFilter(e.target.value), "aria-label": "\u0641\u0644\u062A\u0631 \u0627\u0644\u062E\u0627\u0646\u0629" },
                 React.createElement("option", { value: "all" }, "\u0643\u0644 \u0627\u0644\u062E\u0627\u0646\u0627\u062A"),
+                React.createElement("option", { value: "nights" }, "كل الليالي"),
                 constants_js_1.SLOT_KEYS.map((k) => React.createElement("option", { key: k, value: k }, constants_js_1.SLOTS[k].label))),
             React.createElement("select", { className: "input w-auto", value: sortOrder, onChange: (e) => setSortOrder(e.target.value), "aria-label": "\u062A\u0631\u062A\u064A\u0628 \u0627\u0644\u0642\u0627\u0626\u0645\u0629" },
                 React.createElement("option", { value: "desc" }, "\u0627\u0644\u0623\u0643\u062B\u0631 \u062A\u0644\u0627\u0648\u0629"),
@@ -2875,7 +2895,7 @@ function NightReciters() {
     const nowHijri = (0, react_1.useMemo)(() => (0, hijri_js_1.toHijri)((0, util_js_1.todayStr)()), []);
     // عدد التلاوات المقروءة لكل قارئ خلال الشهرين الهجريين: الحالي + الماضي
     const counts = (0, react_1.useMemo)(() => {
-        const map = {};
+        const map = { cur: {}, prev: {} };
         if (!nowHijri.month || !nowHijri.year)
             return map;
         const curM = nowHijri.month, curY = nowHijri.year;
@@ -2884,14 +2904,17 @@ function NightReciters() {
         recitation_logs.forEach((l) => {
             if (l.status !== 'read')
                 return;
-            const inWindow = (l.hijri_month === curM && l.hijri_year === curY) || (l.hijri_month === prevM && l.hijri_year === prevY);
-            if (!inWindow)
+            const bucket = (l.hijri_month === curM && l.hijri_year === curY) ? map.cur : (l.hijri_month === prevM && l.hijri_year === prevY) ? map.prev : null;
+            if (!bucket)
                 return;
             const k = (0, util_js_1.reciterKey)(l);
-            map[k] = (map[k] || 0) + 1;
+            bucket[k] = (bucket[k] || 0) + 1;
         });
         return map;
     }, [recitation_logs, nowHijri]);
+    // أسماء الشهرين الهجريين (الحالي والماضي) لعنوان العمودين
+    const curName = constants_js_1.HIJRI_MONTHS[(nowHijri.month || 1) - 1];
+    const prevName = constants_js_1.HIJRI_MONTHS[((nowHijri.month || 1) + 10) % 12];
     // تاريخ آخر تلاوة مسجّلة لكل قارئ (على كل السجلات المتاحة لهذا المسؤول)
     const lastDate = (0, react_1.useMemo)(() => {
         const map = {};
@@ -2910,7 +2933,8 @@ function NightReciters() {
         return list
             .map((r) => {
             const k = (0, util_js_1.reciterKey)({ reciter_id: r.id, reciter_name: r.name });
-            return { r, count: counts[k] || 0, last: lastDate[k] || '' };
+            const cur = counts.cur[k] || 0, prev = counts.prev[k] || 0;
+            return { r, cur, prev, count: cur + prev, last: lastDate[k] || '' };
         })
             .sort((a, b) => (sortOrder === 'asc' ? a.count - b.count : b.count - a.count));
     };
@@ -2936,12 +2960,15 @@ function NightReciters() {
                             React.createElement("thead", null,
                                 React.createElement("tr", null,
                                     React.createElement("th", { className: "th" }, "\u0627\u0644\u0642\u0627\u0631\u0626"),
-                                    React.createElement("th", { className: "th" }, "\u0639\u062F\u062F \u0627\u0644\u062A\u0644\u0627\u0648\u0627\u062A (\u0634\u0647\u0631\u064A\u0646)"),
+                                    React.createElement("th", { className: "th" }, curName, React.createElement("span", { className: "ms-1 text-[11px] font-semibold text-ink-soft" }, "(الحالي)")),
+                                    React.createElement("th", { className: "th" }, prevName, React.createElement("span", { className: "ms-1 text-[11px] font-semibold text-ink-soft" }, "(الماضي)")),
                                     React.createElement("th", { className: "th" }, "\u0622\u062E\u0631 \u062A\u0644\u0627\u0648\u0629"))),
-                            React.createElement("tbody", null, rows.map(({ r, count, last }) => (React.createElement("tr", { key: r.id, className: "tr-hover cursor-pointer", onClick: () => setHist({ key: r.id, name: r.name }) },
+                            React.createElement("tbody", null, rows.map(({ r, cur, prev, last }) => (React.createElement("tr", { key: r.id, className: "tr-hover cursor-pointer", onClick: () => setHist({ key: r.id, name: r.name }) },
                                 React.createElement("td", { className: "td font-bold" }, r.name),
                                 React.createElement("td", { className: "td" },
-                                    React.createElement("span", { className: `rounded-full px-2.5 py-0.5 text-xs font-bold ${count > 0 ? 'bg-brand/10 text-brand' : 'bg-hover text-ink-soft'}` }, count)),
+                                    React.createElement("span", { className: `rounded-full px-2.5 py-0.5 text-xs font-bold ${cur > 0 ? 'bg-brand/10 text-brand' : 'bg-hover text-ink-soft'}` }, cur)),
+                                React.createElement("td", { className: "td" },
+                                    React.createElement("span", { className: `rounded-full px-2.5 py-0.5 text-xs font-bold ${prev > 0 ? 'bg-brand/10 text-brand' : 'bg-hover text-ink-soft'}` }, prev)),
                                 React.createElement("td", { className: "td text-sm" }, last ? (0, util_js_1.fmtDate)(last) : '\u2014'))))))))));
             }))),
         React.createElement(ReciterHistoryModal_jsx_1.default, { open: Boolean(hist), onClose: () => setHist(null), reciterKeyValue: hist?.key, name: hist?.name })));
@@ -3044,11 +3071,11 @@ function UsersPage() {
             toast.success('تم تحديث المستخدم');
             return setForm(null);
         }
-        if (form.password.length < MIN_PASSWORD)
+        if (supabase_js_1.normPassword(form.password).length < MIN_PASSWORD)
             return toast.warn('كلمة المرور قصيرة', `${MIN_PASSWORD} خانات على الأقل (حروف أو أرقام أو رموز).`);
         setBusy(true);
         const email = (0, supabase_js_1.makeFakeEmail)(); // بريد داخلي وهمي: لا يراه المستخدم ولا يحتاجه
-        const { data: su, error: e1 } = await (0, supabase_js_1.tempClient)().auth.signUp({ email, password: form.password, options: { data: { full_name: name } } });
+        const { data: su, error: e1 } = await (0, supabase_js_1.tempClient)().auth.signUp({ email, password: supabase_js_1.normPassword(form.password), options: { data: { full_name: name } } });
         if (e1) {
             setBusy(false);
             return toast.error('تعذّر إنشاء الحساب', authHint(e1.message));
@@ -3074,12 +3101,12 @@ function UsersPage() {
     const needOld = pw && pw.user.id !== me && (!secrets[pw.user.id] || pw.forceOld);
     const resetPassword = async () => {
         const { user, password, old } = pw;
-        if (password.length < MIN_PASSWORD)
+        if (supabase_js_1.normPassword(password).length < MIN_PASSWORD)
             return toast.warn('كلمة المرور قصيرة', `${MIN_PASSWORD} خانات على الأقل.`);
         setBusy(true);
         try {
             if (user.id === me) {
-                const { error } = await supabase_js_1.supabase.auth.updateUser({ password });
+                const { error } = await supabase_js_1.supabase.auth.updateUser({ password: supabase_js_1.normPassword(password) });
                 if (error)
                     throw new Error(authHint(error.message));
             }
@@ -3088,10 +3115,15 @@ function UsersPage() {
                 if (current) {
                     // نسجّل الدخول مؤقتاً بالحساب المستهدف (بكلمة المرور المحفوظة) ونغيّرها
                     const tmp = (0, supabase_js_1.tempClient)();
-                    const { error: e1 } = await tmp.auth.signInWithPassword({ email: user.email, password: current });
+                    let e1 = null;
+                    for (const c of supabase_js_1.passwordCandidates(current)) {
+                        ({ error: e1 } = await tmp.auth.signInWithPassword({ email: user.email, password: c }));
+                        if (!e1)
+                            break;
+                    }
                     if (e1)
                         throw new Error('كلمة المرور الحالية غير صحيحة — أدخل الحالية الصحيحة في الحقل أدناه.');
-                    const { error: e2 } = await tmp.auth.updateUser({ password });
+                    const { error: e2 } = await tmp.auth.updateUser({ password: supabase_js_1.normPassword(password) });
                     if (e2)
                         throw new Error(authHint(e2.message));
                 }
@@ -3239,6 +3271,20 @@ exports.supabase = window.supabase.createClient(cfg.url || 'http://localhost', c
   realtime: { params: { eventsPerSecond: 10 } },
 })
 exports.FAKE_EMAIL_DOMAIN = cfg.fakeDomain || 'tilawat.local'
+// توحيد كلمة المرور العربية: نفس الكلمة قد تُكتب بأشكال مختلفة (همزات، ي/ى، ك/ک، أرقام هندية/فارسية، تشكيل، رموز اتجاه مخفية)
+// فتُطبَّق نفس المعالجة عند الإنشاء والدخول حتى لا يختلف ما كُتب عن ما يُكتب لاحقاً
+exports.normPassword = (p) => String(p == null ? '' : p)
+  .normalize('NFKC')
+  .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '')
+  .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+  .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+  .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06F0))
+  .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627')
+  .replace(/[\u0649\u06CC]/g, '\u064A')
+  .replace(/\u06A9/g, '\u0643')
+  .trim()
+// المرشّحات عند الدخول: الصيغة الموحّدة أولاً ثم الكلمة كما كُتبت (للحسابات القديمة المنشأة قبل التوحيد)
+exports.passwordCandidates = (p) => { const raw = String(p == null ? '' : p); return [...new Set([exports.normPassword(raw), raw])] }
 exports.makeFakeEmail = () => 'user_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8) + '@' + exports.FAKE_EMAIL_DOMAIN
 exports.tempClient = () => window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'tilawat-temp-' + Math.random().toString(36).slice(2) } })
 exports.saveConfig = (url, key) => { localStorage.setItem('tilawat-config', JSON.stringify({ url: url.trim().replace(/\/$/, ''), key: key.trim() })); window.location.reload() }
