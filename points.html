@@ -635,11 +635,62 @@
   // kept getting overwritten by the merge before the real edit ever
   // "settled". Sorting keys before comparing makes the comparison ignore
   // key order so only real content changes are detected.
+  // NOTE (fix): this is only ever used to COMPARE two snapshots ("did anything
+  // really change?"), never to store or send data. It is now
+  //  - order-insensitive for arrays: two devices that hold the same items in a
+  //    different order used to look "different" forever, so each one kept
+  //    pushing its own order to the other -> endless "syncing / saved" loop
+  //    and a full re-render (which kicked you out of the input box) each time.
+  //  - undefined-safe: a key whose value is undefined is dropped exactly like
+  //    JSON.stringify/Supabase drops it, so our own echo is recognised.
   function stableStringify(obj){
+    if(obj === undefined) return 'null';
     if(obj === null || typeof obj !== 'object') return JSON.stringify(obj);
-    if(Array.isArray(obj)) return '[' + obj.map(stableStringify).join(',') + ']';
-    const keys = Object.keys(obj).sort();
+    if(Array.isArray(obj)) return '[' + obj.map(stableStringify).sort().join(',') + ']';
+    const keys = Object.keys(obj).filter(k => obj[k] !== undefined).sort();
     return '{' + keys.map(k => JSON.stringify(k) + ':' + stableStringify(obj[k])).join(',') + '}';
+  }
+
+  // Re-render after a change that arrived from ANOTHER device / the server.
+  // A plain renderAll() rebuilds the whole page with innerHTML, which destroys
+  // the input you are typing in (focus + keyboard lost, text wiped). This
+  // wrapper snapshots what you are typing / where the cursor is / scroll
+  // position, re-renders, then puts everything back.
+  function inputKey(el){
+    if(el.id) return '#' + el.id;
+    for(const a of el.attributes){
+      if(a.name.indexOf('data-') === 0) return '[' + a.name + '="' + String(a.value).replace(/["\\]/g, '\\$&') + '"]';
+    }
+    return null;
+  }
+  function renderAllPreservingInput(){
+    const active = document.activeElement;
+    const isField = el => el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) && !/^(checkbox|radio|button|submit)$/i.test(el.type || '');
+    const saved = [];
+    document.querySelectorAll('input, textarea, select').forEach(el => {
+      if(!isField(el)) return;
+      const key = inputKey(el);
+      if(!key) return;
+      const dirty = el.value !== el.defaultValue;
+      if(dirty || el === active){
+        let ss = null, se = null;
+        try{ ss = el.selectionStart; se = el.selectionEnd; }catch(e){ /* number inputs have no selection */ }
+        saved.push({ key, value: el.value, isActive: el === active, ss, se });
+      }
+    });
+    const y = window.scrollY;
+    renderAll();
+    saved.forEach(s => {
+      let el = null;
+      try{ el = document.querySelector(s.key); }catch(e){ el = null; }
+      if(!el) return;
+      if(el.value !== s.value) el.value = s.value;
+      if(s.isActive){
+        try{ el.focus({ preventScroll: true }); }catch(e){ /* ignore */ }
+        try{ if(s.ss !== null) el.setSelectionRange(s.ss, s.se); }catch(e){ /* ignore */ }
+      }
+    });
+    try{ window.scrollTo(0, y); }catch(e){ /* ignore */ }
   }
 
   // transient (not persisted at all) view state
@@ -848,6 +899,8 @@
   function rbacApplyRemoteUsers(remoteUsers){
     if(!Array.isArray(remoteUsers) || remoteUsers.length === 0) return;
     remoteUsers.forEach(u=>{ u.permissions = Object.assign(rbacDefaultPermissions(false), u.permissions || {}); });
+    // Nothing actually changed -> do nothing (no re-render, no lost focus).
+    if(stableStringify(remoteUsers) === stableStringify(rbacStore.users)) return;
     const wasLoggedInAs = rbacStore.currentUserId;
     rbacStore.users = remoteUsers;
     const stillExists = wasLoggedInAs && rbacStore.users.some(u=>u.id===wasLoggedInAs);
@@ -864,7 +917,7 @@
       }
       rbacRenderUserBar();
       rbacApplyUI();
-      if(rbacIsAdmin() && uiState && uiState.currentTab === 'settings') renderSettings();
+      if(rbacIsAdmin() && uiState && uiState.currentTab === 'settings') renderAllPreservingInput();
     }
   }
 
@@ -1821,6 +1874,10 @@
     // part of the synced state anymore — see uiState / ensureUiStateShape().
     if(!s || !Array.isArray(s.groups)) return false;
     s.groups.forEach(ensureGroupShape);
+    // Same normalisation the render step does (zero stale streaks). Doing it
+    // here, BEFORE we compare with the server copy, means both devices agree
+    // on the result and never push it back and forth.
+    s.groups.forEach(checkStreakInactivity);
     if(s.groups.length === 0) s.groups.push(newGroup('الحلقة الأولى'));
     if(!Array.isArray(s.itemTemplates)) s.itemTemplates = [];
     if(!s.deletedGroupIds || typeof s.deletedGroupIds !== 'object') s.deletedGroupIds = {};
@@ -1836,6 +1893,9 @@
   // immediately and requests can never race/overwrite each other.
   function queueSyncPush(){
     if(!supabaseClient) return;
+    // Nothing new since the last successful/in-flight push -> stay quiet
+    // (this is what stops the status bar flickering "saving / saved" nonstop).
+    if(!pushInFlight && !pushRetryTimer && lastPushedJSON !== null && stableStringify(state) === lastPushedJSON) return;
     setSyncStatus('saving', 'جارٍ الحفظ...');
     if(pushInFlight){
       pushQueued = true;
@@ -1857,14 +1917,23 @@
   async function pushToSupabase(){
     const cfg = loadSyncConfig();
     if(!supabaseClient || !cfg) return false;
+    let myJSON = null;
     try{
-      lastPushedJSON = stableStringify(state);
-      pendingPushJSONs.push(lastPushedJSON);
+      // Snapshot NOW. Previously the request body was serialised a moment
+      // later (after renderAll() had already tweaked `state`), so what we
+      // sent differed from what we remembered sending -> our own echo was
+      // mistaken for "another device changed something" -> full re-render.
+      const snapshot = JSON.parse(JSON.stringify(state));
+      myJSON = stableStringify(snapshot);
+      lastPushedJSON = myJSON;
+      pendingPushJSONs.push(myJSON);
       if(pendingPushJSONs.length > 10) pendingPushJSONs.shift(); // safety cap only
+      const sentAt = new Date().toISOString();
       const { error } = await supabaseClient
         .from(SYNC_TABLE)
-        .upsert({ sync_id: cfg.syncId, data: state, updated_at: new Date().toISOString() }, { onConflict: 'sync_id' });
+        .upsert({ sync_id: cfg.syncId, data: snapshot, updated_at: sentAt }, { onConflict: 'sync_id' });
       if(error) throw error;
+      lastServerTs = Date.parse(sentAt);
       setSyncStatus('ok', 'تمت المزامنة ✓');
       // a push succeeded — clear any pending retry and reset the backoff
       if(pushRetryTimer){ clearTimeout(pushRetryTimer); pushRetryTimer = null; }
@@ -1872,6 +1941,10 @@
       return true;
     }catch(e){
       console.error('sync push failed', e);
+      // this push never reached the server: forget it so the retry really sends
+      const pi = pendingPushJSONs.lastIndexOf(myJSON);
+      if(pi !== -1) pendingPushJSONs.splice(pi, 1);
+      lastPushedJSON = null;
       const msg = (e && (e.message || e.error_description || e.hint)) || 'خطأ غير معروف';
       setSyncStatus('err', 'تعذّر الحفظ، سيُعاد المحاولة تلقائيًا… (' + msg + ')');
       scheduleRetryPush();
@@ -1892,55 +1965,124 @@
     }, pushRetryDelay);
   }
 
+  // ---- instant sync: one function applies ANY server copy (from realtime,
+  // from a reconnect catch-up, or from the safety-net poll below) ----
+  let lastServerTs = 0;        // updated_at (ms) of the newest server copy this device has seen/sent
+  let realtimeOk = false;      // true while the live websocket channel is SUBSCRIBED
+  let subscribeGen = 0;        // lets us ignore callbacks from channels we deliberately closed
+  let resubTimer = null;
+  let pulling = false;
+
+  function applyRemoteData(incoming, updatedAt){
+    if(!incoming) return;
+    const incomingTs = updatedAt ? Date.parse(updatedAt) : Date.now();
+    if(updatedAt && !isNaN(incomingTs)) lastServerTs = incomingTs;
+    const incomingJSON = stableStringify(incoming);
+    const echoIdx = pendingPushJSONs.indexOf(incomingJSON);
+    if(echoIdx !== -1){
+      // Matches a push THIS device made that hasn't been echoed back yet.
+      pendingPushJSONs.splice(echoIdx, 1);
+      return;
+    }
+    const before = stableStringify(state);
+    // Server copy is identical to what we already have -> nothing to do.
+    if(before === incomingJSON){ lastPushedJSON = incomingJSON; return; }
+
+    // Merge instead of replace: both people's edits survive.
+    let localTs = 0;
+    try{ localTs = parseInt(localStorage.getItem(LOCAL_TS_KEY) || '0', 10); }catch(e){ localTs = 0; }
+    const merged = mergeState(state, incoming, localTs > incomingTs);
+    ensureStateShapeFull(merged);
+
+    if(stableStringify(merged) !== before){
+      isApplyingRemote = true;
+      state = merged;
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ /* best-effort */ }
+      ensureUiStateShape();
+      isApplyingRemote = false;
+      renderAllPreservingInput();
+      setSyncStatus('ok', 'تحديث من جهاز آخر ✓');
+    }
+    // If this device holds something the server copy lacks, push the merged
+    // superset back so everyone converges.
+    if(stableStringify(state) !== incomingJSON) queueSyncPush();
+    else lastPushedJSON = incomingJSON;
+  }
+
+  // Asks the server "is there anything newer than what I have?". The cheap
+  // check downloads only the timestamp; the full data is fetched only when
+  // it really changed. Used (a) right after the live channel (re)connects to
+  // catch anything missed, (b) when you come back to the tab/app, and
+  // (c) every few seconds as a safety net in case the live channel is
+  // blocked / not enabled on the table / silently dropped (common on phones).
+  async function pullLatest(force){
+    if(!supabaseClient || pulling || !hasSyncedOnce) return;
+    const cfg = loadSyncConfig();
+    if(!cfg) return;
+    pulling = true;
+    try{
+      if(!force){
+        const head = await supabaseClient.from(SYNC_TABLE).select('updated_at').eq('sync_id', cfg.syncId).maybeSingle();
+        if(head.error || !head.data || !head.data.updated_at) return;
+        if(Date.parse(head.data.updated_at) === lastServerTs) return; // nothing new
+      }
+      const res = await supabaseClient.from(SYNC_TABLE).select('data,updated_at').eq('sync_id', cfg.syncId).maybeSingle();
+      if(res.error || !res.data || !res.data.data) return;
+      applyRemoteData(res.data.data, res.data.updated_at);
+    }catch(e){
+      /* offline / transient — the next tick tries again */
+    }finally{
+      pulling = false;
+    }
+  }
+
+  function scheduleResubscribe(cfg){
+    if(resubTimer) return;
+    resubTimer = setTimeout(() => { resubTimer = null; if(supabaseClient) subscribeRealtime(cfg); }, 2000);
+  }
+
   function subscribeRealtime(cfg){
+    const gen = ++subscribeGen;
     if(syncChannel){
       try{ supabaseClient.removeChannel(syncChannel); }catch(e){ /* ignore */ }
       syncChannel = null;
     }
     syncChannel = supabaseClient
-      .channel('sync-' + cfg.syncId)
+      .channel('sync-' + cfg.syncId + '-' + gen)
       .on('postgres_changes', {
         event: '*', schema: 'public', table: SYNC_TABLE, filter: `sync_id=eq.${cfg.syncId}`
       }, (payload) => {
+        if(gen !== subscribeGen) return;
         const incoming = payload.new && payload.new.data;
         if(!incoming) return;
-        const incomingJSON = stableStringify(incoming);
-        const echoIdx = pendingPushJSONs.indexOf(incomingJSON);
-        if(echoIdx !== -1){
-          // Matches a push THIS device made (whichever one — not
-          // necessarily the latest) that hasn't been echoed back yet.
-          pendingPushJSONs.splice(echoIdx, 1);
-          return;
-        }
-
-        // Merge instead of replace: keep anything this device already has
-        // that the incoming update doesn't know about yet (e.g. an edit
-        // made a split-second earlier that hasn't round-tripped through
-        // Supabase back to us as confirmation).
-        const incomingTs = payload.new.updated_at ? Date.parse(payload.new.updated_at) : Date.now();
-        let localTs = 0;
-        try{ localTs = parseInt(localStorage.getItem(LOCAL_TS_KEY) || '0', 10); }catch(e){ localTs = 0; }
-        const merged = mergeState(state, incoming, localTs > incomingTs);
-
-        isApplyingRemote = true;
-        state = merged;
-        ensureStateShapeFull(state);
-        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ /* best-effort */ }
-        // Re-validate this device's OWN navigation pointers against the new
-        // data (in case a group they were viewing got renamed/removed by
-        // someone else) — but never change which tab/group they're looking
-        // at just because data changed. No tab/page switch happens here.
-        ensureUiStateShape();
-        isApplyingRemote = false;
-        renderAll();
-        setSyncStatus('ok', 'تحديث من جهاز آخر ✓');
-        // If merging pulled in anything the incoming payload didn't have
-        // (our own recent local edit), push the merged superset back so
-        // every other connected device converges on the same full picture.
-        if(stableStringify(state) !== incomingJSON) queueSyncPush();
+        applyRemoteData(incoming, payload.new.updated_at);
       })
-      .subscribe();
+      .subscribe((status) => {
+        if(gen !== subscribeGen) return;
+        if(status === 'SUBSCRIBED'){
+          realtimeOk = true;
+          pullLatest(true);   // catch anything that happened while we were disconnected
+        }else if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED'){
+          realtimeOk = false;
+          scheduleResubscribe(cfg);
+        }
+      });
   }
+
+  // Safety-net poll (only while the tab is visible) + catch-up whenever the
+  // user returns to the page / regains focus / gets internet back.
+  setInterval(() => { if(document.visibilityState === 'visible') pullLatest(false); }, 4000);
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible'){
+      pullLatest(true);
+      if(!realtimeOk && supabaseClient){ const c = loadSyncConfig(); if(c) subscribeRealtime(c); }
+    }
+  });
+  window.addEventListener('focus', () => pullLatest(false));
+  window.addEventListener('online', () => {
+    pullLatest(true);
+    if(supabaseClient){ const c = loadSyncConfig(); if(c) subscribeRealtime(c); }
+  });
 
   window.addEventListener('online', () => {
     // Connection just came back — if we have unsynced local changes, don't
@@ -2042,6 +2184,7 @@
         // on which was edited more recently; nothing is ever dropped just
         // because it only exists on one side.
         const remoteTs = data.updated_at ? Date.parse(data.updated_at) : 0;
+        lastServerTs = remoteTs;
         let localTs = 0;
         try{ localTs = parseInt(localStorage.getItem(LOCAL_TS_KEY) || '0', 10); }catch(e){ localTs = 0; }
 
@@ -2061,6 +2204,7 @@
         // made locally while offline), push it up so the server — and every
         // other device — catches up. Otherwise there's nothing new to send.
         if(mergedJSON !== remoteJSON) pushedOk = await pushToSupabase();
+        else lastPushedJSON = remoteJSON;
       }else{
         pushedOk = await pushToSupabase();
       }
