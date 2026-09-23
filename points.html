@@ -186,6 +186,9 @@
   }
   .item-row:hover{ border-color: var(--text-dim); }
   .item-row.on{ background:var(--gold-soft); border-color:var(--gold); }
+/* previous days are view-only: rows look locked and ignore taps */
+.item-row.locked{ cursor:not-allowed; pointer-events:none; opacity:.78; filter:grayscale(.25); }
+.item-row.locked:hover{ border-color:inherit; }
   .item-name{ font-size:15px; font-weight:500; }
   .item-points{ font-size:12.5px; color:var(--text-dim); font-weight:700; }
   .item-row.on .item-points{ color:var(--gold); }
@@ -2550,6 +2553,7 @@
     const idx = group.students.findIndex(s=>s.id===activeStudentId);
     const student = group.students[idx];
     const staging = isStagingDay(group, selectedDay);
+    const readOnly = !staging;   // any day other than the current one is view-only
     const staged = getDayList(group, selectedDay, student.id);
     const markedCount = group.students.filter(s => getDayList(group, selectedDay, s.id).length > 0).length;
 
@@ -2582,7 +2586,7 @@
       itemsHtml = group.items.length ? group.items.map(it => {
         const on = staged.includes(it.id);
         const neg = it.points < 0;
-        return `<div class="item-row ${on?'on':''} ${neg?'negative':''}" data-item="${it.id}">
+        return `<div class="item-row ${on?'on':''} ${neg?'negative':''} ${readOnly?'locked':''}" data-item="${it.id}" ${readOnly?'aria-disabled="true"':''}>
           <div class="check-circle">${on?'✓':''}</div>
           <div style="flex:1; padding:0 12px;"><div class="item-name">${escapeHtml(it.name)}${neg?'<span class="type-tag neg">خصم</span>':''}</div></div>
           <div class="item-points">${it.points>0?'+':''}${it.points} نقطة</div>
@@ -2593,7 +2597,7 @@
     html += `
       <div class="card">
         <p class="section-title">التنقل بين الأيام</p>
-        <p class="section-hint">اضغط على أي يوم سابق لمراجعته أو لتعديل ما فاتك تسجيله فيه. التعديلات على الأيام السابقة تُحفظ فور الضغط مباشرة.</p>
+        <p class="section-hint">اضغط على أي يوم سابق لمراجعة ما تم تسجيله فيه. الأيام السابقة للعرض فقط ولا يمكن تعديلها.</p>
         <div class="day-row">${dayChipsHtml}</div>
       </div>
 
@@ -2628,7 +2632,7 @@
           <button class="btn btn-ghost" id="backTodayBtn">${group.currentDay>16?'العودة لآخر يوم':'العودة لليوم الحالي'}</button>
         </div>` : `
         <div class="submit-bar">
-          <span class="submit-note">وضع تعديل يوم سابق — كل تغيير يُحفظ تلقائيًا فورًا، ويُحدَّث الترتيب مباشرة</span>
+          <span class="submit-note">🔒 يوم سابق — للعرض فقط، لا يمكن تعديله</span>
           <button class="btn btn-ghost" id="backTodayBtn">${group.currentDay>16?'العودة لآخر يوم':'العودة لليوم الحالي'}</button>
         </div>`}
         <p class="status-line" id="evalStatus"></p>
@@ -2652,6 +2656,7 @@
     });
     root.querySelectorAll('[data-item]').forEach(row=>{
       row.addEventListener('click', ()=>{
+        if(readOnly) return;   // previous days: view only
         const itemId = row.getAttribute('data-item');
         const item = group.items.find(it=>it.id===itemId);
         const list = getDayList(group, selectedDay, student.id).slice();
