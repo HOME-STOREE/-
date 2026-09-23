@@ -555,6 +555,15 @@ create trigger trg_cards_default_sort_order
     color: color-mix(in srgb, var(--accent) 78%, var(--text));
     vertical-align: middle;
   }
+  .user-pill {
+    display: inline-block;
+    font-size: .68rem; font-weight: 700; line-height: 1;
+    padding: .28rem .6rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    color: color-mix(in srgb, var(--text) 65%, transparent);
+    vertical-align: middle;
+  }
 
   /* ---- الشريط العلوي الزجاجي ---- */
   .glass-header {
@@ -1252,8 +1261,11 @@ create trigger trg_cards_default_sort_order
         </div>
         <div>
           <label class="text-sm font-medium mb-1.5 block">كلمة المرور</label>
-          <input type="password" id="login-password" required autocomplete="current-password"
-            class="input-field w-full px-3.5 py-2.5 text-sm" placeholder="••••••••">
+          <div class="pw-wrap">
+            <input type="password" id="login-password" required autocomplete="current-password"
+              class="input-field w-full px-3.5 py-2.5 text-sm" placeholder="••••••••">
+            <button type="button" class="pw-toggle" data-toggle-pw="login-password" aria-label="إظهار كلمة المرور">👁</button>
+          </div>
         </div>
 
         <div id="login-error" class="hidden text-sm rounded-xl px-3.5 py-2.5" style="background:color-mix(in srgb, var(--danger) 12%, transparent); color:var(--danger); border:1px solid color-mix(in srgb, var(--danger) 25%, transparent);"></div>
@@ -1282,7 +1294,7 @@ create trigger trg_cards_default_sort_order
       </div>
 
       <div class="flex items-center gap-2">
-        <span id="admin-badge" class="hidden admin-pill">مدير</span>
+        <span id="admin-badge" class="hidden">مدير</span>
 
         <button id="account-btn" class="btn-ghost w-10 h-10 flex items-center justify-center text-sm" title="حسابي — تغيير اسم المستخدم وكلمة المرور" aria-label="حسابي">
           <span aria-hidden="true">👤</span>
@@ -1501,12 +1513,13 @@ create trigger trg_cards_default_sort_order
 
       <div class="form-sep"></div>
 
-      <div>
-        <label for="account-current-password" class="text-sm font-medium mb-1.5 block">كلمة المرور الحالية *</label>
+      <div id="account-current-password-wrap">
+        <label for="account-current-password" id="account-current-password-label" class="text-sm font-medium mb-1.5 block">كلمة المرور الحالية *</label>
         <div class="pw-wrap">
           <input id="account-current-password" type="password" required autocomplete="current-password" class="input-field w-full px-3.5 py-2.5 text-sm" placeholder="مطلوبة لتأكيد هويتك">
           <button type="button" class="pw-toggle" data-toggle-pw="account-current-password" aria-label="إظهار كلمة المرور">👁</button>
         </div>
+        <p id="account-current-password-hint" class="muted text-[11px] mt-1 hidden">بصفتك مديراً، يمكنك تغيير كلمة المرور مباشرة بدون إدخال القديمة.</p>
       </div>
 
       <div id="account-error" class="hidden form-error" role="alert"></div>
@@ -1818,6 +1831,7 @@ async function init() {
 function showLogin() {
   el('view-login').classList.remove('hidden');
   el('app-shell').classList.add('hidden');
+  resetPwToggles();
 }
 function showApp() {
   el('view-login').classList.add('hidden');
@@ -1872,7 +1886,11 @@ async function loadProfileAndData() {
   state.profile = profile;
 
   el('header-user-name').textContent = profile.full_name || profile.username || profile.email || '';
-  el('admin-badge').classList.toggle('hidden', !profile.is_admin);
+  const roleBadge = el('admin-badge');
+  roleBadge.textContent = profile.is_admin ? 'مدير' : 'مستخدم';
+  roleBadge.classList.toggle('admin-pill', profile.is_admin);
+  roleBadge.classList.toggle('user-pill', !profile.is_admin);
+  roleBadge.classList.remove('hidden');
   el('admin-tabs').classList.toggle('hidden', !profile.is_admin);
 
   if (profile.is_admin) {
@@ -2213,7 +2231,7 @@ function renderPermissionsMatrix(filter = '') {
       <div class="flex items-center gap-3">
         <div class="avatar${profile.is_admin ? ' is-admin' : ''}" aria-hidden="true">${escapeHtml(initialOf(displayName))}</div>
         <div class="min-w-0">
-          <div class="font-bold leading-tight">${escapeHtml(displayName)}${profile.is_admin ? ' <span class="admin-pill">مدير</span>' : ''}</div>
+          <div class="font-bold leading-tight">${escapeHtml(displayName)}${profile.is_admin ? ' <span class="admin-pill">مدير</span>' : ' <span class="user-pill">مستخدم</span>'}</div>
           <div class="muted text-xs">${escapeHtml(profile.username ? '@' + profile.username : (profile.email || ''))}</div>
         </div>
       </div>`;
@@ -2655,7 +2673,7 @@ function renderUsersList() {
         <div class="list-row-main">
           <div class="avatar${profile.is_admin ? ' is-admin' : ''}" style="width:2.9rem; height:2.9rem;" aria-hidden="true">${escapeHtml(initialOf(displayName))}</div>
           <div class="min-w-0 flex-1">
-            <h4 class="font-bold text-sm truncate">${escapeHtml(displayName)}${profile.is_admin ? ' <span class="admin-pill">مدير</span>' : ''}</h4>
+            <h4 class="font-bold text-sm truncate">${escapeHtml(displayName)}${profile.is_admin ? ' <span class="admin-pill">مدير</span>' : ' <span class="user-pill">مستخدم</span>'}</h4>
             <p class="muted text-xs truncate">${escapeHtml(profile.username ? '@' + profile.username : (profile.email || ''))}</p>
             <p class="muted text-[11px] mt-0.5">${permCount} صلاحية نظام</p>
           </div>
@@ -2816,6 +2834,11 @@ function openAccountModal() {
   el('account-username').value = state.profile.username || '';
   clearFormError('account-error');
   resetPwToggles();
+  // المدير يستطيع تغيير كلمة مروره مباشرة بدون تأكيد القديمة (تماماً كما يفعل مع الموظفين)
+  const isAdmin = Boolean(state.profile.is_admin);
+  el('account-current-password').required = !isAdmin;
+  el('account-current-password-label').textContent = isAdmin ? 'كلمة المرور الحالية (اختياري للمدير)' : 'كلمة المرور الحالية *';
+  el('account-current-password-hint').classList.toggle('hidden', !isAdmin);
   openModal('account-modal');
   setTimeout(() => el('account-username').focus(), 50);
 }
@@ -2844,7 +2867,11 @@ el('account-form').addEventListener('submit', async (e) => {
   if (wantsPassword) {
     if (newPw.length < 6) return showFormError('account-error', 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل.');
     if (newPw !== confirmPw) return showFormError('account-error', 'تأكيد كلمة المرور غير مطابق.');
-    if (newPw === currentPw) return showFormError('account-error', 'كلمة المرور الجديدة يجب أن تختلف عن الحالية.');
+    if (currentPw && newPw === currentPw) return showFormError('account-error', 'كلمة المرور الجديدة يجب أن تختلف عن الحالية.');
+  }
+  const isAdmin = Boolean(state.profile.is_admin);
+  if (!isAdmin && wantsPassword && !currentPw) {
+    return showFormError('account-error', 'أدخل كلمة المرور الحالية لتأكيد هويتك.');
   }
 
   const btn = el('account-submit');
@@ -2854,10 +2881,14 @@ el('account-form').addEventListener('submit', async (e) => {
 
   try {
     // 1) تأكيد كلمة المرور الحالية (ويجدّد الجلسة أيضاً، وهذا ما يطلبه Supabase لتحديث كلمة المرور)
-    const { error: verifyErr } = await sb.auth.signInWithPassword({ email: oldEmail, password: currentPw });
-    if (verifyErr) {
-      showFormError('account-error', 'كلمة المرور الحالية غير صحيحة.');
-      return;
+    // المدير معفى من هذه الخطوة: يستطيع تغيير كلمة مروره مباشرة دون معرفة القديمة،
+    // تماماً كصلاحيته في تغيير كلمات مرور الموظفين.
+    if (!isAdmin || currentPw) {
+      const { error: verifyErr } = await sb.auth.signInWithPassword({ email: oldEmail, password: currentPw });
+      if (verifyErr) {
+        showFormError('account-error', isAdmin ? 'كلمة المرور الحالية غير صحيحة — اتركها فارغة للتغيير المباشر.' : 'كلمة المرور الحالية غير صحيحة.');
+        return;
+      }
     }
 
     // 2) تحديث بيانات الدخول في Supabase Auth دفعة واحدة
