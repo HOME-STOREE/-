@@ -1930,7 +1930,7 @@ function DailyLog() {
                 setPending({ id: reciter.id, name: reciter.name });
                 return;
             }
-            if (pages === '' || Number(pages) <= 0)
+            if (slot !== 'fri' && (pages === '' || Number(pages) <= 0))
                 return toast.warn('أدخل عدد الصفحات', 'حقل «عدد الصفحات» مطلوب عند تسجيل قراءة.');
         }
         else {
@@ -2095,8 +2095,8 @@ function DailyLog() {
                         reciter.confirmedFor && React.createElement("span", { className: "badge-warn" }, "\u0627\u0633\u062A\u062B\u0646\u0627\u0621")))),
                 React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0633\u0648\u0631\u0629 / \u0627\u0644\u0645\u0642\u0637\u0639 \u0627\u0644\u0645\u0642\u0631\u0648\u0621 (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)" },
                     React.createElement("input", { className: "input", value: surah, onChange: (e) => setSurah(e.target.value), placeholder: "\u0645\u062B\u0627\u0644: \u0633\u0648\u0631\u0629 \u0627\u0644\u0643\u0647\u0641" })),
-                React.createElement(ui_jsx_1.Field, { label: "\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A *" },
-                    React.createElement("input", { type: "number", min: "1", required: true, className: "input", value: pages, onChange: (e) => setPages(e.target.value) })),
+                React.createElement(ui_jsx_1.Field, { label: slot === 'fri' ? "\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)" : "\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A *" },
+                    React.createElement("input", { type: "number", min: slot === 'fri' ? "0" : "1", required: slot !== 'fri', className: "input", value: pages, onChange: (e) => setPages(e.target.value) })),
                 React.createElement(ui_jsx_1.Field, { label: "\u0645\u0644\u0627\u062D\u0638\u0627\u062A (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)", className: "md:col-span-2" },
                     React.createElement("input", { className: "input", value: notes, onChange: (e) => setNotes(e.target.value) })))) : (React.createElement("div", { className: "grid gap-4 md:grid-cols-2" },
                 React.createElement(ui_jsx_1.Field, { label: "\u0633\u0628\u0628 \u0639\u062F\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629", className: reasonCode === 'other' ? '' : 'md:col-span-2' },
