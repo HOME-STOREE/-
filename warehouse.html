@@ -53,10 +53,85 @@
 </style>
 </head>
 <body>
-<a href="index.html" id="back-to-gateway-btn" style="position:fixed; top:14px; left:130px; z-index:99999; display:inline-flex; align-items:center; gap:6px; padding:8px 14px; background:rgba(43,59,71,0.92); color:#fff; border-radius:999px; font-family:system-ui,-apple-system,'Segoe UI',Tajawal,sans-serif; font-size:13px; font-weight:600; text-decoration:none; box-shadow:0 4px 14px rgba(0,0,0,0.25); backdrop-filter:blur(6px);" onmouseover="this.style.background='rgba(43,59,71,1)'" onmouseout="this.style.background='rgba(43,59,71,0.92)'">
+<a href="index.html" id="back-to-gateway-btn" style="position:fixed; top:14px; left:130px; z-index:99999; display:inline-flex; align-items:center; gap:6px; padding:8px 14px; background:rgba(43,59,71,0.92); color:#fff; border-radius:999px; font-family:system-ui,-apple-system,'Segoe UI',Tajawal,sans-serif; font-size:13px; font-weight:600; text-decoration:none; box-shadow:0 4px 14px rgba(0,0,0,0.25); backdrop-filter:blur(6px); touch-action:none; user-select:none;" onmouseover="this.style.background='rgba(43,59,71,1)'" onmouseout="this.style.background='rgba(43,59,71,0.92)'">
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>
   العودة إلى الصفحة الرئيسية
 </a>
+<script>
+(function(){
+  // زر "العودة للصفحة الرئيسية" أصبح قابلاً للسحب — لو كان يغطّي شيئاً في
+  // الصفحة تقدر تمسكه وتحرّكه لأي مكان، وموضعه الجديد يُحفظ ويبقى محفوظاً
+  // حتى بعد إغلاق الصفحة وفتحها من جديد. النقر العادي (بدون سحب) يبقى
+  // يفتح الصفحة الرئيسية كالمعتاد.
+  var btn = document.getElementById('back-to-gateway-btn');
+  if (!btn) return;
+  var POS_KEY = 'warehouseBackBtnPos';
+  var DRAG_THRESHOLD = 6; // بكسل — أقل من كذا يُعتبر نقرة وليس سحباً
+
+  function clamp(left, top) {
+    var w = btn.offsetWidth, h = btn.offsetHeight;
+    var maxLeft = Math.max(0, window.innerWidth - w - 4);
+    var maxTop = Math.max(0, window.innerHeight - h - 4);
+    return { left: Math.min(Math.max(4, left), maxLeft), top: Math.min(Math.max(4, top), maxTop) };
+  }
+  function applyPos(left, top) {
+    var p = clamp(left, top);
+    btn.style.left = p.left + 'px';
+    btn.style.top = p.top + 'px';
+  }
+
+  // استرجاع آخر موضع محفوظ (إن وجد)
+  try {
+    var saved = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
+    if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
+      applyPos(saved.left, saved.top);
+    }
+  } catch (e) { /* تجاهل */ }
+  window.addEventListener('resize', function () {
+    var r = btn.getBoundingClientRect();
+    applyPos(r.left, r.top);
+  });
+
+  var dragging = false, moved = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+
+  btn.addEventListener('pointerdown', function (e) {
+    if (e.button !== undefined && e.button !== 0) return; // زر الفأرة الأيسر / اللمس فقط
+    dragging = true;
+    moved = false;
+    var r = btn.getBoundingClientRect();
+    startX = e.clientX; startY = e.clientY;
+    startLeft = r.left; startTop = r.top;
+    try { btn.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  });
+
+  btn.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    var dx = e.clientX - startX, dy = e.clientY - startY;
+    if (!moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) moved = true;
+    if (moved) {
+      e.preventDefault();
+      applyPos(startLeft + dx, startTop + dy);
+    }
+  });
+
+  function endDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+  }
+  btn.addEventListener('pointerup', function (e) {
+    endDrag(e);
+    if (moved) {
+      try { localStorage.setItem(POS_KEY, JSON.stringify({ left: parseFloat(btn.style.left), top: parseFloat(btn.style.top) })); } catch (err) { /* ignore */ }
+    }
+  });
+  btn.addEventListener('pointercancel', endDrag);
+
+  // لو كانت هذي حركة سحب فعلية، نمنع فتح الرابط بعدها مباشرة
+  btn.addEventListener('click', function (e) {
+    if (moved) { e.preventDefault(); moved = false; }
+  });
+})();
+</script>
 <div id="root"></div>
 
 <!-- طبقة تخزين سحابية: Supabase (Postgres + Realtime عبر postgres_changes) -->
@@ -2038,7 +2113,7 @@ function ItemsPage({ data, setData, notify, readOnly, onPrint, systemNotify, cur
           <div className="inv-card-grid">
             {filtered.map((it) => (
               <div className={`inv-card ${getCardTheme(it, data.itemGroups) ? `inv-card-${getCardTheme(it, data.itemGroups)}` : ""}`} key={it.code}>
-                {it.image && <img className="inv-card-photo" src={it.image} alt={it.name} />}
+                {it.image && <ZoomableImage className="inv-card-photo" src={it.image} alt={it.name} />}
                 <div className="inv-card-head">
                   <span className="cell-strong">
                     {it.emoji ? `${it.emoji} ` : ""}{it.name}
@@ -2075,7 +2150,7 @@ function ItemsPage({ data, setData, notify, readOnly, onPrint, systemNotify, cur
                   <input type="checkbox" checked={selectedCodes.has(it.code)} onChange={() => toggleSelect(it.code)} />
                   <div className="quick-log-card-info">
                     <div className="cell-strong">
-                      {it.image && <img className="row-thumb" src={it.image} alt={it.name} />}
+                      {it.image && <ZoomableImage className="row-thumb" src={it.image} alt={it.name} />}
                       {it.emoji ? `${it.emoji} ` : ""}{it.name}
                       {it.isContainer && <span className="box-badge">📦 صندوق</span>}
                     </div>
@@ -2161,7 +2236,7 @@ function ItemsPage({ data, setData, notify, readOnly, onPrint, systemNotify, cur
                     <td className="cell-mono">{idx + 1}</td>
                     <td><CodeTag code={it.code} /></td>
                     <td className="cell-strong">
-                      {it.image && <img className="row-thumb" src={it.image} alt={it.name} />}
+                      {it.image && <ZoomableImage className="row-thumb" src={it.image} alt={it.name} />}
                       {it.emoji ? `${it.emoji} ` : ""}{it.name}
                       {it.isContainer && <span className="box-badge">📦 صندوق</span>}
                     </td>
@@ -2386,7 +2461,7 @@ function ImageUploadField({ value, onChange }) {
     <div className="image-upload-field">
       {value ? (
         <div className="image-upload-preview">
-          <img src={value} alt="صورة" />
+          <ZoomableImage src={value} alt="صورة" />
           <div className="image-upload-preview-actions">
             <button type="button" className="btn-ghost" onClick={() => galleryRef.current?.click()}>
               <FolderOpen size={14} /> رفع صورة
@@ -2458,10 +2533,26 @@ function ItemForm({ item, itemGroups, branches, allItems, barcodes, locations, o
     ...item,
   });
   // الأصناف المؤهلة تكون "صندوق" يوضع بداخله هذا الصنف: أي صنف عليه علامة isContainer
-  // باستثناء الصنف نفسه (لا يقدر يكون بداخل نفسه) وأي صندوق أصلاً بداخل هذا الصنف (يمنع الحلقات)
-  const containerOptions = (allItems || []).filter(
-    (i) => i.isContainer && i.code !== form.code && i.parentCode !== form.code
-  );
+  // باستثناء الصنف نفسه (لا يقدر يكون بداخل نفسه) وأي صندوق أصلاً بداخل هذا الصنف (يمنع الحلقات).
+  // (كانت المقارنة القديمة تقارن دائماً بـ form.code حتى لو كان فارغاً "" عند
+  // الإضافة، فتستبعد بالخطأ كل صندوق غير موضوع داخل صندوق آخر لأن parentCode
+  // لتلك الصناديق يساوي "" أيضاً — لذا الشرطان يُطبَّقان فقط لو للصنف كود فعلي)
+  // كذلك نعرض فقط صناديق نفس "القسم" المختار أعلاه، ولو ما اختار قسماً بعد
+  // نعرض كل الصناديق من كل الأقسام حتى يقدر يختار القسم لاحقاً بلا مشكلة.
+  const containerOptions = (allItems || []).filter((i) => {
+    if (!i.isContainer) return false;
+    if (form.code && i.code === form.code) return false;
+    if (form.code && i.parentCode === form.code) return false;
+    if (form.branch && i.branch !== form.branch) return false;
+    return true;
+  });
+  // لو غيّر القسم بعد ما كان قد اختار صندوقاً من قسم آخر، نلغي اختياره
+  // القديم تلقائياً حتى لا يبقى الصنف مرتبطاً بصندوق من قسم مختلف بصمت
+  useEffect(() => {
+    if (form.parentCode && !containerOptions.some((c) => c.code === form.parentCode)) {
+      setForm((f) => ({ ...f, parentCode: "" }));
+    }
+  }, [form.branch]);
   const [cameraOpen, setCameraOpen] = useState(false);
   const codeRef = React.useRef(null);
   const nameRef = React.useRef(null);
@@ -2587,6 +2678,9 @@ function ItemForm({ item, itemGroups, branches, allItems, barcodes, locations, o
             <option value="">بدون — غير موضوع داخل صندوق</option>
             {containerOptions.map((c) => <option key={c.code} value={c.code}>{c.emoji ? `${c.emoji} ` : ""}{c.name}</option>)}
           </select>
+          {form.branch && containerOptions.length === 0 && (
+            <div className="field-hint">لا توجد صناديق في هذا القسم بعد. أنشئ صندوقاً أولاً بتفعيل «هذا الصنف صندوق» ضمن نفس القسم.</div>
+          )}
         </Field>
       )}
       <Field label="ملاحظات">
@@ -3811,7 +3905,7 @@ function InventoryPage({ inventory, itemGroups, branches, locations: masterLocat
           <div className="inv-card-grid">
             {filtered.map((i) => (
               <div className={`inv-card ${getCardTheme(i, itemGroups) ? `inv-card-${getCardTheme(i, itemGroups)}` : ""}`} key={i.code} id={`inv-item-${i.code}`}>
-                {i.image && <img className="inv-card-photo" src={i.image} alt={i.name} />}
+                {i.image && <ZoomableImage className="inv-card-photo" src={i.image} alt={i.name} />}
                 <div className="inv-card-head">
                   <span className="cell-strong">
                     {i.emoji ? `${i.emoji} ` : ""}{i.name}
@@ -3854,7 +3948,7 @@ function InventoryPage({ inventory, itemGroups, branches, locations: masterLocat
                   <tr key={i.code} id={`inv-item-${i.code}`}>
                     <td><CodeTag code={i.code} /></td>
                     <td className="cell-strong">
-                      {i.image && <img className="row-thumb" src={i.image} alt={i.name} />}
+                      {i.image && <ZoomableImage className="row-thumb" src={i.image} alt={i.name} />}
                       {i.emoji ? `${i.emoji} ` : ""}{i.name}
                       {i.isContainer && <span className="box-badge">📦 صندوق</span>}
                       {i.parentCode && <span className="box-badge">↳ داخل: {itemName(i.parentCode) || "—"}</span>}
@@ -9280,6 +9374,27 @@ function FontStyles() {
       .inv-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
       .inv-card-photo { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 2px; }
       .row-thumb { width: 26px; height: 26px; object-fit: cover; border-radius: 5px; vertical-align: middle; margin-left: 6px; }
+      .image-lightbox-overlay {
+        position: fixed; inset: 0; z-index: 99999;
+        background: rgba(0,0,0,0.85);
+        display: flex; align-items: center; justify-content: center;
+        padding: 24px; cursor: zoom-out;
+        animation: lightbox-fade-in .15s ease-out;
+      }
+      @keyframes lightbox-fade-in { from { opacity: 0; } to { opacity: 1; } }
+      .image-lightbox-img {
+        max-width: 92vw; max-height: 92vh; object-fit: contain;
+        border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        cursor: default;
+      }
+      .image-lightbox-close {
+        position: fixed; top: 16px; left: 16px; z-index: 100000;
+        width: 40px; height: 40px; border-radius: 50%; border: none;
+        background: rgba(255,255,255,0.15); color: #fff;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+      }
+      .image-lightbox-close:hover { background: rgba(255,255,255,0.3); }
       .inv-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
       .inv-card-head .cell-strong { font-size: 15px; }
       .inv-card-loc { font-size: 12.5px; color: var(--ink-soft); display: flex; align-items: center; gap: 4px; }
@@ -9794,6 +9909,50 @@ function FontStyles() {
   );
 }
 
+// ---------------------------------------------------------------
+// معاينة الصورة بالحجم الكامل: أي <img> في الموقع يمكن أن يفتح هذه
+// النافذة عند الضغط عليه، بدلاً من أن تبقى الصورة بحجمها الصغير الثابت.
+// نستخدم نمط pub/sub بسيط (بدل تمرير الحالة عبر كل مكوّن) حتى يقدر أي
+// عنصر صورة في أي مكان بالموقع يفتحها بسطر واحد فقط.
+let _openLightboxImpl = null;
+function openLightbox(src) {
+  if (src && _openLightboxImpl) _openLightboxImpl(src);
+}
+function ZoomableImage({ src, alt, className }) {
+  if (!src) return null;
+  return (
+    <img
+      className={className}
+      src={src}
+      alt={alt}
+      style={{ cursor: "zoom-in" }}
+      onClick={(e) => { e.stopPropagation(); openLightbox(src); }}
+    />
+  );
+}
+function ImageLightbox() {
+  const [img, setImg] = useState(null);
+  useEffect(() => {
+    _openLightboxImpl = setImg;
+    return () => { _openLightboxImpl = null; };
+  }, []);
+  useEffect(() => {
+    if (!img) return;
+    const onKey = (e) => { if (e.key === "Escape") setImg(null); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [img]);
+  if (!img) return null;
+  return (
+    <div className="image-lightbox-overlay" onClick={() => setImg(null)}>
+      <button type="button" className="image-lightbox-close" onClick={() => setImg(null)} aria-label="إغلاق">
+        <X size={22} />
+      </button>
+      <img className="image-lightbox-img" src={img} alt="عرض الصورة بالحجم الكامل" onClick={(e) => e.stopPropagation()} />
+    </div>
+  );
+}
+
 function RootRouter() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("scanner") === "1") {
@@ -9802,7 +9961,7 @@ function RootRouter() {
   if (params.get("photo") === "1") {
     return <PhotoCaptureMobilePage initialCode={params.get("code") || ""} initialMode={params.get("mode") || "camera"} />;
   }
-  return <App />;
+  return (<><App /><ImageLightbox /></>);
 }
 
 const root = createRoot(document.getElementById("root"));
