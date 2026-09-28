@@ -1,4 +1,4 @@
-const CACHE_NAME = "gateway-cache-v4"; // 🔴 غيّر الرقم (v4, v5, ...) كل ما تعمل تحديث مهم مستقبلاً
+const CACHE_NAME = "gateway-cache-v5"; // 🔴 غيّر الرقم (v4, v5, ...) كل ما تعمل تحديث مهم مستقبلاً
 const STATIC_ASSETS = [
   "./manifest.json",
   "./icon-192.png",
@@ -65,6 +65,40 @@ self.addEventListener("fetch", (event) => {
         })
         .catch(() => cached);
       return cached || fetchPromise;
+    })
+  );
+});
+
+
+// ===== Web Push: استقبال وعرض التنبيهات حتى لو الموقع مقفل =====
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) {
+    data = { body: event.data ? event.data.text() : "" };
+  }
+  const title = data.title || "المستودع";
+  const options = {
+    body: data.body || "",
+    tag: data.tag || "warehouse",
+    icon: "./icon-192.png",
+    badge: "./icon-192.png",
+    dir: "rtl",
+    lang: "ar",
+    renotify: true,
+    data: { url: "./" },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "./";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if ("focus" in c) return c.focus();
+      }
+      return self.clients.openWindow(target);
     })
   );
 });
