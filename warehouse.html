@@ -896,7 +896,7 @@ function computeInventory(data) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  NOTIFICATIONS (تنبيهات رئيس الموقع)                                */
+/*  NOTIFICATIONS (تنبيهات رئيس الموقع، وأي مستخدم يُمنح صلاحية "الإشعارات")   */
 /*  نوعان يعملان معاً:                                                  */
 /*  1) تنبيه محلي فوري (Notification API) — يظهر فقط أثناء فتح الموقع   */
 /*     في هذا المتصفح تحديداً (تبويب مفتوح، بالخلفية أو الأمامية).      */
@@ -966,8 +966,9 @@ async function getPushSubscriptionState() {
 }
 
 // تفعيل التنبيهات اللحظية على هذا الجهاز: يطلب إذن الإشعارات، يسجّل Service Worker،
-// يشترك في Push، ثم يحفظ الاشتراك في Supabase مربوطاً بمعرّف رئيس الموقع الحالي.
-async function subscribeToPush(ownerId) {
+// يشترك في Push، ثم يحفظ الاشتراك في Supabase مربوطاً بمعرّف المستلم الحالي
+// (رئيس الموقع أو مستخدم صُرّح له بصلاحية "الإشعارات").
+async function subscribeToPush(recipientId) {
   if (!pushIsSupported()) throw new Error("هذا المتصفح/الجهاز لا يدعم التنبيهات اللحظية");
   const permission = await Notification.requestPermission();
   if (permission !== "granted") throw new Error("لم يتم السماح بالتنبيهات من إعدادات المتصفح");
@@ -992,7 +993,7 @@ async function subscribeToPush(ownerId) {
   const json = sub.toJSON();
   const { error } = await window.supabase.from("push_subscriptions").upsert(
     {
-      owner_id: String(ownerId || "unknown"),
+      owner_id: String(recipientId || "unknown"),
       endpoint: json.endpoint,
       p256dh: json.keys.p256dh,
       auth: json.keys.auth,
@@ -1017,29 +1018,30 @@ async function unsubscribeFromPush() {
   await sub.unsubscribe();
 }
 
-// يستدعي Supabase Edge Function (send-push) لإرسال إشعار فعلي لكل أجهزة رئيس
-// الموقع المشتركة. لا يعطّل الواجهة أبداً حتى لو فشل الإرسال (fire-and-forget).
-async function sendPushToOwner(ownerId, title, body, tag) {
-  if (!ownerId || !window.supabase) return;
+// يستدعي Supabase Edge Function (send-push) لإرسال إشعار فعلي لكل أجهزة هذا
+// المستلم (رئيس موقع أو مستخدم مصرّح له) المشتركة. لا يعطّل الواجهة أبداً حتى
+// لو فشل الإرسال (fire-and-forget).
+async function sendPushToOwner(recipientId, title, body, tag) {
+  if (!recipientId || !window.supabase) return;
   try {
+    // اسم الحقل "ownerId" هنا هو ما يتوقعه Edge Function المنشور حالياً على
+    // Supabase (send-push) — أبقيناه كما هو حتى لو صار يحمل أحياناً معرّف
+    // مستخدم بدل رئيس موقع، تفادياً لأي تعديل على الطرف الآخر.
     await window.supabase.functions.invoke("send-push", {
-      body: { ownerId: String(ownerId), title, body, tag },
+      body: { ownerId: String(recipientId), title, body, tag },
     });
   } catch {
     // تجاهل: فشل إرسال الـ Push الحقيقي لا يجب أن يوقف بقية التطبيق أبداً
   }
 }
 
-// نقطة دخول موحّدة يستدعيها أي جزء من الموقع عند وقوع حدث؛ تقرر بنفسها
-// هل ترسل تنبيه نظام فعلياً حسب صلاحية المستخدم الحالي وإعداداته.
-// level الحدث: "shortage" (نقص/نفاد) يظهر دائماً إن لم تكن التنبيهات موقوفة،
-// أما "all" (إضافة/حركة عادية) فيظهر فقط إذا اختار رئيس الموقع "كل التنبيهات".
-function notifySystemEvent({ isOwner, ownerId, settings, eventLevel, title, body, tag }) {
-  if (!isOwner) return;
-  if (settings.level === "off") return;
-  if (eventLevel === "all" && settings.level !== "all") return;
-  fireSystemNotification(title, body, tag);       // تنبيه محلي فوري لهذا التبويب
-  sendPushToOwner(ownerId, title, body, tag);      // تنبيه Push حقيقي لكل أجهزة رئيس الموقع
+// يرسل تنبيهاً فعلياً (محلي + Push) لمستلم محدد. قرار "هل يستحق يستلمه
+// أصلاً" يُحسم قبل استدعاء هذه الدالة (في systemNotify داخل App)، لأن
+// معيار القرار يختلف بين رئيس الموقع (مستوى واحد يختاره بنفسه) والمستخدم
+// (فئات إشعارات يحددها له رئيس الموقع).
+function notifySystemEvent({ recipientId, title, body, tag }) {
+  fireSystemNotification(title, body, tag);      // تنبيه محلي فوري لهذا التبويب
+  sendPushToOwner(recipientId, title, body, tag); // تنبيه Push حقيقي لكل أجهزة هذا المستلم تحديداً
 }
 
 /* ------------------------------------------------------------------ */
@@ -4619,7 +4621,18 @@ const NAV = [
 // وتُمنع بنفس طريقة صفحات NAV — مثل ربط الجوال كقارئ باركود لاسلكي.
 const EXTRA_PERMISSIONS = [
   { key: "scannerPairing", label: "ربط الجوال (قارئ باركود لاسلكي)", icon: Smartphone },
+  { key: "notifications", label: "الإشعارات (تنبيه بأي نشاط في الموقع)", icon: Bell },
 ];
+
+// أنواع الإشعارات التي يحددها رئيس الموقع لكل مستخدم على حدة (مستقلة عن
+// صلاحية "الإشعارات" نفسها التي تحدد فقط هل يستلم أي شيء أصلاً). تُحفظ في
+// user.notifyCategories. "all" يشمل كل شيء بما فيه "low" و"empty" معاً.
+const NOTIFY_CATEGORY_OPTIONS = [
+  { key: "low", label: "تحذير نقص (وصول الصنف لحد الأدنى)" },
+  { key: "empty", label: "نفاذ صنف بالكامل" },
+  { key: "all", label: "كل الإشعارات (يشمل أي صنف جديد أو حركة دخول/خروج أيضاً)" },
+];
+const DEFAULT_NOTIFY_CATEGORIES = ["low", "empty"];
 
 // الصفحات التي يقدر رئيس الموقع يتيحها أو يمنعها لكل مستخدم (متحكم) على حدة.
 // لوحة التحكم دائماً متاحة للجميع كصفحة أساسية، وباقي صفحات الإدارة
@@ -4864,8 +4877,8 @@ function UsersPage({ data, setData, notify }) {
   const [modal, setModal] = useState(null); // { mode, user }
   const [confirmDelete, setConfirmDelete] = useState(null);
 
-  const openAdd = () => setModal({ mode: "add", user: { username: "", name: "", password: randomPassword(), canEdit: true, temp: false, durationKey: "1d", permissions: GRANTABLE_PAGES.map((p) => p.key) } });
-  const openEdit = (u) => setModal({ mode: "edit", user: { ...u, temp: !!u.tempUntil, durationKey: "1d", permissions: u.permissions || GRANTABLE_PAGES.map((p) => p.key) } });
+  const openAdd = () => setModal({ mode: "add", user: { username: "", name: "", password: randomPassword(), canEdit: true, temp: false, durationKey: "1d", permissions: GRANTABLE_PAGES.map((p) => p.key), notifyCategories: DEFAULT_NOTIFY_CATEGORIES } });
+  const openEdit = (u) => setModal({ mode: "edit", user: { ...u, temp: !!u.tempUntil, durationKey: "1d", permissions: u.permissions || GRANTABLE_PAGES.map((p) => p.key), notifyCategories: u.notifyCategories || DEFAULT_NOTIFY_CATEGORIES } });
 
   const save = (form) => {
     const username = form.username.trim();
@@ -4888,6 +4901,9 @@ function UsersPage({ data, setData, notify }) {
       canEdit: !!form.canEdit,
       restrictedBranch: form.restrictedBranch || "",
       permissions: GRANTABLE_PAGES.map((p) => p.key).filter((k) => (form.permissions || []).includes(k)),
+      // أنواع الإشعارات المختارة لهذا المستخدم بالذات (تُحفظ حتى لو الصلاحية
+      // نفسها غير مفعّلة حالياً، حتى لا تضيع اختياراته لو أعاد تفعيلها لاحقاً)
+      notifyCategories: NOTIFY_CATEGORY_OPTIONS.map((c) => c.key).filter((k) => (form.notifyCategories || DEFAULT_NOTIFY_CATEGORIES).includes(k)),
       tempUntil,
       createdAt: form.createdAt || Date.now(),
     };
@@ -5063,6 +5079,31 @@ function UserForm({ user, branches, onCancel, onSave }) {
           })}
         </div>
       </Field>
+      {(form.permissions || []).includes("notifications") && (
+        <Field label="أنواع الإشعارات التي تصل لهذا المستخدم" full>
+          <div className="perm-grid">
+            {NOTIFY_CATEGORY_OPTIONS.map((c) => {
+              const categories = form.notifyCategories || DEFAULT_NOTIFY_CATEGORIES;
+              const checked = categories.includes(c.key);
+              return (
+                <label key={c.key} className={`perm-check ${checked ? "perm-check-active" : ""}`}>
+                  <input
+                    type="checkbox" checked={checked}
+                    onChange={() => setForm({
+                      ...form,
+                      notifyCategories: checked ? categories.filter((k) => k !== c.key) : [...categories, c.key],
+                    })}
+                  />
+                  <span>{c.label}</span>
+                </label>
+              );
+            })}
+          </div>
+          <p style={{ fontSize: 11.5, color: "var(--ink-soft)", marginTop: 4 }}>
+            هذا التحديد يحدد فقط أي الأحداث تصل لهذا المستخدم — يبقى عليه هو أن يفعّل استلام التنبيهات على جهازه بنفسه من زر 🔔 بعد تسجيل دخوله.
+          </p>
+        </Field>
+      )}
       <Field label="نوع كلمة المرور">
         <div className="login-choices" style={{ gap: 6 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
@@ -6459,8 +6500,8 @@ function BackupSettingsModal({ data, auditLog, notify, onClose, onRestore }) {
   );
 }
 
-// نافذة إعدادات التنبيهات — لرئيس الموقع فقط
-function NotificationSettingsModal({ settings, onSave, onClose, ownerId }) {
+// نافذة إعدادات التنبيهات — لرئيس الموقع، وأي مستخدم مُنح صلاحية "الإشعارات"
+function NotificationSettingsModal({ settings, onSave, onClose, recipientId, showLevelChoice = true, categoriesSummary = null }) {
   const [level, setLevel] = useState(settings.level);
   const permission = typeof Notification !== "undefined" ? Notification.permission : "unsupported";
 
@@ -6488,7 +6529,7 @@ function NotificationSettingsModal({ settings, onSave, onClose, ownerId }) {
     setPushBusy(true);
     setPushError("");
     try {
-      await subscribeToPush(ownerId);
+      await subscribeToPush(recipientId);
       setPushState("subscribed");
     } catch (e) {
       setPushError(e?.message || "تعذّر تفعيل التنبيهات اللحظية");
@@ -6527,7 +6568,7 @@ function NotificationSettingsModal({ settings, onSave, onClose, ownerId }) {
           </div>
         )}
 
-        {ownerId && pushState !== "unsupported" && (
+        {recipientId && pushState !== "unsupported" && (
           <div className="notif-option" style={{ padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 10 }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
               <div style={{ flex: 1 }}>
@@ -6555,7 +6596,14 @@ function NotificationSettingsModal({ settings, onSave, onClose, ownerId }) {
           </div>
         )}
 
-        {OPTIONS.map((o) => (
+        {!showLevelChoice && (
+          <div className="alert alert-info" style={{ fontSize: 12.5 }}>
+            أنواع الإشعارات التي تصلك يحددها رئيس الموقع من صفحة «المستخدمون».
+            <div style={{ fontWeight: 700, marginTop: 4 }}>المفعّل لك حالياً: {categoriesSummary}</div>
+          </div>
+        )}
+
+        {showLevelChoice && OPTIONS.map((o) => (
           <label key={o.key} className="notif-option" style={{
             display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px",
             border: `1px solid ${level === o.key ? "var(--navy)" : "var(--line)"}`,
@@ -6569,12 +6617,16 @@ function NotificationSettingsModal({ settings, onSave, onClose, ownerId }) {
           </label>
         ))}
         <div className="modal-actions">
-          <button className="btn-ghost" onClick={onClose}>إلغاء</button>
-          <button className="btn-primary" onClick={() => { onSave(level); onClose(); }}><Check size={15} /> حفظ</button>
+          <button className="btn-ghost" onClick={onClose}>{showLevelChoice ? "إلغاء" : "إغلاق"}</button>
+          {showLevelChoice && (
+            <button className="btn-primary" onClick={() => { onSave(level); onClose(); }}><Check size={15} /> حفظ</button>
+          )}
         </div>
-        <p style={{ fontSize: 11.5, color: "var(--ink-soft)", marginTop: 4 }}>
-          ملاحظة: الخيارات أعلاه (كل التنبيهات / النقص فقط / إيقاف) تتحكم في نوع الأحداث التي تُرسل تنبيهاً، وتطبَّق على كلا النوعين معاً: التنبيه الفوري داخل المتصفح وتنبيهات الجوال اللحظية (Push).
-        </p>
+        {showLevelChoice && (
+          <p style={{ fontSize: 11.5, color: "var(--ink-soft)", marginTop: 4 }}>
+            ملاحظة: الخيارات أعلاه (كل التنبيهات / النقص فقط / إيقاف) تتحكم في نوع الأحداث التي تُرسل تنبيهاً، وتطبَّق على كلا النوعين معاً: التنبيه الفوري داخل المتصفح وتنبيهات الجوال اللحظية (Push).
+          </p>
+        )}
       </div>
     </Modal>
   );
@@ -8131,7 +8183,7 @@ function App() {
 
   const inventory = useMemo(() => (data ? computeInventory(data) : []), [data]);
 
-  // إعدادات تنبيهات رئيس الموقع (خاصة بهذا الجهاز/المتصفح)
+  // إعدادات تنبيهات التنبيهات (خاصة بهذا الجهاز/المتصفح)
   const [notifSettings, setNotifSettingsState] = useState(() => getNotifSettings());
   const [showNotifSettings, setShowNotifSettings] = useState(false);
   const [showGuestScreenSettings, setShowGuestScreenSettings] = useState(false);
@@ -8142,41 +8194,106 @@ function App() {
     saveNotifSettings(next);
   };
 
+  // نحسب هذين مبكراً (قبل أي إرجاع مبكر بالأسفل) لأن systemNotify وتنبيه
+  // النقص يحتاجانهما لتحديد من يستحق يستلم التنبيه الآن. data قد تكون null
+  // بعد أول تحميل مباشرة، فنتحقق منها أولاً.
+  const isOwner = session.type === "owner";
+  const currentUser = data && session.type === "user" ? data.users.find((u) => u.id === session.userId) : null;
+  // يستحق استلام تنبيهات النظام أصلاً: رئيس الموقع دائماً، أو أي مستخدم مُنح
+  // صلاحية "الإشعارات" صراحة (أو مستخدم "غير مقيّد" أصلاً، بلا قائمة صلاحيات محددة)
+  const canReceiveSystemNotifications = isOwner || !!(currentUser && (!currentUser.permissions || currentUser.permissions.includes("notifications")));
+  // معرّف فريد لهذا المستلم — يُستخدم لحفظ/استرجاع اشتراك التنبيهات اللحظية
+  // (Push) الخاصة به بمعزل عن بقية المستخدمين ورؤساء الموقع الآخرين
+  const notifRecipientId = isOwner ? session.ownerId : (currentUser ? "user:" + currentUser.id : null);
+
+  // يستدعيه أي جزء من الموقع عند وقوع حدث؛ يقرر بنفسه هل يستحق المستلم
+  // الحالي استلامه فعلاً، حسب نوعه:
+  // - eventLevel: "low" (تحذير نقص) | "empty" (نفاذ صنف) | "all" (أي شيء آخر:
+  //   صنف جديد، تسجيل دخول/خروج — لا يظهر إلا لمن اختار "كل الإشعارات")
+  // - رئيس الموقع: يقرر بنفسه من جهازه (إعدادات all/shortage/off الثلاثة كما كانت)
+  // - المستخدم: القرار محسوم مسبقاً من رئيس الموقع عبر user.notifyCategories
+  //   (صفحة المستخدمون)، وليس للمستخدم نفسه رأي في نوع ما يستلمه — فقط في
+  //   تفعيل/تعطيل استلامه على جهازه (زر 🔔)
   const systemNotify = useCallback((opts) => {
-    notifySystemEvent({
-      isOwner: session.type === "owner",
-      ownerId: session.type === "owner" ? session.ownerId : undefined,
-      settings: notifSettings,
-      ...opts,
-    });
-  }, [session.type, session.ownerId, notifSettings]);
+    const { eventLevel, ...rest } = opts;
+    if (!canReceiveSystemNotifications) return;
+    let shouldSend = false;
+    if (isOwner) {
+      if (notifSettings.level === "off") shouldSend = false;
+      else if (eventLevel === "all") shouldSend = notifSettings.level === "all";
+      else shouldSend = true; // "low" / "empty" — دلوكة النقص كما كانت دائماً تظهر ما لم توقف التنبيهات كلياً
+    } else if (currentUser) {
+      const cats = currentUser.notifyCategories || DEFAULT_NOTIFY_CATEGORIES;
+      if (cats.includes("all")) shouldSend = true;
+      else if (eventLevel === "low") shouldSend = cats.includes("low");
+      else if (eventLevel === "empty") shouldSend = cats.includes("empty");
+      else shouldSend = false; // eventLevel "all" لكن هذا المستخدم ما اختار فئة "كل الإشعارات"
+    }
+    if (!shouldSend) return;
+    notifySystemEvent({ recipientId: notifRecipientId, ...rest });
+  }, [canReceiveSystemNotifications, isOwner, notifSettings, currentUser, notifRecipientId]);
+
+  // أول ما تتوفر البيانات، لو رئيس الموقع سبق وحفظ تفضيل تنبيهات مشترك من
+  // جهاز آخر، نطابق عليه إعداد هذا الجهاز — مرة واحدة فقط لكل دخول، حتى لا
+  // نطغى على تغيير محلي لاحق يجريه بنفسه. (المستخدمون لا يملكون تفضيلاً
+  // ذاتياً بعد الآن — نوع ما يصلهم يحدده رئيس الموقع عبر notifyCategories)
+  const syncedSharedLevelRef = React.useRef(false);
+  useEffect(() => {
+    if (!data || syncedSharedLevelRef.current || !isOwner) return;
+    const shared = (data.owners || []).find((o) => o.id === session.ownerId)?.notifyLevel;
+    if (shared) {
+      syncedSharedLevelRef.current = true;
+      if (shared !== notifSettings.level) {
+        const next = { ...notifSettings, level: shared };
+        setNotifSettingsState(next);
+        saveNotifSettings(next);
+      }
+    }
+  }, [data, isOwner, session.ownerId]);
 
   // تسجيل الـ Service Worker مرة واحدة عند فتح الموقع (شرط أساسي لعمل PWA وPush)
   useEffect(() => {
     registerServiceWorker();
   }, []);
 
-  // كشف تلقائي لأي صنف "دخل حالة نقص" جديدة (منخفض أو نفد) ليست موجودة بالفحص السابق،
-  // فيرسل تنبيه نظام لرئيس الموقع (حسب إعداداته)، بدون تكرار نفس التنبيه في كل مرة.
-  const prevShortageRef = React.useRef(new Set());
+  // كشف تلقائي لأي صنف "دخل حالة نقص أو نفاد" جديدة ليست موجودة بالفحص السابق.
+  // نرسل تنبيهاً منفصلاً لكل حالة (منخفض / نافد) لأنهما فئتان مستقلتان يقدر
+  // رئيس الموقع يمنح كل مستخدم إحداهما أو كلتيهما أو لا شيء منهما.
+  const prevShortageRef = React.useRef({ low: new Set(), empty: new Set() });
   useEffect(() => {
-    if (session.type !== "owner" || !data) return;
-    const shortageNow = new Set(inventory.filter((i) => i.status === "low" || i.status === "empty").map((i) => i.code));
+    if (!canReceiveSystemNotifications || !data) return;
+    const lowNow = new Set(inventory.filter((i) => i.status === "low").map((i) => i.code));
+    const emptyNow = new Set(inventory.filter((i) => i.status === "empty").map((i) => i.code));
     const prev = prevShortageRef.current;
-    const newlyShort = [...shortageNow].filter((c) => !prev.has(c));
-    if (newlyShort.length) {
-      const names = newlyShort.map((c) => inventory.find((i) => i.code === c)?.name).filter(Boolean);
+
+    const newlyLow = [...lowNow].filter((c) => !prev.low.has(c));
+    if (newlyLow.length) {
+      const names = newlyLow.map((c) => inventory.find((i) => i.code === c)?.name).filter(Boolean);
       systemNotify({
-        eventLevel: "shortage",
-        title: "المستودع — تنبيه نقص",
+        eventLevel: "low",
+        title: "المستودع — تحذير نقص",
         body: names.length === 1
-          ? `الصنف «${names[0]}» وصل لحد النقص أو نفد`
-          : `${names.length} أصناف وصلت لحد النقص أو نفدت: ${names.slice(0, 3).join("، ")}${names.length > 3 ? "…" : ""}`,
-        tag: "warehouse-shortage",
+          ? `الصنف «${names[0]}» وصل لحد النقص`
+          : `${names.length} أصناف وصلت لحد النقص: ${names.slice(0, 3).join("، ")}${names.length > 3 ? "…" : ""}`,
+        tag: "warehouse-low",
       });
     }
-    prevShortageRef.current = shortageNow;
-  }, [inventory, session.type, data, systemNotify]);
+
+    const newlyEmpty = [...emptyNow].filter((c) => !prev.empty.has(c));
+    if (newlyEmpty.length) {
+      const names = newlyEmpty.map((c) => inventory.find((i) => i.code === c)?.name).filter(Boolean);
+      systemNotify({
+        eventLevel: "empty",
+        title: "المستودع — نفاذ صنف",
+        body: names.length === 1
+          ? `الصنف «${names[0]}» نفد بالكامل`
+          : `${names.length} أصناف نفدت بالكامل: ${names.slice(0, 3).join("، ")}${names.length > 3 ? "…" : ""}`,
+        tag: "warehouse-empty",
+      });
+    }
+
+    prevShortageRef.current = { low: lowNow, empty: emptyNow };
+  }, [inventory, canReceiveSystemNotifications, data, systemNotify]);
 
   // "مهامك اليوم" — تظهر تلقائياً مرة وحدة لكل دخول للمنظم (session.type === "user")
   // لو عنده مهام معلّقة مكلّف فيها شخصياً أو موجّهة لكل المنظمين، دون إزعاجه بها
@@ -8233,9 +8350,7 @@ function App() {
     );
   }
 
-  const isOwner = session.type === "owner";
   const isGuest = session.type !== "owner" && session.type !== "user";
-  const currentUser = session.type === "user" ? data.users.find((u) => u.id === session.userId) : null;
   const currentOwner = isOwner ? (data.owners || []).find((o) => o.id === session.ownerId) : null;
   actorRef.current = isOwner
     ? (currentOwner ? `${currentOwner.name} (رئيس الموقع)` : "رئيس الموقع")
@@ -8430,7 +8545,7 @@ function App() {
           />
           <GlobalSearch data={data} inventory={inventory} go={go} onPick={goToItem} currentUser={currentUser} isOwner={isOwner} />
           <ThemeToggle themePref={themePref} effectiveTheme={effectiveTheme} onSet={setThemePref} />
-          {isOwner && (
+          {canReceiveSystemNotifications && (
             <button className="icon-btn" title="إعدادات التنبيهات" onClick={() => setShowNotifSettings(true)}>
               <Bell size={17} />
             </button>
@@ -8489,8 +8604,23 @@ function App() {
         <NotificationSettingsModal
           settings={notifSettings}
           onClose={() => setShowNotifSettings(false)}
-          onSave={(level) => setNotifSettings(level)}
-          ownerId={isOwner ? session.ownerId : null}
+          onSave={(level) => {
+            setNotifSettings(level); // إعداد محلي لهذا الجهاز (يبقى كما كان، يتحكم بالتنبيه الفوري داخل هذا المتصفح)
+            // ونحفظه أيضاً في بيانات رئيس الموقع المشتركة (لا الجهاز)، حتى يقدر
+            // أي كود يعمل من طرف الخادم لاحقاً (بدون أي متصفح مفتوح) يعرف تفضيله
+            if (isOwner) {
+              setData({ ...data, owners: (data.owners || []).map((o) => (o.id === session.ownerId ? { ...o, notifyLevel: level } : o)) });
+            }
+          }}
+          recipientId={notifRecipientId}
+          showLevelChoice={isOwner}
+          categoriesSummary={
+            !isOwner && currentUser
+              ? (currentUser.notifyCategories || DEFAULT_NOTIFY_CATEGORIES).includes("all")
+                ? "كل الإشعارات"
+                : NOTIFY_CATEGORY_OPTIONS.filter((c) => c.key !== "all" && (currentUser.notifyCategories || DEFAULT_NOTIFY_CATEGORIES).includes(c.key)).map((c) => c.label).join("، ") || "لا شيء محدد بعد"
+              : null
+          }
         />
       )}
 
