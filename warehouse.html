@@ -2419,7 +2419,7 @@ function isLikelyMobileDevice() {
   return /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent || "");
 }
 
-async function fileToCompressedDataURL(file, maxDim = 640, quality = 0.72) {
+async function fileToCompressedDataURL(file, maxDim = 400, quality = 0.55) {
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
@@ -2441,10 +2441,60 @@ async function fileToCompressedDataURL(file, maxDim = 640, quality = 0.72) {
     canvas.height = h;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0, w, h);
+    // WebP أصغر من JPEG بنفس الجودة تقريباً؛ المتصفحات التي لا تدعمه
+    // (نادرة جداً اليوم) ترجع JPEG تلقائياً بدل رفض التحويل بصمت
+    const webp = canvas.toDataURL("image/webp", quality);
+    if (webp.startsWith("data:image/webp")) return webp;
     return canvas.toDataURL("image/jpeg", quality);
   } catch {
     // لو فشل الضغط لأي سبب (مثلاً صورة غير مدعومة)، نستخدم الصورة الأصلية
     // كما هي بدل ما نفشل العملية بالكامل
+    return dataUrl;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  رفع الصورة إلى Supabase Storage بدل تخزينها كنص Base64 داخل         */
+/*  warehouse-data-v1 — هذا هو السبب الحقيقي لتضخم الصف وفشل الحفظ     */
+/*  (timeout) عند تسجيل حركة عادية. نحتفظ فقط برابط قصير للصورة.       */
+/* ------------------------------------------------------------------ */
+const IMAGE_BUCKET = "item-images";
+
+async function dataUrlToUploadResult(dataUrl, prefix = "img") {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  const isWebp = blob.type === "image/webp";
+  const ext = isWebp ? "webp" : "jpg";
+  const path = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error } = await window.supabase.storage
+    .from(IMAGE_BUCKET)
+    .upload(path, blob, { contentType: blob.type || "image/jpeg", upsert: false });
+  if (error) throw error;
+  const { data } = window.supabase.storage.from(IMAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
+
+// يأخذ ملفاً من الجهاز، يضغطه، يرفعه لمخزن الصور، ويرجع رابطاً قصيراً
+// فقط (وليس الصورة نفسها) — هذا الرابط هو ما يُحفظ في بيانات المستودع
+async function fileToUploadedImageUrl(file, maxDim = 640, quality = 0.72) {
+  const compressedDataUrl = await fileToCompressedDataURL(file, maxDim, quality);
+  try {
+    return await dataUrlToUploadResult(compressedDataUrl, "items");
+  } catch (e) {
+    // لو فشل الرفع (مثلاً الـ bucket غير منشأ بعد)، نرجع الصورة كنص
+    // Base64 كحل احتياطي مؤقت بدل فقدان الصورة بالكامل
+    console.error("image upload failed, falling back to inline base64:", e);
+    return compressedDataUrl;
+  }
+}
+
+// نفس الفكرة، لكن للصور القادمة من جلسة تصوير الجوال (تصلنا كـ dataURL
+// جاهزة أصلاً وليست File)
+async function dataUrlToUploadedImageUrl(dataUrl) {
+  try {
+    return await dataUrlToUploadResult(dataUrl, "items");
+  } catch (e) {
+    console.error("image upload failed, falling back to inline base64:", e);
     return dataUrl;
   }
 }
@@ -2467,8 +2517,8 @@ function ImageUploadField({ value, onChange }) {
     if (!file) return;
     setBusy(true);
     try {
-      const dataUrl = await fileToCompressedDataURL(file);
-      onChange(dataUrl);
+      const url = await fileToUploadedImageUrl(file);
+      onChange(url);
     } catch {
       // تجاهل بصمت — المستخدم يقدر يعيد المحاولة
     } finally {
@@ -2537,7 +2587,16 @@ function ImageUploadField({ value, onChange }) {
       {phonePairMode && (
         <PhotoCapturePairing
           mode={phonePairMode}
-          onCapture={(img) => { onChange(img); setPhonePairMode(null); }}
+          onCapture={async (img) => {
+            setPhonePairMode(null);
+            setBusy(true);
+            try {
+              const url = await dataUrlToUploadedImageUrl(img);
+              onChange(url);
+            } finally {
+              setBusy(false);
+            }
+          }}
           onClose={() => setPhonePairMode(null)}
         />
       )}
