@@ -8719,9 +8719,18 @@ function App() {
             title={sync.online ? "متصل — البيانات محدّثة" : "غير متصل — سيتم التحديث عند عودة الاتصال"}
           />
           <ThemeToggle themePref={themePref} effectiveTheme={effectiveTheme} onSet={setThemePref} />
-          <a className="btn-ghost view-control-btn" href="index.html?login" title="دخول الموظفين عبر البوابة" aria-label="دخول الموظفين" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Users size={14} /> <span>دخول الموظفين</span>
-          </a>
+          {/* يُخفى الزر إذا كان المستخدم مسجّلاً في المنصة بأكثر من صلاحية أو مدير (عنده زر العودة للرئيسية) */}
+          {!(() => {
+            try {
+              const allowed = JSON.parse(localStorage.getItem("allowedPages") || "[]");
+              const ps = JSON.parse(localStorage.getItem("portalSession") || "null");
+              return (Array.isArray(allowed) && allowed.length > 1) || !!(ps && ps.role === "admin");
+            } catch (e) { return false; }
+          })() && (
+            <a className="btn-ghost view-control-btn" href="index.html?login" title="دخول المستخدمين عبر البوابة" aria-label="دخول المستخدمين" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Users size={14} /> <span>دخول المستخدمين</span>
+            </a>
+          )}
           <button className="btn-ghost view-control-btn" onClick={() => setShowControlLogin(true)}>
             <KeyRound size={14} /> <span>الدخول للتحكم</span>
           </button>
