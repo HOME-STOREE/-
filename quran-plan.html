@@ -567,12 +567,231 @@
     flex: 0 0 auto;
   }
 </style>
+<script id="pwa-dynamic-manifest">
+/* ============================================================
+   PWA ديناميكي (نفس الكود في index.html و warehouse.html)
+   الشعار: واحد عام لكل التثبيتات (icon-*.png). الذي يتغيّر هو الاسم فقط:
+      - جهاز غير مسجّل / حساب مستودع فقط → "نظام المستودع" (start_url = warehouse.html)
+      - مسجّل بالبوابة بصلاحية واحدة       → اسم ذلك الموقع نفسه (من بطاقته في البوابة)
+      - مسجّل بأكثر من صلاحية أو مدير       → "المنصة الرئيسية / الأنظمة" (start_url = index.html)
+   يعرض زر "تثبيت التطبيق" عند beforeinstallprompt، ويسجّل sw.js ويحفظ مكتبات CDN للأوفلاين.
+   ملاحظة: الروابط داخل manifest الـ Data URI يجب أن تكون مطلقة، لذلك تُبنى من مجلد الصفحة.
+   ============================================================ */
+(function () {
+  'use strict';
+  var PORTAL_TOKEN_KEY = 'sb-nzommukbtzmeytjibizy-auth-token';
+  var CDN_RE = /^https:\/\/(esm\.sh|unpkg\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|cdn\.tailwindcss\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
+  var BASE = new URL('./', location.href).href;
+  var IS_INDEX_PAGE = /\/(index(\.html)?)?$/i.test(location.pathname);   // البوابة نفسها
+
+  var APPS = {
+    warehouse: {
+      mode: 'warehouse',
+      name: 'نظام المستودع', short: 'المستودع', title: 'المستودع',
+      desc: 'نظام إدارة المستودع والمخزون',
+      start: 'warehouse.html', theme: '#2B3B47', bg: '#ECE2CC'
+    },
+    platform: {
+      mode: 'platform',
+      name: 'المنصة الرئيسية / الأنظمة', short: 'الأنظمة', title: 'الأنظمة',
+      desc: 'البوابة الرئيسية للوصول إلى المستودع وبقية الأنظمة المتاحة لك',
+      start: 'index.html', theme: '#4a3020', bg: '#fdfbf8'
+    }
+  };
+
+  function readJSON(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+
+  function livePortal() {
+    var ps = readJSON('portalSession');
+    if (!ps || ps.source !== 'portal') return null;
+    try { if (localStorage.getItem(PORTAL_TOKEN_KEY) === null) return null; } catch (e) { return null; }
+    return ps;
+  }
+
+  function clip(str, n) { str = String(str || '').trim(); return str.length > n ? str.slice(0, n) : str; }
+
+  // يحدد هوية التطبيق (الاسم/صفحة البدء) حسب الصلاحيات. الشعار ثابت دائماً.
+  function decideApp() {
+    var ps = livePortal(), allowed = readJSON('allowedPages');
+    if (ps) {
+      if (ps.role === 'admin') return APPS.platform;
+      if (Array.isArray(allowed) && allowed.length === 1) {
+        var key = allowed[0], card = null, cards = Array.isArray(ps.cards) ? ps.cards : [];
+        for (var i = 0; i < cards.length; i++) { if (cards[i] && cards[i].key === key) { card = cards[i]; break; } }
+        var title = card && card.title ? String(card.title).trim() : '';
+        var isWh = key === 'warehouse';
+        return {
+          mode: isWh ? 'warehouse' : 'single',
+          name: title || (isWh ? APPS.warehouse.name : APPS.platform.name),
+          short: clip(title || (isWh ? APPS.warehouse.short : APPS.platform.short), 12),
+          title: clip(title || (isWh ? APPS.warehouse.title : APPS.platform.title), 14),
+          desc: isWh ? APPS.warehouse.desc : ('الدخول إلى ' + (title || 'النظام')),
+          // الموقع غير المستودع قد يكون خارج هذا النطاق: نبدأ من البوابة وهي تحوّله تلقائياً
+          start: isWh ? 'warehouse.html' : 'index.html',
+          theme: isWh ? APPS.warehouse.theme : APPS.platform.theme,
+          bg: isWh ? APPS.warehouse.bg : APPS.platform.bg
+        };
+      }
+      return APPS.platform;                       // أكثر من صلاحية أو لا شيء بعد
+    }
+    return IS_INDEX_PAGE ? APPS.platform : APPS.warehouse;   // زائر / حساب مستودع فقط (الافتراضي = المستودع)
+  }
+
+  function fileIcons() {
+    return [
+      { src: BASE + 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: BASE + 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: BASE + 'icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+    ];
+  }
+
+  function setMeta(name, content) {
+    var m = document.querySelector('meta[name="' + name + '"]');
+    if (!m) { m = document.createElement('meta'); m.setAttribute('name', name); document.head.appendChild(m); }
+    if (m.getAttribute('content') !== content) m.setAttribute('content', content);
+  }
+
+  function setAppleIcon(href) {
+    var cur = document.querySelectorAll('link[rel="apple-touch-icon"]');
+    if (cur.length === 1 && cur[0].getAttribute('href') === href) return;
+    for (var i = 0; i < cur.length; i++) cur[i].parentNode.removeChild(cur[i]);
+    var l = document.createElement('link');
+    l.setAttribute('rel', 'apple-touch-icon'); l.setAttribute('sizes', '180x180'); l.setAttribute('href', href);
+    document.head.appendChild(l);
+  }
+
+  function apply() {
+    var app = decideApp(), mode = app.mode;
+    var manifest = {
+      id: BASE + app.start,
+      name: app.name, short_name: app.short, description: app.desc,
+      lang: 'ar', dir: 'rtl',
+      start_url: BASE + app.start, scope: BASE,
+      display: 'standalone', orientation: 'any',
+      background_color: app.bg, theme_color: app.theme,
+      icons: fileIcons()
+    };
+    var href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest));
+
+    var links = document.querySelectorAll('link[rel="manifest"]');
+    var link = links[0];
+    if (!link) { link = document.createElement('link'); link.setAttribute('rel', 'manifest'); document.head.appendChild(link); }
+    for (var i = 1; i < links.length; i++) links[i].parentNode.removeChild(links[i]);   // manifest واحد فقط
+    if (link.getAttribute('href') !== href) link.setAttribute('href', href);
+
+    // iOS لا يقرأ manifest ديناميكياً بشكل موثوق: نضبط الاسم والأيقونة عبر meta/link
+    setMeta('apple-mobile-web-app-title', app.title);
+    setAppleIcon(BASE + 'apple-touch-icon.png');
+
+    window.__pwaMode = mode;
+    return mode;
+  }
+
+  try { apply(); } catch (e) {}
+  document.addEventListener('DOMContentLoaded', function () { try { apply(); } catch (e) {} });
+  window.addEventListener('pageshow', function () { try { apply(); } catch (e) {} });
+  window.addEventListener('storage', function () { try { apply(); } catch (e) {} });   // دخول/خروج من تبويب آخر
+  window.refreshPwaManifest = apply;
+
+  // تغيّر الجلسة داخل نفس التبويب (تسجيل دخول/خروج) لا يُطلق حدث storage،
+  // لذلك نراقب كتابة/حذف المفاتيح المعنيّة في localStorage ونحدّث الـ manifest فوراً
+  (function () {
+    var WATCH = { 'portalSession': 1, 'allowedPages': 1 };
+    WATCH[PORTAL_TOKEN_KEY] = 1;
+    var pending = false;
+    function kick() {
+      if (pending) return; pending = true;
+      setTimeout(function () { pending = false; try { apply(); } catch (e) {} }, 0);
+    }
+    function isLocal(o) { try { return o === window.localStorage; } catch (e) { return false; } }
+    try {
+      var P = Storage.prototype, _set = P.setItem, _rem = P.removeItem;
+      P.setItem = function (k) {
+        var r = _set.apply(this, arguments);
+        if (WATCH.hasOwnProperty(k) && isLocal(this)) kick();
+        return r;
+      };
+      P.removeItem = function (k) {
+        var r = _rem.apply(this, arguments);
+        if (WATCH.hasOwnProperty(k) && isLocal(this)) kick();
+        return r;
+      };
+    } catch (e) {}
+  })();
+
+  /* ---------- زر "تثبيت التطبيق" ---------- */
+  var deferred = null, DISMISS_KEY = 'pwa-install-fab-dismissed-at';
+
+  function isStandalone() {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  }
+  function recentlyDismissed() {
+    try { var t = +localStorage.getItem(DISMISS_KEY); return !!t && (Date.now() - t) < 7 * 24 * 3600 * 1000; } catch (e) { return false; }
+  }
+  function removeInstallButton() {
+    var b = document.getElementById('pwa-install-fab');
+    if (b && b.parentNode) b.parentNode.removeChild(b);
+  }
+  window.installPwa = function () {
+    var p = deferred; if (!p) return;
+    deferred = null; removeInstallButton();
+    try { p.prompt(); } catch (e) {}
+  };
+  function showInstallButton() {
+    if (!deferred || isStandalone() || recentlyDismissed()) return;
+    if (document.getElementById('pwa-install-banner')) return;   // index.html لديه شريط تثبيت خاص به
+    if (document.getElementById('pwa-install-fab')) return;
+    if (!document.body) { document.addEventListener('DOMContentLoaded', showInstallButton); return; }
+
+    var wrap = document.createElement('div');
+    wrap.id = 'pwa-install-fab';
+    wrap.setAttribute('dir', 'rtl');
+    wrap.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 16px);' +
+      'z-index:99998;display:flex;align-items:center;gap:4px;background:#0F766E;color:#fff;border-radius:999px;' +
+      'box-shadow:0 6px 18px rgba(0,0,0,.28);font:700 14px system-ui,-apple-system,"Segoe UI",Tajawal,sans-serif;max-width:calc(100vw - 24px)';
+
+    var go = document.createElement('button');
+    go.type = 'button'; go.textContent = '📲 تثبيت التطبيق';
+    go.style.cssText = 'all:unset;cursor:pointer;padding:11px 8px 11px 16px;white-space:nowrap';
+    go.addEventListener('click', function () { window.installPwa(); });
+
+    var x = document.createElement('button');
+    x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'إخفاء');
+    x.style.cssText = 'all:unset;cursor:pointer;padding:11px 14px 11px 8px;opacity:.85';
+    x.addEventListener('click', function () {
+      try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch (e) {}
+      removeInstallButton();
+    });
+
+    wrap.appendChild(go); wrap.appendChild(x);
+    document.body.appendChild(wrap);
+  }
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault(); deferred = e; window.__deferredInstallPrompt = e; showInstallButton();
+  });
+  window.addEventListener('appinstalled', function () { deferred = null; removeInstallButton(); });
+
+  /* ---------- Service Worker + حفظ مكتبات CDN للأوفلاين ---------- */
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !window.__PWA_NO_SW) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js')
+        .then(function () { return navigator.serviceWorker.ready; })
+        .then(function (reg) {
+          var urls = [];
+          try {
+            urls = performance.getEntriesByType('resource').map(function (r) { return r.name; })
+              .filter(function (u) { return CDN_RE.test(u); });
+          } catch (e) {}
+          var target = reg.active || navigator.serviceWorker.controller;
+          if (target && urls.length) target.postMessage({ type: 'CACHE_URLS', urls: urls });
+        })
+        .catch(function () {});
+    });
+  }
+})();
+</script>
 </head>
 <body>
-<a href="index.html" id="back-to-gateway-btn" style="position:fixed; top:14px; left:14px; z-index:99999; display:inline-flex; align-items:center; gap:6px; padding:8px 14px; background:rgba(58,90,64,0.92); color:#fff; border-radius:999px; font-family:system-ui,-apple-system,'Segoe UI',Tajawal,sans-serif; font-size:13px; font-weight:600; text-decoration:none; box-shadow:0 4px 14px rgba(0,0,0,0.25); backdrop-filter:blur(6px);" onmouseover="this.style.background='rgba(58,90,64,1)'" onmouseout="this.style.background='rgba(58,90,64,0.92)'">
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>
-  العودة إلى الصفحة الرئيسية
-</a>
 <div class="app-shell">
   <div class="container" id="container">
     <header class="header header-banner">
@@ -3576,5 +3795,6 @@
 
 })();
 </script>
+<script src="floating-navigation.js"></script>
 </body>
 </html>
