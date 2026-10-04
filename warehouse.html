@@ -122,11 +122,11 @@
 <script id="pwa-dynamic-manifest">
 /* ============================================================
    PWA ديناميكي (نفس الكود في index.html و warehouse.html)
-   1) يولّد manifest (Data URI) حسب الصلاحيات في localStorage:
-      - زائر / حساب مستودع فقط → "نظام المستودع" + شعار المستودع + start_url = warehouse.html
-      - متعدد الصلاحيات (أو مدير بوابة) → "المنصة الرئيسية / الأنظمة" + شعار المنصة + start_url = index.html
-   2) يعرض زر "تثبيت التطبيق" عند beforeinstallprompt
-   3) يسجّل sw.js ويحفظ مكتبات CDN للعمل بدون إنترنت
+   الشعار: واحد عام لكل التثبيتات (icon-*.png). الذي يتغيّر هو الاسم فقط:
+      - جهاز غير مسجّل / حساب مستودع فقط → "نظام المستودع" (start_url = warehouse.html)
+      - مسجّل بالبوابة بصلاحية واحدة       → اسم ذلك الموقع نفسه (من بطاقته في البوابة)
+      - مسجّل بأكثر من صلاحية أو مدير       → "المنصة الرئيسية / الأنظمة" (start_url = index.html)
+   يعرض زر "تثبيت التطبيق" عند beforeinstallprompt، ويسجّل sw.js ويحفظ مكتبات CDN للأوفلاين.
    ملاحظة: الروابط داخل manifest الـ Data URI يجب أن تكون مطلقة، لذلك تُبنى من مجلد الصفحة.
    ============================================================ */
 (function () {
@@ -138,11 +138,13 @@
 
   var APPS = {
     warehouse: {
+      mode: 'warehouse',
       name: 'نظام المستودع', short: 'المستودع', title: 'المستودع',
       desc: 'نظام إدارة المستودع والمخزون',
       start: 'warehouse.html', theme: '#2B3B47', bg: '#ECE2CC'
     },
     platform: {
+      mode: 'platform',
       name: 'المنصة الرئيسية / الأنظمة', short: 'الأنظمة', title: 'الأنظمة',
       desc: 'البوابة الرئيسية للوصول إلى المستودع وبقية الأنظمة المتاحة لك',
       start: 'index.html', theme: '#4a3020', bg: '#fdfbf8'
@@ -151,26 +153,6 @@
 
   function readJSON(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
 
-  // شعار المستودع: نلتقطه من وسوم الصفحة الأصلية (manifest مضمّن + apple-touch-icon) قبل أن نستبدلها
-  var harvested = (function () {
-    var out = { icons: null, apple: null };
-    try {
-      var prefix = 'data:application/manifest+json,';
-      var links = document.querySelectorAll('link[rel="manifest"]');
-      for (var i = 0; i < links.length; i++) {
-        var h = links[i].getAttribute('href') || '';
-        if (h.indexOf(prefix) === 0) {
-          var j = JSON.parse(decodeURIComponent(h.slice(prefix.length)));
-          var ic = (j && j.icons || []).filter(function (x) { return /^data:image\//.test(x.src || ''); });
-          if (ic.length) out.icons = ic;
-        }
-      }
-      var a = document.querySelector('link[rel="apple-touch-icon"][href^="data:image/"]');
-      if (a) out.apple = a.getAttribute('href');
-    } catch (e) {}
-    return out;
-  })();
-
   function livePortal() {
     var ps = readJSON('portalSession');
     if (!ps || ps.source !== 'portal') return null;
@@ -178,12 +160,33 @@
     return ps;
   }
 
-  function decideMode() {
+  function clip(str, n) { str = String(str || '').trim(); return str.length > n ? str.slice(0, n) : str; }
+
+  // يحدد هوية التطبيق (الاسم/صفحة البدء) حسب الصلاحيات. الشعار ثابت دائماً.
+  function decideApp() {
     var ps = livePortal(), allowed = readJSON('allowedPages');
-    if (ps && ((Array.isArray(allowed) && allowed.length > 1) || ps.role === 'admin')) return 'platform';
-    // في index.html لا يتوفر شعار المستودع → نبقى على المنصة
-    if (!IS_WAREHOUSE_PAGE && !harvested.icons) return 'platform';
-    return 'warehouse';
+    if (ps) {
+      if (ps.role === 'admin') return APPS.platform;
+      if (Array.isArray(allowed) && allowed.length === 1) {
+        var key = allowed[0], card = null, cards = Array.isArray(ps.cards) ? ps.cards : [];
+        for (var i = 0; i < cards.length; i++) { if (cards[i] && cards[i].key === key) { card = cards[i]; break; } }
+        var title = card && card.title ? String(card.title).trim() : '';
+        var isWh = key === 'warehouse';
+        return {
+          mode: isWh ? 'warehouse' : 'single',
+          name: title || (isWh ? APPS.warehouse.name : APPS.platform.name),
+          short: clip(title || (isWh ? APPS.warehouse.short : APPS.platform.short), 12),
+          title: clip(title || (isWh ? APPS.warehouse.title : APPS.platform.title), 14),
+          desc: isWh ? APPS.warehouse.desc : ('الدخول إلى ' + (title || 'النظام')),
+          // الموقع غير المستودع قد يكون خارج هذا النطاق: نبدأ من البوابة وهي تحوّله تلقائياً
+          start: isWh ? 'warehouse.html' : 'index.html',
+          theme: isWh ? APPS.warehouse.theme : APPS.platform.theme,
+          bg: isWh ? APPS.warehouse.bg : APPS.platform.bg
+        };
+      }
+      return APPS.platform;                       // أكثر من صلاحية أو لا شيء بعد
+    }
+    return IS_WAREHOUSE_PAGE ? APPS.warehouse : APPS.platform;   // زائر / حساب مستودع فقط
   }
 
   function fileIcons() {
@@ -210,7 +213,7 @@
   }
 
   function apply() {
-    var mode = decideMode(), app = APPS[mode];
+    var app = decideApp(), mode = app.mode;
     var manifest = {
       id: BASE + app.start,
       name: app.name, short_name: app.short, description: app.desc,
@@ -218,7 +221,7 @@
       start_url: BASE + app.start, scope: BASE,
       display: 'standalone', orientation: 'any',
       background_color: app.bg, theme_color: app.theme,
-      icons: (mode === 'warehouse' && harvested.icons) ? harvested.icons : fileIcons()
+      icons: fileIcons()
     };
     var href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest));
 
@@ -230,7 +233,7 @@
 
     // iOS لا يقرأ manifest ديناميكياً بشكل موثوق: نضبط الاسم والأيقونة عبر meta/link
     setMeta('apple-mobile-web-app-title', app.title);
-    setAppleIcon((mode === 'warehouse' && harvested.apple) ? harvested.apple : BASE + 'apple-touch-icon.png');
+    setAppleIcon(BASE + 'apple-touch-icon.png');
 
     window.__pwaMode = mode;
     return mode;
