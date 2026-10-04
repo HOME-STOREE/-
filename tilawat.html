@@ -822,6 +822,7 @@ exports.default = ReciterAvailableList;
 const react_1 = require("react");
 const lucide_react_1 = require("lucide-react");
 const util_js_1 = require("src/lib/util.js");
+const ui_jsx_1 = require("src/components/ui.jsx");
 /**
  * قائمة القراء المتاحين (المعتمدين) لهذه الخانة فقط — لمسؤول الليلة ومسؤول تلاوة الجمعة.
  * أمام كل قارئ عدد مشاركاته (تلاوات مقروءة) خلال الشهرين الهجريين: الحالي + الماضي.
@@ -857,7 +858,8 @@ function ReciterAvailableList({ approved, recitation_logs, hijriNow, selectedId,
             : React.createElement(lucide_react_1.UserRound, { className: "h-4 w-4 shrink-0 text-ink-soft" });
         const nameSpan = React.createElement("span", { className: "flex items-center gap-2" }, icon, r.name);
         const countSpan = React.createElement("span", { className: `shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold ${count > 0 ? 'bg-brand/10 text-brand' : 'bg-hover text-ink-soft'}`, title: "\u0639\u062F\u062F \u0627\u0644\u0645\u0634\u0627\u0631\u0643\u0627\u062A \u062E\u0644\u0627\u0644 \u0627\u0644\u0634\u0647\u0631\u064A\u0646 \u0627\u0644\u0623\u062E\u064A\u0631\u064A\u0646" }, count);
-        return React.createElement("button", { type: "button", key: r.id, onClick: () => onPick({ id: r.id, name: r.name, approved: true, kind: 'approved' }), className: `flex items-center justify-between gap-2 rounded-xl border-2 px-4 py-3 text-start font-semibold transition-colors ${active ? 'border-ok bg-ok/10 text-ok' : 'border-cardline bg-white text-ink hover:bg-hover'}` }, nameSpan, countSpan);
+        const pickBtn = React.createElement("button", { type: "button", onClick: () => onPick({ id: r.id, name: r.name, approved: true, kind: 'approved' }), className: `flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl border-2 px-4 py-3 text-start font-semibold transition-colors ${active ? 'border-ok bg-ok/10 text-ok' : 'border-cardline bg-white text-ink hover:bg-hover'}` }, nameSpan, countSpan);
+        return React.createElement("div", { key: r.id, className: "flex items-center gap-2" }, pickBtn, r.phone && React.createElement(ui_jsx_1.PhoneMenu, { phone: r.phone, name: r.name }));
     });
     return React.createElement("div", { className: "grid gap-2 sm:grid-cols-2" }, cards);
 }
@@ -872,11 +874,13 @@ const ui_jsx_1 = require("src/components/ui.jsx");
 const DataContext_jsx_1 = require("src/context/DataContext.jsx");
 const constants_js_1 = require("src/lib/constants.js");
 const util_js_1 = require("src/lib/util.js");
+const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
 /** سجل تتبّع كامل لقارئ: التاريخ، المسجد، الخانة، السورة، الملاحظات */
-function ReciterHistoryModal({ open, onClose, reciterKeyValue, name, periodFrom = '', periodTo = '' }) {
+function ReciterHistoryModal({ open, onClose, reciterKeyValue, name, periodFrom = '', periodTo = '', periodMatch = null }) {
     const { recitation_logs, mosqueById } = (0, DataContext_jsx_1.useData)();
-    const rows = (0, react_1.useMemo)(() => (open ? recitation_logs.filter((l) => l.status === 'read' && (0, util_js_1.reciterKey)(l) === reciterKeyValue) : []), [open, recitation_logs, reciterKeyValue]);
-    const inPeriod = rows.filter((l) => (!periodFrom || l.log_date >= periodFrom) && (!periodTo || l.log_date <= periodTo)).length;
+    const { isAdmin } = (0, AuthContext_jsx_1.useAuth)();
+    const rows = (0, react_1.useMemo)(() => (open ? recitation_logs.filter((l) => l.status === 'read' && (isAdmin || l.slot_key !== 'fri') && (0, util_js_1.reciterKey)(l) === reciterKeyValue) : []), [open, recitation_logs, reciterKeyValue, isAdmin]);
+    const inPeriod = rows.filter((l) => (periodMatch ? periodMatch(l) : (!periodFrom || l.log_date >= periodFrom) && (!periodTo || l.log_date <= periodTo))).length;
     const pages = rows.reduce((s, l) => s + (l.pages || 0), 0);
     return (React.createElement(ui_jsx_1.Modal, { open: open, onClose: onClose, title: `سجل تلاوات: ${name}`, size: "xl" },
         React.createElement("div", { className: "mb-4 flex flex-wrap gap-2" },
@@ -938,6 +942,7 @@ exports.SyncBadge = SyncBadge;
 exports.StatCard = StatCard;
 exports.Bar = Bar;
 exports.MultiSelect = MultiSelect;
+exports.PhoneMenu = PhoneMenu;
 const react_1 = require("react");
 const react_dom_1 = require("react-dom");
 const lucide_react_1 = require("lucide-react");
@@ -1007,6 +1012,42 @@ function Modal({ open, onClose, title, children, footer, size = 'md', drawer = f
                     React.createElement(lucide_react_1.X, { className: "h-5 w-5" }))),
             React.createElement("div", { className: "flex-1 overflow-y-auto px-5 py-4" }, children),
             footer && React.createElement("div", { className: "flex flex-wrap justify-end gap-2 border-t border-cardline bg-hover/60 px-5 py-3.5" }, footer))), document.body);
+}
+// رمز الدولة الافتراضي للأرقام المحلية (05xxxxxxxx) — غيّره إن لزم
+const DEFAULT_CC = '966';
+function phoneDigits(raw) {
+    let d = String(raw || '')
+        .replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x0660))
+        .replace(/[\u06F0-\u06F9]/g, (c) => String(c.charCodeAt(0) - 0x06F0))
+        .replace(/\D/g, '');
+    if (d.startsWith('00'))
+        d = d.slice(2);
+    else if (d.startsWith('0'))
+        d = DEFAULT_CC + d.slice(1);
+    else if (/^5\d{8}$/.test(d))
+        d = DEFAULT_CC + d;
+    return d;
+}
+/** رقم القارئ: عند الضغط عليه تظهر نافذة بخيارين (اتصال / واتساب) وكل خيار ينقل مباشرة للخدمة */
+function PhoneMenu({ phone, name }) {
+    const [open, setOpen] = (0, react_1.useState)(false);
+    const digits = phoneDigits(phone);
+    if (!digits)
+        return null;
+    const shown = String(phone).trim();
+    return React.createElement("span", { onClick: (e) => e.stopPropagation(), className: "inline-flex shrink-0" },
+        React.createElement("button", { type: "button", dir: "ltr", onClick: () => setOpen(true), title: "اتصال أو واتساب", className: "inline-flex items-center gap-1 rounded-full border border-cardline bg-white px-2.5 py-0.5 text-xs font-bold text-brand hover:bg-hover" },
+            React.createElement(lucide_react_1.Phone, { className: "h-3 w-3" }),
+            shown),
+        React.createElement(Modal, { open: open, onClose: () => setOpen(false), title: name ? `التواصل مع ${name}` : 'التواصل', size: "sm" },
+            React.createElement("p", { dir: "ltr", className: "mb-4 text-center text-lg font-extrabold" }, shown),
+            React.createElement("div", { className: "grid gap-2.5" },
+                React.createElement("a", { href: `tel:+${digits}`, onClick: () => setOpen(false), className: "btn-primary w-full justify-center gap-2" },
+                    React.createElement(lucide_react_1.Phone, { className: "h-4 w-4" }),
+                    " اتصال"),
+                React.createElement("a", { href: `https://wa.me/${digits}`, target: "_blank", rel: "noopener noreferrer", onClick: () => setOpen(false), className: "btn-outline w-full justify-center gap-2" },
+                    React.createElement(lucide_react_1.MessageCircle, { className: "h-4 w-4" }),
+                    " واتساب"))));
 }
 function ConfirmDialog({ open, title, message, confirmLabel = 'تأكيد', danger, onConfirm, onClose, busy }) {
     return (React.createElement(Modal, { open: open, onClose: onClose, title: title, size: "sm", footer: React.createElement(React.Fragment, null,
@@ -1338,10 +1379,12 @@ function DataProvider({ children }) {
             return data;
         const ids = new Set(profile.mosque_ids || []);
         const slots = profile.role === 'night_supervisor' ? new Set(profile.slot_keys || []) : null;
+        // تلاوات الجمعة (النهار) لا تظهر لمسؤول المسجد؛ تظهر للمدير ولمسؤول الليلة المُسنَد إليه الجمعة
+        const hideFri = profile.role === 'supervisor';
         return {
             ...data,
             mosques: data.mosques.filter((m) => ids.has(m.id)),
-            recitation_logs: data.recitation_logs.filter((l) => ids.has(l.mosque_id) && (!slots || slots.has(l.slot_key))),
+            recitation_logs: data.recitation_logs.filter((l) => ids.has(l.mosque_id) && (!slots || slots.has(l.slot_key)) && !(hideFri && l.slot_key === 'fri')),
         };
     }, [data, profile]);
     const derived = (0, react_1.useMemo)(() => {
@@ -1440,7 +1483,7 @@ exports.REASONS = [
     { code: 'no_jamaa', label: 'عدم القراءة بسبب عدم وجود صلاة جماعة', short: 'بدون صلاة جماعة', color: '#7A5C4F' },
     { code: 'mawlid', label: 'عدم وجود قراءة بسبب إحياء المولد', short: 'إحياء مولد', color: '#B58F5B' },
     { code: 'funeral', label: 'عدم وجود قراءة بسبب قراءة مأتم', short: 'قراءة مأتم', color: '#8FA08A' },
-    { code: 'absent', label: 'لم يحضر القارئ', short: 'لم يحضر القارئ', color: '#6F8FAF' },
+    { code: 'absent', label: 'عدم وجود قراءة بسبب صلاة الوحشة', short: 'صلاة الوحشة', color: '#6F8FAF' },
     { code: 'other', label: 'سبب آخر', short: 'أسباب أخرى', color: '#C4B5A2' },
 ];
 exports.REASON_BY_CODE = Object.fromEntries(exports.REASONS.map((r) => [r.code, r]));
@@ -1711,6 +1754,29 @@ const constants_js_1 = require("src/lib/constants.js");
 const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
 const ReciterHistoryModal_jsx_1 = __importDefault(require("src/components/ReciterHistoryModal.jsx"));
+const hijri_js_1 = require("src/lib/hijri.js");
+const CALENDARS = [
+    { value: 'greg', label: 'ميلادي' },
+    { value: 'hijri', label: 'هجري' },
+];
+const HRANGES = [
+    { value: 'hmonth', label: 'الشهر الهجري الحالي' },
+    { value: 'hprev', label: 'الشهر الهجري الماضي' },
+    { value: 'hyear', label: 'سنة هجرية' },
+    { value: 'all', label: 'الكل' },
+    { value: 'hcustom', label: 'فترة مخصصة' },
+];
+// التاريخ الهجري للتلاوة: المحفوظ في السجل، وإن لم يوجد يُحسب من التاريخ الميلادي (الليلة تتبع اليوم التالي)
+function logHijri(l) {
+    if (l.hijri_month && l.hijri_year)
+        return { d: Number(l.hijri_day) || 0, m: Number(l.hijri_month), y: Number(l.hijri_year) };
+    if (!l.log_date)
+        return { d: 0, m: 0, y: 0 };
+    const h = (0, hijri_js_1.toHijri)(l.slot_key === 'fri' ? l.log_date : (0, util_js_1.addDays)(l.log_date, 1));
+    return { d: Number(h.day) || 0, m: Number(h.month) || 0, y: Number(h.year) || 0 };
+}
+const hIdx = (y, m) => Number(y) * 12 + (Number(m) - 1);
+const hLabel = (i) => `${constants_js_1.HIJRI_MONTHS[((i % 12) + 12) % 12]} ${Math.floor(i / 12)} هـ`;
 const RANGES = [
     { value: 'week', label: 'أسبوع' },
     { value: 'month', label: 'شهر' },
@@ -1719,7 +1785,9 @@ const RANGES = [
 ];
 function Analytics() {
     const { isAdmin } = (0, AuthContext_jsx_1.useAuth)();
-    const { mosques, recitation_logs: logs, mosqueById } = (0, DataContext_jsx_1.useData)();
+    const { mosques, recitation_logs: allLogs, mosqueById } = (0, DataContext_jsx_1.useData)();
+    // تلاوات الجمعة (نهاراً) تظهر في الإحصائيات لمدير النظام فقط
+    const logs = (0, react_1.useMemo)(() => (isAdmin ? allLogs : allLogs.filter((l) => l.slot_key !== 'fri')), [allLogs, isAdmin]);
     // ----- الفلاتر -----
     const [q, setQ] = (0, react_1.useState)('');
     const [mosqueId, setMosqueId] = (0, react_1.useState)('all');
@@ -1731,6 +1799,13 @@ function Analytics() {
     const [hist, setHist] = (0, react_1.useState)(null);
     const [showAll, setShowAll] = (0, react_1.useState)(false);
     const [printAll, setPrintAll] = (0, react_1.useState)(false);
+    // التقويم المستخدم في الفترة الزمنية: ميلادي (الافتراضي) أو هجري
+    const nowH = (0, react_1.useMemo)(() => (0, hijri_js_1.toHijri)((0, util_js_1.todayStr)()), []);
+    const [cal, setCal] = (0, react_1.useState)('greg');
+    const [hRange, setHRange] = (0, react_1.useState)('hmonth');
+    const [hYear, setHYear] = (0, react_1.useState)(nowH.year);
+    const [hFrom, setHFrom] = (0, react_1.useState)({ month: nowH.month, year: nowH.year });
+    const [hTo, setHTo] = (0, react_1.useState)({ month: nowH.month, year: nowH.year });
     // عند الطباعة نعرض كل صفوف لوحة القراء
     (0, react_1.useEffect)(() => {
         const before = () => (0, react_dom_1.flushSync)(() => setPrintAll(true));
@@ -1743,6 +1818,8 @@ function Analytics() {
         };
     }, []);
     const period = (0, react_1.useMemo)(() => {
+        if (cal === 'hijri')
+            return { from: '', to: '' };
         const t = (0, util_js_1.todayStr)();
         if (range === 'week')
             return { from: (0, util_js_1.addDays)(t, -6), to: t };
@@ -1751,7 +1828,50 @@ function Analytics() {
         if (range === 'custom')
             return { from, to };
         return { from: '', to: '' };
-    }, [range, from, to]);
+    }, [cal, range, from, to]);
+    // نطاق الأشهر الهجرية [من، إلى] كرقم تسلسلي، أو null = كل الفترات
+    const hijriSpan = (0, react_1.useMemo)(() => {
+        if (cal !== 'hijri')
+            return null;
+        const cur = hIdx(nowH.year, nowH.month);
+        if (hRange === 'hmonth')
+            return [cur, cur];
+        if (hRange === 'hprev')
+            return [cur - 1, cur - 1];
+        if (hRange === 'hyear')
+            return [hIdx(hYear, 1), hIdx(hYear, 12)];
+        if (hRange === 'hcustom') {
+            const a = hIdx(hFrom.year, hFrom.month), b = hIdx(hTo.year, hTo.month);
+            return a <= b ? [a, b] : [b, a];
+        }
+        return null;
+    }, [cal, hRange, hYear, hFrom, hTo, nowH]);
+    const hijriYears = (0, react_1.useMemo)(() => {
+        const set = new Set([Number(nowH.year)]);
+        logs.forEach((l) => { const h = logHijri(l); if (h.y)
+            set.add(h.y); });
+        return [...set].sort((a, b) => b - a);
+    }, [logs, nowH]);
+    const periodText = cal === 'hijri'
+        ? (hijriSpan ? (hijriSpan[0] === hijriSpan[1] ? hLabel(hijriSpan[0]) : (hRange === 'hyear' ? `سنة ${hYear} هـ` : `${hLabel(hijriSpan[0])} ← ${hLabel(hijriSpan[1])}`)) : 'كل الفترات')
+        : null;
+    // هل التلاوة ضمن الفترة المختارة (بحسب التقويم المختار)
+    const periodMatch = (0, react_1.useMemo)(() => (l) => {
+        if (cal === 'hijri') {
+            if (!hijriSpan)
+                return true;
+            const h = logHijri(l);
+            if (!h.y || !h.m)
+                return false;
+            const i = hIdx(h.y, h.m);
+            return i >= hijriSpan[0] && i <= hijriSpan[1];
+        }
+        if (period.from && l.log_date < period.from)
+            return false;
+        if (period.to && l.log_date > period.to)
+            return false;
+        return true;
+    }, [cal, hijriSpan, period]);
     const filtered = (0, react_1.useMemo)(() => logs.filter((l) => {
         if (mosqueId !== 'all' && l.mosque_id !== mosqueId)
             return false;
@@ -1759,14 +1879,12 @@ function Analytics() {
             return false;
         if (night !== 'all' && l.hijri_day !== Number(night))
             return false;
-        if (period.from && l.log_date < period.from)
-            return false;
-        if (period.to && l.log_date > period.to)
+        if (!periodMatch(l))
             return false;
         if (q.trim() && !(l.status === 'read' && (0, util_js_1.matchesQuery)(l.reciter_name, q)))
             return false;
         return true;
-    }), [logs, mosqueId, slot, night, period, q]);
+    }), [logs, mosqueId, slot, night, periodMatch, q]);
     const reads = (0, react_1.useMemo)(() => filtered.filter((l) => l.status === 'read'), [filtered]);
     const misses = (0, react_1.useMemo)(() => filtered.filter((l) => l.status === 'not_read'), [filtered]);
     // ----- لوحة مشاركة القراء -----
@@ -1813,13 +1931,13 @@ function Analytics() {
     const single = q.trim() && board.length === 1 ? board[0] : null;
     const summary = [
         ['المسجد', mosqueId === 'all' ? (isAdmin ? 'جميع المساجد' : mosques.length > 1 ? 'جميع المساجد المسندة إليك' : mosques[0]?.name || '—') : mosqueById[mosqueId]?.name],
-        ['الخانة', slot === 'all' ? 'الكل' : slot === 'nights' ? 'كل الليالي' : constants_js_1.SLOTS[slot].label],
+        ['الخانة', slot === 'all' ? (isAdmin ? 'الكل' : 'كل الليالي') : slot === 'nights' ? 'كل الليالي' : constants_js_1.SLOTS[slot].label],
         ['رقم الليلة (هجري)', night === 'all' ? 'الكل' : night],
-        ['الفترة', period.from || period.to ? `${(0, util_js_1.fmtDate)(period.from) === '—' ? 'البداية' : (0, util_js_1.fmtDate)(period.from)} ← ${(0, util_js_1.fmtDate)(period.to) === '—' ? 'اليوم' : (0, util_js_1.fmtDate)(period.to)}` : 'كل الفترات'],
+        ['الفترة', cal === 'hijri' ? `${periodText} (هجري)` : period.from || period.to ? `${(0, util_js_1.fmtDate)(period.from) === '—' ? 'البداية' : (0, util_js_1.fmtDate)(period.from)} ← ${(0, util_js_1.fmtDate)(period.to) === '—' ? 'اليوم' : (0, util_js_1.fmtDate)(period.to)}` : 'كل الفترات'],
         ...(q.trim() ? [['القارئ', q.trim()]] : []),
     ];
     const doPrint = () => { (0, react_dom_1.flushSync)(() => setPrintAll(true)); window.print(); };
-    const clear = () => { setQ(''); setMosqueId('all'); setSlot('all'); setNight('all'); setRange('month'); setFrom(''); setTo(''); };
+    const clear = () => { setQ(''); setMosqueId('all'); setSlot('all'); setNight('all'); setRange('month'); setFrom(''); setTo(''); setCal('greg'); setHRange('hmonth'); setHYear(nowH.year); setHFrom({ month: nowH.month, year: nowH.year }); setHTo({ month: nowH.month, year: nowH.year }); };
     return (React.createElement(React.Fragment, null,
         React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u0625\u062D\u0635\u0627\u0626\u064A\u0627\u062A \u0648\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631", subtitle: "\u0627\u0628\u062D\u062B \u0648\u0635\u0641\u0650\u0651 \u0644\u062A\u062D\u0635\u0644 \u0639\u0644\u0649 \u0623\u0631\u0642\u0627\u0645 \u062F\u0642\u064A\u0642\u0629\u060C \u062B\u0645 \u0635\u062F\u0651\u0631 \u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u0643\u0645\u0644\u0641 PDF.", actions: React.createElement("button", { className: "btn-primary", onClick: doPrint },
                 React.createElement(lucide_react_1.Printer, { className: "h-4 w-4" }),
@@ -1852,9 +1970,9 @@ function Analytics() {
                 React.createElement("div", null,
                     React.createElement("label", { className: "label" }, "\u0627\u0644\u062E\u0627\u0646\u0629"),
                     React.createElement("select", { className: "input", value: slot, onChange: (e) => setSlot(e.target.value) },
-                        React.createElement("option", { value: "all" }, "\u0627\u0644\u062C\u0645\u0639\u0629 \u0648\u0627\u0644\u0644\u064A\u0627\u0644\u064A"),
-                        React.createElement("option", { value: "fri" }, "\u0627\u0644\u062C\u0645\u0639\u0629 \u0641\u0642\u0637"),
-                        React.createElement("option", { value: "nights" }, "\u0643\u0644 \u0627\u0644\u0644\u064A\u0627\u0644\u064A"),
+                        React.createElement("option", { value: "all" }, isAdmin ? "الجمعة والليالي" : "كل الليالي"),
+                        isAdmin && React.createElement("option", { value: "fri" }, "الجمعة فقط"),
+                        isAdmin && React.createElement("option", { value: "nights" }, "كل الليالي"),
                         constants_js_1.SLOT_KEYS.filter((k) => k !== 'fri').map((k) => React.createElement("option", { key: k, value: k }, constants_js_1.SLOTS[k].label)))),
                 React.createElement("div", null,
                     React.createElement("label", { className: "label" }, "\u0631\u0642\u0645 \u0627\u0644\u0644\u064A\u0644\u0629 (\u0627\u0644\u064A\u0648\u0645 \u0627\u0644\u0647\u062C\u0631\u064A)"),
@@ -1865,9 +1983,31 @@ function Analytics() {
                             n))))),
             React.createElement("div", { className: "flex flex-wrap items-end gap-3" },
                 React.createElement("div", null,
+                    React.createElement("label", { className: "label" }, "التقويم"),
+                    React.createElement(ui_jsx_1.Segmented, { options: CALENDARS, value: cal, onChange: setCal })),
+                React.createElement("div", null,
                     React.createElement("label", { className: "label" }, "\u0627\u0644\u0641\u062A\u0631\u0629 \u0627\u0644\u0632\u0645\u0646\u064A\u0629"),
-                    React.createElement(ui_jsx_1.Segmented, { options: RANGES, value: range, onChange: setRange })),
-                range === 'custom' && (React.createElement(React.Fragment, null,
+                    cal === 'hijri'
+                        ? React.createElement(ui_jsx_1.Segmented, { options: HRANGES, value: hRange, onChange: setHRange })
+                        : React.createElement(ui_jsx_1.Segmented, { options: RANGES, value: range, onChange: setRange })),
+                cal === 'hijri' && hRange === 'hyear' && (React.createElement("div", null,
+                    React.createElement("label", { className: "label" }, "السنة الهجرية"),
+                    React.createElement("select", { className: "input", value: hYear, onChange: (e) => setHYear(Number(e.target.value)) }, hijriYears.map((y) => React.createElement("option", { key: y, value: y }, y))))),
+                cal === 'hijri' && hRange === 'hcustom' && (React.createElement(React.Fragment, null,
+                    React.createElement("div", null,
+                        React.createElement("label", { className: "label" }, "من شهر"),
+                        React.createElement("div", { className: "flex gap-2" },
+                            React.createElement("select", { className: "input", value: hFrom.month, onChange: (e) => setHFrom({ ...hFrom, month: Number(e.target.value) }) }, constants_js_1.HIJRI_MONTHS.map((m, i) => React.createElement("option", { key: m, value: i + 1 }, m))),
+                            React.createElement("select", { className: "input", value: hFrom.year, onChange: (e) => setHFrom({ ...hFrom, year: Number(e.target.value) }) }, hijriYears.map((y) => React.createElement("option", { key: y, value: y }, y))))),
+                    React.createElement("div", null,
+                        React.createElement("label", { className: "label" }, "إلى شهر"),
+                        React.createElement("div", { className: "flex gap-2" },
+                            React.createElement("select", { className: "input", value: hTo.month, onChange: (e) => setHTo({ ...hTo, month: Number(e.target.value) }) }, constants_js_1.HIJRI_MONTHS.map((m, i) => React.createElement("option", { key: m, value: i + 1 }, m))),
+                            React.createElement("select", { className: "input", value: hTo.year, onChange: (e) => setHTo({ ...hTo, year: Number(e.target.value) }) }, hijriYears.map((y) => React.createElement("option", { key: y, value: y }, y))))))),
+                cal === 'hijri' && (React.createElement("p", { className: "pb-2 text-xs font-semibold text-ink-soft" },
+                    "الفترة: ",
+                    periodText)),
+                cal === 'greg' && range === 'custom' && (React.createElement(React.Fragment, null,
                     React.createElement("div", null,
                         React.createElement("label", { className: "label" }, "\u0645\u0646 \u062A\u0627\u0631\u064A\u062E"),
                         React.createElement("input", { type: "date", className: "input", value: from, onChange: (e) => setFrom(e.target.value) })),
@@ -2001,7 +2141,7 @@ function Analytics() {
                             "(\u00D7",
                             n,
                             ")"))))))))),
-        React.createElement(ReciterHistoryModal_jsx_1.default, { open: Boolean(hist), onClose: () => setHist(null), reciterKeyValue: hist?.key, name: hist?.name, periodFrom: period.from, periodTo: period.to })));
+        React.createElement(ReciterHistoryModal_jsx_1.default, { open: Boolean(hist), onClose: () => setHist(null), reciterKeyValue: hist?.key, name: hist?.name, periodFrom: period.from, periodTo: period.to, periodMatch: periodMatch })));
 }
 
 };
@@ -2040,8 +2180,8 @@ function DailyLog() {
     const mosque = mosqueById[mosqueId];
     const isNight = profile.role === 'night_supervisor';
     const mySlots = profile.slot_keys || [];
-    // تسجيل تلاوة الجمعة لمدير النظام فقط: مسؤول المسجد نطاقه الليالي فقط
-    // (من كان نطاقه «الجمعة» فقط لا يبقى له شيء يسجّله، ولا يُمنح الليالي بالخطأ)
+    // تلاوة الجمعة (النهار): لمدير النظام ولمسؤول الليلة المُسنَد إليه الجمعة فقط.
+    // مسؤول المسجد نطاقه الليالي فقط (من كان نطاقه «الجمعة» فقط لا يبقى له شيء يسجّله، ولا يُمنح الليالي بالخطأ)
     const scope = isAdmin || isNight ? 'both' : (profile.scope === 'friday' ? 'friday' : 'night');
     const duty = isNight
         ? mySlots.length === 1
@@ -2053,7 +2193,7 @@ function DailyLog() {
         if (!mosque)
             return [];
         const s = [];
-        if (isAdmin && mosque.enable_friday && (!isNight || mySlots.includes('fri')) && (scope === 'both' || scope === 'friday'))
+        if ((isAdmin || (isNight && mySlots.includes('fri'))) && mosque.enable_friday && (scope === 'both' || scope === 'friday'))
             s.push('fri');
         if (mosque.enable_night && (scope === 'both' || scope === 'night'))
             constants_js_1.NIGHT_KEYS.forEach((k) => mosque.night_days?.includes(k) && (!isNight || mySlots.includes(k)) && s.push(k));
@@ -2583,8 +2723,7 @@ function Login() {
                     busy ? React.createElement(ui_jsx_1.Spinner, { className: "!text-white h-4 w-4" }) : React.createElement(lucide_react_1.LogIn, { className: "h-4 w-4" }),
                     " ",
                     first ? 'إنشاء حساب المدير' : 'تسجيل الدخول'),
-                React.createElement("p", { className: "text-center text-xs text-ink-soft" }, "\u062A\u0628\u0642\u0649 \u0645\u0633\u062C\u0651\u0644\u0627\u064B \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u062D\u062A\u0649 \u062A\u0636\u063A\u0637 \u00AB\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062E\u0631\u0648\u062C\u00BB."),
-                React.createElement("button", { type: "button", className: "mx-auto block text-xs font-semibold text-ink underline", onClick: () => { setMode(first ? 'login' : 'first'); setError(''); } }, first ? 'العودة لتسجيل الدخول' : 'أول تشغيل؟ إنشاء حساب المدير')))));
+                React.createElement("p", { className: "text-center text-xs text-ink-soft" }, "\u062A\u0628\u0642\u0649 \u0645\u0633\u062C\u0651\u0644\u0627\u064B \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u062D\u062A\u0649 \u062A\u0636\u063A\u0637 \u00AB\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062E\u0631\u0648\u062C\u00BB.")))));
 }
 
 };
@@ -2969,7 +3108,7 @@ const constants_js_1 = require("src/lib/constants.js");
 const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
 const ReciterHistoryModal_jsx_1 = __importDefault(require("src/components/ReciterHistoryModal.jsx"));
-const blank = { name: '', notes: '', is_active: true, slots: [] };
+const blank = { name: '', phone: '', notes: '', is_active: true, slots: [] };
 function Reciters() {
     const { isAdmin } = (0, AuthContext_jsx_1.useAuth)();
     const { reciters, slotsByReciter, recitation_logs, upsertLocal, removeLocal } = (0, DataContext_jsx_1.useData)();
@@ -3010,11 +3149,14 @@ function Reciters() {
             return toast.warn('اسم القارئ مطلوب');
         setBusy(true);
         const row = { name: form.name.trim(), notes: form.notes?.trim() || null, is_active: form.is_active };
+        // رقم القارئ (للمدير فقط): يُرسَل إذا كُتب رقم، أو إذا كان عمود phone موجوداً في قاعدة البيانات
+        if (form.phone?.trim() || reciters.some((x) => 'phone' in x))
+            row.phone = form.phone?.trim() || null;
         const q1 = form.id ? supabase_js_1.supabase.from('reciters').update(row).eq('id', form.id) : supabase_js_1.supabase.from('reciters').insert(row);
         const { data: r, error } = await q1.select().single();
         if (error) {
             setBusy(false);
-            return toast.error('تعذّر الحفظ', error.code === '23505' ? 'يوجد قارئ بنفس الاسم.' : error.message);
+            return toast.error('تعذّر الحفظ', error.code === '23505' ? 'يوجد قارئ بنفس الاسم.' : (/phone/.test(error.message) ? 'عمود الرقم (phone) غير موجود في جدول reciters — أضفه من Supabase ثم أعد المحاولة.' : error.message));
         }
         upsertLocal('reciters', r);
         const existing = slotsByReciter[r.id] || [];
@@ -3072,6 +3214,7 @@ function Reciters() {
                         React.createElement("th", { className: "th" }, "\u0627\u0644\u062E\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629"),
                         React.createElement("th", { className: "th" }, "\u0639\u062F\u062F \u0627\u0644\u062A\u0644\u0627\u0648\u0627\u062A"),
                         React.createElement("th", { className: "th" }, "\u0622\u062E\u0631 \u062A\u0644\u0627\u0648\u0629"),
+                        React.createElement("th", { className: "th" }, "الرقم"),
                         isAdmin && React.createElement("th", { className: "th w-24" }))),
                 React.createElement("tbody", null, rows.map((r) => {
                     const st = stats[r.id];
@@ -3084,9 +3227,10 @@ function Reciters() {
                             React.createElement("div", { className: "flex flex-wrap gap-1.5" }, slots.length ? slots.map((k) => React.createElement("span", { key: k, className: k === 'fri' ? 'badge-brand' : 'badge-neutral' }, constants_js_1.SLOTS[k].short)) : React.createElement("span", { className: "text-ink-soft" }, "\u2014"))),
                         React.createElement("td", { className: "td font-bold" }, st?.count ?? 0),
                         React.createElement("td", { className: "td text-sm" }, st ? (0, util_js_1.fmtDate)(st.last) : '—'),
+                        React.createElement("td", { className: "td" }, r.phone ? React.createElement(ui_jsx_1.PhoneMenu, { phone: r.phone, name: r.name }) : React.createElement("span", { className: "text-ink-soft" }, "—")),
                         isAdmin && (React.createElement("td", { className: "td", onClick: (e) => e.stopPropagation() },
                             React.createElement("div", { className: "flex gap-1" },
-                                React.createElement("button", { className: "btn-ghost btn-sm !px-2", "aria-label": "\u062A\u0639\u062F\u064A\u0644", onClick: () => setForm({ ...r, notes: r.notes || '', slots }) },
+                                React.createElement("button", { className: "btn-ghost btn-sm !px-2", "aria-label": "\u062A\u0639\u062F\u064A\u0644", onClick: () => setForm({ ...r, notes: r.notes || '', phone: r.phone || '', slots }) },
                                     React.createElement(lucide_react_1.Pencil, { className: "h-4 w-4" })),
                                 React.createElement("button", { className: "btn-ghost btn-sm !px-2 text-bad", "aria-label": "\u062D\u0630\u0641", onClick: () => setDel(r) },
                                     React.createElement(lucide_react_1.Trash2, { className: "h-4 w-4" })))))));
@@ -3099,6 +3243,8 @@ function Reciters() {
                     " \u062D\u0641\u0638")) }, form && (React.createElement("div", { className: "space-y-4" },
             React.createElement(ui_jsx_1.Field, { label: "\u0627\u0633\u0645 \u0627\u0644\u0642\u0627\u0631\u0626" },
                 React.createElement("input", { className: "input", value: form.name, onChange: (e) => setForm({ ...form, name: e.target.value }), autoFocus: true })),
+            isAdmin && React.createElement(ui_jsx_1.Field, { label: "رقم القارئ (اختياري)", hint: "يظهر لمسؤول الليلة بجانب الاسم مع خيارَي الاتصال والواتساب." },
+                React.createElement("input", { type: "tel", inputMode: "tel", dir: "ltr", className: "input text-end", placeholder: "05xxxxxxxx", value: form.phone || '', onChange: (e) => setForm({ ...form, phone: e.target.value }) })),
             React.createElement(ui_jsx_1.Field, { label: "\u0645\u0644\u0627\u062D\u0638\u0627\u062A (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)" },
                 React.createElement("input", { className: "input", value: form.notes, onChange: (e) => setForm({ ...form, notes: e.target.value }) })),
             React.createElement("div", { className: "rounded-xl border border-cardline bg-hover p-4" },
@@ -3218,7 +3364,10 @@ function NightReciters() {
                                     React.createElement("th", { className: "th" }, prevName, React.createElement("span", { className: "ms-1 text-[11px] font-semibold text-ink-soft" }, "(الماضي)")),
                                     React.createElement("th", { className: "th" }, "\u0622\u062E\u0631 \u062A\u0644\u0627\u0648\u0629"))),
                             React.createElement("tbody", null, rows.map(({ r, cur, prev, last }) => (React.createElement("tr", { key: r.id, className: "tr-hover cursor-pointer", onClick: () => setHist({ key: r.id, name: r.name }) },
-                                React.createElement("td", { className: "td font-bold" }, r.name),
+                                React.createElement("td", { className: "td font-bold" },
+                                    React.createElement("div", { className: "flex flex-wrap items-center gap-2" },
+                                        r.name,
+                                        r.phone && React.createElement(ui_jsx_1.PhoneMenu, { phone: r.phone, name: r.name }))),
                                 React.createElement("td", { className: "td" },
                                     React.createElement("span", { className: `rounded-full px-2.5 py-0.5 text-xs font-bold ${cur > 0 ? 'bg-brand/10 text-brand' : 'bg-hover text-ink-soft'}` }, cur)),
                                 React.createElement("td", { className: "td" },
@@ -3552,6 +3701,8 @@ exports.functionError = async function functionError(error) {
 defs["lucide-react"] = function(exports, require, module, React){
 
 const ICONS = {"BarChart3":"<path d=\"M3 3v16a2 2 0 0 0 2 2h16\"></path><path d=\"M18 17V9\"></path><path d=\"M13 17V5\"></path><path d=\"M8 17v-3\"></path>","BookOpen":"<path d=\"M12 7v14\"></path><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\"></path>","Building2":"<path d=\"M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z\"></path><path d=\"M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2\"></path><path d=\"M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2\"></path><path d=\"M10 6h4\"></path><path d=\"M10 10h4\"></path><path d=\"M10 14h4\"></path><path d=\"M10 18h4\"></path>","ClipboardList":"<rect width=\"8\" height=\"4\" x=\"8\" y=\"2\" rx=\"1\" ry=\"1\"></rect><path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\"></path><path d=\"M12 11h4\"></path><path d=\"M12 16h4\"></path><path d=\"M8 11h.01\"></path><path d=\"M8 16h.01\"></path>","LayoutDashboard":"<rect width=\"7\" height=\"9\" x=\"3\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"14\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"9\" x=\"14\" y=\"12\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"></rect>","LogOut":"<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"></path><polyline points=\"16 17 21 12 16 7\"></polyline><line x1=\"21\" x2=\"9\" y1=\"12\" y2=\"12\"></line>","Menu":"<line x1=\"4\" x2=\"20\" y1=\"12\" y2=\"12\"></line><line x1=\"4\" x2=\"20\" y1=\"6\" y2=\"6\"></line><line x1=\"4\" x2=\"20\" y1=\"18\" y2=\"18\"></line>","Users":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"></path><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"></path>","UserRound":"<circle cx=\"12\" cy=\"8\" r=\"5\"></circle><path d=\"M20 21a8 8 0 0 0-16 0\"></path>","X":"<path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path>","Bell":"<path d=\"M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9\"></path><path d=\"M10.3 21a1.94 1.94 0 0 0 3.4 0\"></path>","ChevronDown":"<path d=\"m6 9 6 6 6-6\"></path>","Search":"<circle cx=\"11\" cy=\"11\" r=\"8\"></circle><path d=\"m21 21-4.3-4.3\"></path>","UserPlus":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><line x1=\"19\" x2=\"19\" y1=\"8\" y2=\"14\"></line><line x1=\"22\" x2=\"16\" y1=\"11\" y2=\"11\"></line>","Loader2":"<path d=\"M21 12a9 9 0 1 1-6.219-8.56\"></path>","Wifi":"<path d=\"M12 20h.01\"></path><path d=\"M2 8.82a15 15 0 0 1 20 0\"></path><path d=\"M5 12.859a10 10 0 0 1 14 0\"></path><path d=\"M8.5 16.429a5 5 0 0 1 7 0\"></path>","WifiOff":"<path d=\"M12 20h.01\"></path><path d=\"M8.5 16.429a5 5 0 0 1 7 0\"></path><path d=\"M5 12.859a10 10 0 0 1 5.17-2.69\"></path><path d=\"M19 12.859a10 10 0 0 0-2.007-1.523\"></path><path d=\"M2 8.82a15 15 0 0 1 4.177-2.643\"></path><path d=\"M22 8.82a15 15 0 0 0-11.288-3.764\"></path><path d=\"m2 2 20 20\"></path>","Inbox":"<polyline points=\"22 12 16 12 14 15 10 15 8 12 2 12\"></polyline><path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path>","AlertTriangle":"<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"></path><path d=\"M12 9v4\"></path><path d=\"M12 17h.01\"></path>","CheckCircle2":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"m9 12 2 2 4-4\"></path>","Info":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M12 16v-4\"></path><path d=\"M12 8h.01\"></path>","XCircle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"m15 9-6 6\"></path><path d=\"m9 9 6 6\"></path>","Printer":"<path d=\"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2\"></path><path d=\"M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6\"></path><rect x=\"6\" y=\"14\" width=\"12\" height=\"8\" rx=\"1\"></rect>","Pencil":"<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"></path><path d=\"m15 5 4 4\"></path>","Save":"<path d=\"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\"></path><path d=\"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7\"></path><path d=\"M7 3v4a1 1 0 0 0 1 1h7\"></path>","Trash2":"<path d=\"M3 6h18\"></path><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"></path><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"></path><line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\"></line><line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\"></line>","LogIn":"<path d=\"M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4\"></path><polyline points=\"10 17 15 12 10 7\"></polyline><line x1=\"15\" x2=\"3\" y1=\"12\" y2=\"12\"></line>","Plus":"<path d=\"M5 12h14\"></path><path d=\"M12 5v14\"></path>","Eye":"<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>","EyeOff":"<path d=\"M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143\"></path><path d=\"m2 2 20 20\"></path>","Database":"<ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"></ellipse><path d=\"M3 5V19A9 3 0 0 0 21 19V5\"></path><path d=\"M3 12A9 3 0 0 0 21 12\"></path>","Clock":"<path d=\"M12 6v6l4 2\"></path><circle cx=\"12\" cy=\"12\" r=\"10\"></circle>","KeyRound":"<path d=\"M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z\"></path><circle cx=\"16.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"></circle>"}
+ICONS.Phone = '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>'
+ICONS.MessageCircle = '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path>'
 function make(name) {
   const inner = ICONS[name]
   return function Icon(props) {
@@ -3592,6 +3743,8 @@ exports.EyeOff = make('EyeOff')
 exports.KeyRound = make('KeyRound')
 exports.Database = make('Database')
 exports.Clock = make('Clock')
+exports.Phone = make('Phone')
+exports.MessageCircle = make('MessageCircle')
 
 };
 defs["react-router-dom"] = function(exports, require, module, React){
