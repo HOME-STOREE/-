@@ -266,12 +266,252 @@ create trigger trg_cards_default_sort_order
 ================================================================================
 -->
 <meta charset="UTF-8">
+<script>
+/* ============================================================
+   حارس التوجيه المبكر (يعمل قبل رسم الصفحة لتفادي أي وميض)
+   - زائر بلا جلسة بوابة            → warehouse.html مباشرة (وضع العرض الخارجي)
+   - حساب مستودع فقط (دخل من المستودع) → warehouse.html مباشرة
+   - جلسة بوابة (Supabase)            → يكمل التحميل، ويقرّر التوجيه بعد قراءة الصلاحيات
+   - index.html?login (أو #login)      → يعرض شاشة دخول البوابة بدون تحويل
+   ============================================================ */
+(function () {
+  var qs = location.search + '&' + location.hash.replace('#', '&');
+  window.__PORTAL_LOGIN_MODE = /(^|[?&])login(=|&|$)/.test(qs);
+  if (window.__PORTAL_LOGIN_MODE) return;
+  var hasPortalSession = false;
+  try { hasPortalSession = localStorage.getItem('sb-nzommukbtzmeytjibizy-auth-token') !== null; } catch (e) {}
+  if (!hasPortalSession) {
+    window.__PORTAL_REDIRECTING = true;
+    location.replace('warehouse.html');
+  }
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>البوابة الرئيسية للأنظمة</title>
 <link rel="icon" type="image/png" sizes="32x32" href="./icon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="./icon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
 <link rel="manifest" href="./manifest.json">
+<script id="pwa-dynamic-manifest">
+/* ============================================================
+   PWA ديناميكي (نفس الكود في index.html و warehouse.html)
+   1) يولّد manifest (Data URI) حسب الصلاحيات في localStorage:
+      - زائر / حساب مستودع فقط → "نظام المستودع" + شعار المستودع + start_url = warehouse.html
+      - متعدد الصلاحيات (أو مدير بوابة) → "المنصة الرئيسية / الأنظمة" + شعار المنصة + start_url = index.html
+   2) يعرض زر "تثبيت التطبيق" عند beforeinstallprompt
+   3) يسجّل sw.js ويحفظ مكتبات CDN للعمل بدون إنترنت
+   ملاحظة: الروابط داخل manifest الـ Data URI يجب أن تكون مطلقة، لذلك تُبنى من مجلد الصفحة.
+   ============================================================ */
+(function () {
+  'use strict';
+  var PORTAL_TOKEN_KEY = 'sb-nzommukbtzmeytjibizy-auth-token';
+  var CDN_RE = /^https:\/\/(esm\.sh|unpkg\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
+  var BASE = new URL('./', location.href).href;
+  var IS_WAREHOUSE_PAGE = /\/warehouse(\.html)?$/i.test(location.pathname);
+
+  var APPS = {
+    warehouse: {
+      name: 'نظام المستودع', short: 'المستودع', title: 'المستودع',
+      desc: 'نظام إدارة المستودع والمخزون',
+      start: 'warehouse.html', theme: '#2B3B47', bg: '#ECE2CC'
+    },
+    platform: {
+      name: 'المنصة الرئيسية / الأنظمة', short: 'الأنظمة', title: 'الأنظمة',
+      desc: 'البوابة الرئيسية للوصول إلى المستودع وبقية الأنظمة المتاحة لك',
+      start: 'index.html', theme: '#4a3020', bg: '#fdfbf8'
+    }
+  };
+
+  function readJSON(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+
+  // شعار المستودع: نلتقطه من وسوم الصفحة الأصلية (manifest مضمّن + apple-touch-icon) قبل أن نستبدلها
+  var harvested = (function () {
+    var out = { icons: null, apple: null };
+    try {
+      var prefix = 'data:application/manifest+json,';
+      var links = document.querySelectorAll('link[rel="manifest"]');
+      for (var i = 0; i < links.length; i++) {
+        var h = links[i].getAttribute('href') || '';
+        if (h.indexOf(prefix) === 0) {
+          var j = JSON.parse(decodeURIComponent(h.slice(prefix.length)));
+          var ic = (j && j.icons || []).filter(function (x) { return /^data:image\//.test(x.src || ''); });
+          if (ic.length) out.icons = ic;
+        }
+      }
+      var a = document.querySelector('link[rel="apple-touch-icon"][href^="data:image/"]');
+      if (a) out.apple = a.getAttribute('href');
+    } catch (e) {}
+    return out;
+  })();
+
+  function livePortal() {
+    var ps = readJSON('portalSession');
+    if (!ps || ps.source !== 'portal') return null;
+    try { if (localStorage.getItem(PORTAL_TOKEN_KEY) === null) return null; } catch (e) { return null; }
+    return ps;
+  }
+
+  function decideMode() {
+    var ps = livePortal(), allowed = readJSON('allowedPages');
+    if (ps && ((Array.isArray(allowed) && allowed.length > 1) || ps.role === 'admin')) return 'platform';
+    // في index.html لا يتوفر شعار المستودع → نبقى على المنصة
+    if (!IS_WAREHOUSE_PAGE && !harvested.icons) return 'platform';
+    return 'warehouse';
+  }
+
+  function fileIcons() {
+    return [
+      { src: BASE + 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: BASE + 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: BASE + 'icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+    ];
+  }
+
+  function setMeta(name, content) {
+    var m = document.querySelector('meta[name="' + name + '"]');
+    if (!m) { m = document.createElement('meta'); m.setAttribute('name', name); document.head.appendChild(m); }
+    if (m.getAttribute('content') !== content) m.setAttribute('content', content);
+  }
+
+  function setAppleIcon(href) {
+    var cur = document.querySelectorAll('link[rel="apple-touch-icon"]');
+    if (cur.length === 1 && cur[0].getAttribute('href') === href) return;
+    for (var i = 0; i < cur.length; i++) cur[i].parentNode.removeChild(cur[i]);
+    var l = document.createElement('link');
+    l.setAttribute('rel', 'apple-touch-icon'); l.setAttribute('sizes', '180x180'); l.setAttribute('href', href);
+    document.head.appendChild(l);
+  }
+
+  function apply() {
+    var mode = decideMode(), app = APPS[mode];
+    var manifest = {
+      id: BASE + app.start,
+      name: app.name, short_name: app.short, description: app.desc,
+      lang: 'ar', dir: 'rtl',
+      start_url: BASE + app.start, scope: BASE,
+      display: 'standalone', orientation: 'any',
+      background_color: app.bg, theme_color: app.theme,
+      icons: (mode === 'warehouse' && harvested.icons) ? harvested.icons : fileIcons()
+    };
+    var href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest));
+
+    var links = document.querySelectorAll('link[rel="manifest"]');
+    var link = links[0];
+    if (!link) { link = document.createElement('link'); link.setAttribute('rel', 'manifest'); document.head.appendChild(link); }
+    for (var i = 1; i < links.length; i++) links[i].parentNode.removeChild(links[i]);   // manifest واحد فقط
+    if (link.getAttribute('href') !== href) link.setAttribute('href', href);
+
+    // iOS لا يقرأ manifest ديناميكياً بشكل موثوق: نضبط الاسم والأيقونة عبر meta/link
+    setMeta('apple-mobile-web-app-title', app.title);
+    setAppleIcon((mode === 'warehouse' && harvested.apple) ? harvested.apple : BASE + 'apple-touch-icon.png');
+
+    window.__pwaMode = mode;
+    return mode;
+  }
+
+  try { apply(); } catch (e) {}
+  document.addEventListener('DOMContentLoaded', function () { try { apply(); } catch (e) {} });
+  window.addEventListener('pageshow', function () { try { apply(); } catch (e) {} });
+  window.addEventListener('storage', function () { try { apply(); } catch (e) {} });   // دخول/خروج من تبويب آخر
+  window.refreshPwaManifest = apply;
+
+  // تغيّر الجلسة داخل نفس التبويب (تسجيل دخول/خروج) لا يُطلق حدث storage،
+  // لذلك نراقب كتابة/حذف المفاتيح المعنيّة في localStorage ونحدّث الـ manifest فوراً
+  (function () {
+    var WATCH = { 'portalSession': 1, 'allowedPages': 1 };
+    WATCH[PORTAL_TOKEN_KEY] = 1;
+    var pending = false;
+    function kick() {
+      if (pending) return; pending = true;
+      setTimeout(function () { pending = false; try { apply(); } catch (e) {} }, 0);
+    }
+    function isLocal(o) { try { return o === window.localStorage; } catch (e) { return false; } }
+    try {
+      var P = Storage.prototype, _set = P.setItem, _rem = P.removeItem;
+      P.setItem = function (k) {
+        var r = _set.apply(this, arguments);
+        if (WATCH.hasOwnProperty(k) && isLocal(this)) kick();
+        return r;
+      };
+      P.removeItem = function (k) {
+        var r = _rem.apply(this, arguments);
+        if (WATCH.hasOwnProperty(k) && isLocal(this)) kick();
+        return r;
+      };
+    } catch (e) {}
+  })();
+
+  /* ---------- زر "تثبيت التطبيق" ---------- */
+  var deferred = null, DISMISS_KEY = 'pwa-install-fab-dismissed-at';
+
+  function isStandalone() {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  }
+  function recentlyDismissed() {
+    try { var t = +localStorage.getItem(DISMISS_KEY); return !!t && (Date.now() - t) < 7 * 24 * 3600 * 1000; } catch (e) { return false; }
+  }
+  function removeInstallButton() {
+    var b = document.getElementById('pwa-install-fab');
+    if (b && b.parentNode) b.parentNode.removeChild(b);
+  }
+  window.installPwa = function () {
+    var p = deferred; if (!p) return;
+    deferred = null; removeInstallButton();
+    try { p.prompt(); } catch (e) {}
+  };
+  function showInstallButton() {
+    if (!deferred || isStandalone() || recentlyDismissed()) return;
+    if (document.getElementById('pwa-install-banner')) return;   // index.html لديه شريط تثبيت خاص به
+    if (document.getElementById('pwa-install-fab')) return;
+    if (!document.body) { document.addEventListener('DOMContentLoaded', showInstallButton); return; }
+
+    var wrap = document.createElement('div');
+    wrap.id = 'pwa-install-fab';
+    wrap.setAttribute('dir', 'rtl');
+    wrap.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 16px);' +
+      'z-index:99998;display:flex;align-items:center;gap:4px;background:#0F766E;color:#fff;border-radius:999px;' +
+      'box-shadow:0 6px 18px rgba(0,0,0,.28);font:700 14px system-ui,-apple-system,"Segoe UI",Tajawal,sans-serif;max-width:calc(100vw - 24px)';
+
+    var go = document.createElement('button');
+    go.type = 'button'; go.textContent = '📲 تثبيت التطبيق';
+    go.style.cssText = 'all:unset;cursor:pointer;padding:11px 8px 11px 16px;white-space:nowrap';
+    go.addEventListener('click', function () { window.installPwa(); });
+
+    var x = document.createElement('button');
+    x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'إخفاء');
+    x.style.cssText = 'all:unset;cursor:pointer;padding:11px 14px 11px 8px;opacity:.85';
+    x.addEventListener('click', function () {
+      try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch (e) {}
+      removeInstallButton();
+    });
+
+    wrap.appendChild(go); wrap.appendChild(x);
+    document.body.appendChild(wrap);
+  }
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault(); deferred = e; window.__deferredInstallPrompt = e; showInstallButton();
+  });
+  window.addEventListener('appinstalled', function () { deferred = null; removeInstallButton(); });
+
+  /* ---------- Service Worker + حفظ مكتبات CDN للأوفلاين ---------- */
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js')
+        .then(function () { return navigator.serviceWorker.ready; })
+        .then(function (reg) {
+          var urls = [];
+          try {
+            urls = performance.getEntriesByType('resource').map(function (r) { return r.name; })
+              .filter(function (u) { return CDN_RE.test(u); });
+          } catch (e) {}
+          var target = reg.active || navigator.serviceWorker.controller;
+          if (target && urls.length) target.postMessage({ type: 'CACHE_URLS', urls: urls });
+        })
+        .catch(function () {});
+    });
+  }
+})();
+</script>
 <meta name="theme-color" content="#FAF9F6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="الأنظمة">
@@ -1800,6 +2040,96 @@ el('confirm-ok').addEventListener('click', async () => {
 /* ============================================================
    المصادقة
    ============================================================ */
+/* ============================================================
+   الجلسة والتوجيه الذكي (localStorage)
+   المفاتيح:
+     allowedPages     مصفوفة مفاتيح الصفحات المسموحة، مثل ["warehouse","<card-id>"]
+     portalSession    تفاصيل الجلسة: {source, userId, name, role, cards:[{key,title,url}], savedAt}
+     warehouseSession جلسة المستودع الداخلية (يكتبها جسر warehouse.html، وتُستعاد هناك تلقائياً)
+   ============================================================ */
+const WAREHOUSE_URL = 'warehouse.html';
+const WAREHOUSE_KEY = 'warehouse';
+const LS_ALLOWED = 'allowedPages';
+const LS_PORTAL = 'portalSession';
+const LS_WH_SESSION = 'warehouseSession';
+const WH_ROLE_KEY = 'warehouse-role';           // مفتاح sessionStorage الأصلي داخل المستودع
+const LOGIN_MODE = window.__PORTAL_LOGIN_MODE === true;
+
+function lsRead(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (_) { return null; } }
+function lsWrite(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
+function lsDrop(k) { try { localStorage.removeItem(k); } catch (_) {} }
+
+function pageKeyForCard(card) {
+  const id = resolveCardIdentity(card);
+  const isWarehouse = id.themeKey === 'warehouse' || /(^|\/)warehouse(\.html)?([?#]|$)/i.test(card.url || '');
+  return isWarehouse ? WAREHOUSE_KEY : card.id;
+}
+
+// يمنع javascript: و data: ويقبل الروابط النسبية و http(s) فقط
+function safeDestination(url) {
+  const u = String(url || '').trim();
+  if (!u) return null;
+  if (/^(https?:)?\/\//i.test(u)) return u;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return null;
+  return u;
+}
+
+function getMyPermittedPages() {
+  return state.cards
+    .filter(c => state.myPermittedCardIds.has(c.id))
+    .map(c => ({ key: pageKeyForCard(c), title: c.title, url: c.url }));
+}
+
+function savePortalAccess(pages) {
+  const uid = state.session.user.id;
+  const prev = lsRead(LS_PORTAL);
+  // لا تُورَّث جلسة المستودع المحفوظة من هوية سابقة إلى مستخدم مختلف
+  if (prev && prev.userId !== uid) lsDrop(LS_WH_SESSION);
+  lsWrite(LS_ALLOWED, Array.from(new Set(pages.map(p => p.key))));
+  lsWrite(LS_PORTAL, {
+    source: 'portal',
+    userId: uid,
+    name: (state.profile && (state.profile.full_name || state.profile.username)) || '',
+    role: state.profile && state.profile.is_admin ? 'admin' : 'user',
+    cards: pages,
+    savedAt: Date.now()
+  });
+}
+
+// all=false: يمسح فقط ما كتبته البوابة (لا يمسّ جلسة دخول المستودع المستقلة)
+// all=true : خروج صريح من البوابة، يمسح كل شيء
+function clearPortalAccess(all) {
+  const ps = lsRead(LS_PORTAL);
+  if (!all && !(ps && ps.source === 'portal')) return;
+  lsDrop(LS_ALLOWED);
+  lsDrop(LS_PORTAL);
+  lsDrop(LS_WH_SESSION);
+  try { sessionStorage.removeItem(WH_ROLE_KEY); } catch (_) {}
+}
+
+function redirectTo(url) {
+  const dest = safeDestination(url);
+  if (!dest) return false;
+  window.__PORTAL_REDIRECTING = true;
+  location.replace(dest);
+  return true;
+}
+
+// يحفظ الصلاحيات ثم يقرّر: true = تم التحويل (لا تعرض الواجهة)، false = اعرض البوابة
+function routeAfterAuth() {
+  const pages = getMyPermittedPages();
+  savePortalAccess(pages);
+
+  // المدير يحتاج لوحة الإدارة (الصلاحيات/البطاقات/المستخدمين) فيبقى في البوابة دائماً
+  if (state.profile && state.profile.is_admin) return false;
+
+  if (pages.length === 1) {
+    const only = pages[0];
+    return redirectTo(only.key === WAREHOUSE_KEY ? WAREHOUSE_URL : only.url);
+  }
+  return false;   // صفر أو أكثر من صلاحية → البوابة وبطاقاتها
+}
+
 async function init() {
   startWatchdog(12000);
   try {
@@ -1809,8 +2139,11 @@ async function init() {
 
     if (state.session) {
       await loadProfileAndData();
+      if (routeAfterAuth()) { clearWatchdog(); return; }
       showApp();
     } else {
+      clearPortalAccess();
+      if (!LOGIN_MODE) { clearWatchdog(); redirectTo(WAREHOUSE_URL); return; }
       showLogin();
     }
   } catch (err) {
@@ -1823,6 +2156,7 @@ async function init() {
   sb.auth.onAuthStateChange((event, session) => {
     state.session = session;
     if (event === 'SIGNED_OUT') {
+      clearPortalAccess();
       showLogin();
     }
   });
@@ -1853,9 +2187,14 @@ el('login-form').addEventListener('submit', async (e) => {
     const { error } = await sb.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
+    // دخول جديد للبوابة: لا نُبقي أي جلسة مستودع قديمة لهوية أخرى
+    lsDrop(LS_WH_SESSION);
+    try { sessionStorage.removeItem(WH_ROLE_KEY); } catch (_) {}
+
     startWatchdog(12000);
     await loadProfileAndData();
     clearWatchdog();
+    if (routeAfterAuth()) return;
     showApp();
   } catch (err) {
     errBox.textContent = 'تعذّر تسجيل الدخول: تحقق من اسم المستخدم وكلمة المرور.';
@@ -1867,6 +2206,7 @@ el('login-form').addEventListener('submit', async (e) => {
 });
 
 el('logout-btn').addEventListener('click', async () => {
+  clearPortalAccess(true);
   await sb.auth.signOut();
   state.profile = null;
   state.cards = [];
@@ -2093,9 +2433,13 @@ function renderEmployeeGrid() {
     const id = resolveCardIdentity(card);
 
     const a = document.createElement('a');
-    a.href = card.url;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
+    if (pageKeyForCard(card) === WAREHOUSE_KEY) {
+      a.href = WAREHOUSE_URL;                 // نفس التبويب؛ الجسر داخل المستودع يستعيد الجلسة المحفوظة
+    } else {
+      a.href = card.url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+    }
     a.className = 'system-card fade-in ' + layoutFor(i)
       + (id.themeKey ? ` theme-${id.themeKey}` : ' theme-custom');
     a.style.animationDelay = (i * 60) + 'ms';
@@ -3063,7 +3407,7 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ---------------- تشغيل ---------------- */
-init();
+if (!window.__PORTAL_REDIRECTING) init();
 </script>
 </body>
 </html>
