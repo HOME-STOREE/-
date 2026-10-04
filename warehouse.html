@@ -100,13 +100,6 @@
   window.addEventListener('storage', refreshBackButton);    // تسجيل خروج/دخول من تبويب آخر
 })();
 </script>
-<style id="back-btn-label-style">
-  #back-to-gateway-btn .bg-short { display: none; }
-  @media (max-width: 520px) {
-    #back-to-gateway-btn .bg-long { display: none; }
-    #back-to-gateway-btn .bg-short { display: inline; }
-  }
-</style>
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="المستودع" />
@@ -132,9 +125,9 @@
 (function () {
   'use strict';
   var PORTAL_TOKEN_KEY = 'sb-nzommukbtzmeytjibizy-auth-token';
-  var CDN_RE = /^https:\/\/(esm\.sh|unpkg\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
+  var CDN_RE = /^https:\/\/(esm\.sh|unpkg\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|cdn\.tailwindcss\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
   var BASE = new URL('./', location.href).href;
-  var IS_WAREHOUSE_PAGE = /\/warehouse(\.html)?$/i.test(location.pathname);
+  var IS_INDEX_PAGE = /\/(index(\.html)?)?$/i.test(location.pathname);   // البوابة نفسها
 
   var APPS = {
     warehouse: {
@@ -186,7 +179,7 @@
       }
       return APPS.platform;                       // أكثر من صلاحية أو لا شيء بعد
     }
-    return IS_WAREHOUSE_PAGE ? APPS.warehouse : APPS.platform;   // زائر / حساب مستودع فقط
+    return IS_INDEX_PAGE ? APPS.platform : APPS.warehouse;   // زائر / حساب مستودع فقط (الافتراضي = المستودع)
   }
 
   function fileIcons() {
@@ -324,7 +317,7 @@
   window.addEventListener('appinstalled', function () { deferred = null; removeInstallButton(); });
 
   /* ---------- Service Worker + حفظ مكتبات CDN للأوفلاين ---------- */
-  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !window.__PWA_NO_SW) {
     window.addEventListener('load', function () {
       navigator.serviceWorker.register('./sw.js')
         .then(function () { return navigator.serviceWorker.ready; })
@@ -379,88 +372,6 @@
 </style>
 </head>
 <body>
-<a href="index.html" id="back-to-gateway-btn" draggable="false" style="position:fixed; top:14px; left:130px; z-index:99999; display:inline-flex; visibility:hidden; white-space:nowrap; align-items:center; gap:6px; padding:8px 14px; background:#1D4ED8; color:#fff; border-radius:999px; font-family:system-ui,-apple-system,'Segoe UI',Tajawal,sans-serif; font-size:13px; font-weight:700; text-decoration:none; box-shadow:0 4px 14px rgba(0,0,0,0.25); backdrop-filter:blur(6px); touch-action:none; user-select:none;" onmouseover="this.style.background='#1E40AF'" onmouseout="this.style.background='#1D4ED8'">
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>
-  <span class="bg-long">العودة للأنظمة / المنصة الرئيسية</span><span class="bg-short">العودة للأنظمة</span>
-</a>
-<script>
-(function(){
-  // زر "العودة للصفحة الرئيسية" أصبح قابلاً للسحب — لو كان يغطّي شيئاً في
-  // الصفحة تقدر تمسكه وتحرّكه لأي مكان، وموضعه الجديد يُحفظ ويبقى محفوظاً
-  // حتى بعد إغلاق الصفحة وفتحها من جديد. النقر العادي (بدون سحب) يبقى
-  // يفتح الصفحة الرئيسية كالمعتاد.
-  var btn = document.getElementById('back-to-gateway-btn');
-  if (!btn) return;
-  var POS_KEY = 'warehouseBackBtnPos';
-  var DRAG_THRESHOLD = 6; // بكسل — أقل من كذا يُعتبر نقرة وليس سحباً
-
-  function clamp(left, top) {
-    var w = btn.offsetWidth, h = btn.offsetHeight;
-    var maxLeft = Math.max(0, window.innerWidth - w - 4);
-    var maxTop = Math.max(0, window.innerHeight - h - 4);
-    return { left: Math.min(Math.max(4, left), maxLeft), top: Math.min(Math.max(4, top), maxTop) };
-  }
-  function applyPos(left, top) {
-    var p = clamp(left, top);
-    btn.style.left = p.left + 'px';
-    btn.style.top = p.top + 'px';
-  }
-
-  // استرجاع آخر موضع محفوظ (إن وجد)
-  try {
-    var saved = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
-    if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
-      applyPos(saved.left, saved.top);
-    }
-  } catch (e) { /* تجاهل */ }
-  window.addEventListener('resize', function () {
-    var r = btn.getBoundingClientRect();
-    applyPos(r.left, r.top);
-  });
-
-  btn.addEventListener('dragstart', function (e) { e.preventDefault(); });
-
-  var dragging = false, moved = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
-
-  btn.addEventListener('pointerdown', function (e) {
-    if (e.button !== undefined && e.button !== 0) return; // زر الفأرة الأيسر / اللمس فقط
-    e.preventDefault(); // يمنع متصفح اللابتوب من بدء سحب الرابط الأصلي بدل تحريك الزر
-    dragging = true;
-    moved = false;
-    var r = btn.getBoundingClientRect();
-    startX = e.clientX; startY = e.clientY;
-    startLeft = r.left; startTop = r.top;
-    try { btn.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
-  });
-
-  btn.addEventListener('pointermove', function (e) {
-    if (!dragging) return;
-    var dx = e.clientX - startX, dy = e.clientY - startY;
-    if (!moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) moved = true;
-    if (moved) {
-      e.preventDefault();
-      applyPos(startLeft + dx, startTop + dy);
-    }
-  });
-
-  function endDrag(e) {
-    if (!dragging) return;
-    dragging = false;
-  }
-  btn.addEventListener('pointerup', function (e) {
-    endDrag(e);
-    if (moved) {
-      try { localStorage.setItem(POS_KEY, JSON.stringify({ left: parseFloat(btn.style.left), top: parseFloat(btn.style.top) })); } catch (err) { /* ignore */ }
-    }
-  });
-  btn.addEventListener('pointercancel', endDrag);
-
-  // لو كانت هذي حركة سحب فعلية، نمنع فتح الرابط بعدها مباشرة
-  btn.addEventListener('click', function (e) {
-    if (moved) { e.preventDefault(); moved = false; }
-  });
-})();
-</script>
 <div id="root"></div>
 
 <!-- طبقة تخزين سحابية: Supabase (Postgres + Realtime عبر postgres_changes) -->
@@ -10502,5 +10413,6 @@ function RootRouter() {
 const root = createRoot(document.getElementById("root"));
 root.render(<RootRouter />);
 </script>
+<script src="floating-navigation.js"></script>
 </body>
 </html>
