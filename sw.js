@@ -6,8 +6,8 @@
    - بيانات Supabase وباركود QR: لا تُخزَّن أبداً
    - استقبال التنبيهات اللحظية (Push) كما كان
    ============================================================ */
-const CACHE_NAME = "gateway-cache-v7";        // 🔴 غيّر الرقم (v7, v8, ...) كل ما تعمل تحديث مهم مستقبلاً
-const RUNTIME_CACHE = "gateway-runtime-v7";   // مكتبات CDN وملفات تُخزَّن أثناء التشغيل
+const CACHE_NAME = "gateway-cache-v11";        // 🔴 غيّر الرقم (v7, v8, ...) كل ما تعمل تحديث مهم مستقبلاً
+const RUNTIME_CACHE = "gateway-runtime-v11";   // مكتبات CDN وملفات تُخزَّن أثناء التشغيل
 const RUNTIME_MAX_ENTRIES = 150;
 const NETWORK_TIMEOUT_MS = 4000;
 
@@ -15,6 +15,11 @@ const PRECACHE_URLS = [
   "./index.html",
   "./warehouse.html",
   "./manifest.json",
+  "./points.html",
+  "./floating-navigation.js",
+  "./quran-plan.html",
+  "./tilawat.html",
+  "./events.html",
   "./icon-192.png",
   "./icon-512.png",
   "./icon-512-maskable.png",
@@ -24,7 +29,7 @@ const PRECACHE_URLS = [
 ];
 
 const CDN_HOSTS = [
-  "esm.sh", "unpkg.com", "cdn.jsdelivr.net", "cdnjs.cloudflare.com",
+  "esm.sh", "unpkg.com", "cdn.jsdelivr.net", "cdnjs.cloudflare.com", "cdn.tailwindcss.com",
   "fonts.googleapis.com", "fonts.gstatic.com"
 ];
 
@@ -196,6 +201,12 @@ self.addEventListener("message", (event) => {
   if (d.type === "CACHE_URLS" && Array.isArray(d.urls)) event.waitUntil(warmUrls(d.urls));
 });
 
+/* هذا الملف يُحمَّل أيضاً داخل tilawat-sw.js (نطاق tilawat.html) للاستفادة من الكاش فقط؛
+   إشعارات تلاوات يعالجها tilawat-sw.js نفسه، فلا نسجّل معالجات المستودع في ذلك النطاق */
+const IS_TILAWAT_SCOPE = /\/tilawat\.html$/i.test(self.registration.scope);
+
+if (!IS_TILAWAT_SCOPE) {
+
 /* ===== Web Push: استقبال وعرض التنبيهات حتى لو الموقع مقفل ===== */
 self.addEventListener("push", (event) => {
   let data = {};
@@ -229,3 +240,5 @@ self.addEventListener("notificationclick", (event) => {
     })
   );
 });
+
+}
