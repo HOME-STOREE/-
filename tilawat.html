@@ -2784,7 +2784,7 @@ function DataManagement() {
       ];
     });
     const csv = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\n');
-    downloadBlob('\uFEFF' + csv, `tilawat-export-${fileTimestamp()}.csv`, 'text/csv;charset=utf-8;');
+    downloadBlob('\uFEFF' + 'sep=,\n' + csv, `tilawat-export-${fileTimestamp()}.csv`, 'text/csv;charset=utf-8;');
     toast.success('تم تصدير الملف', `${rows.length} سجل`);
   };
 
