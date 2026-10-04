@@ -21,13 +21,11 @@
 
   // 2. استخراج لون هوية الموقع ديناميكياً
   function detectSiteBrandColor() {
-    // أ) البحث عن meta theme-color
     var metaTheme = document.querySelector('meta[name="theme-color"]');
     if (metaTheme && metaTheme.getAttribute('content')) {
       return metaTheme.getAttribute('content');
     }
 
-    // ب) البحث عن لون رئيسي في Header أو العناصر الأساسية
     var header = document.querySelector('header, nav, .bg-primary, [class*="bg-"]');
     if (header) {
       var bg = window.getComputedStyle(header).backgroundColor;
@@ -36,7 +34,6 @@
       }
     }
 
-    // ج) البحث عن لون أول رابط أو عنوان رئيسي
     var primaryElem = document.querySelector('h1, a, button');
     if (primaryElem) {
       var color = window.getComputedStyle(primaryElem).color;
@@ -45,7 +42,6 @@
       }
     }
 
-    // د) لون افتراضي في حال لم يتم العثور على أي لون
     return '#1e293b';
   }
 
@@ -72,7 +68,6 @@
       font-family: system-ui, -apple-system, sans-serif;
       cursor: grab;
       user-select: none;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       touch-action: none;
       border: 1px solid rgba(255, 255, 255, 0.2);
     `;
@@ -97,35 +92,15 @@
     expandedContent.style.cssText = `
       display: none;
       align-items: center;
-      gap: 10px;
-      padding: 0 12px 0 8px;
+      padding: 0 14px 0 8px;
       white-space: nowrap;
     `;
 
     var labelText = document.createElement('span');
-    labelText.textContent = 'العودة للصفحة الرئيسية';
+    labelText.textContent = 'العودة للرئيسية ⬅️';
     labelText.style.cssText = 'font-size: 14px; font-weight: 600; color: #ffffff;';
 
-    var goBtn = document.createElement('button');
-    goBtn.textContent = 'انتقال ⬅️';
-    goBtn.style.cssText = `
-      background: rgba(255, 255, 255, 0.9);
-      color: #0f172a;
-      border: none;
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: bold;
-      cursor: pointer;
-      transition: background 0.2s;
-    `;
-    goBtn.onclick = function (e) {
-      e.stopPropagation();
-      window.location.href = 'index.html';
-    };
-
     expandedContent.appendChild(labelText);
-    expandedContent.appendChild(goBtn);
     navContainer.appendChild(iconCircle);
     navContainer.appendChild(expandedContent);
     document.body.appendChild(navContainer);
@@ -145,7 +120,7 @@
       collapseTimeout = setTimeout(collapse, 5000);
     }
 
-    // ميزة السحب والتحريك (Draggable)
+    // ميزة السحب والتحريك المتزامنة فورياً (Draggable)
     var isDragging = false;
     var hasMoved = false;
     var startX, startY, initialLeft, initialTop;
@@ -162,6 +137,8 @@
       initialLeft = rect.left;
       initialTop = rect.top;
       
+      // إزالة أي transition أثناء السحب لضمان الاستجابة السريعة
+      navContainer.style.transition = 'none';
       navContainer.style.cursor = 'grabbing';
       navContainer.style.right = 'auto';
       navContainer.style.bottom = 'auto';
@@ -184,6 +161,7 @@
     }
 
     function onEnd() {
+      if (!isDragging) return;
       isDragging = false;
       navContainer.style.cursor = 'grab';
     }
@@ -196,12 +174,16 @@
     window.addEventListener('touchmove', onMove, { passive: true });
     window.addEventListener('touchend', onEnd);
 
+    // عند الضغط على الزر
     navContainer.addEventListener('click', function () {
-      if (hasMoved) return;
-      if (isExpanded) {
-        collapse();
-      } else {
+      if (hasMoved) return; // عدم التنفيذ إذا كانت الإيماءة مجرد سحب
+
+      if (!isExpanded) {
+        // الضغطة الأولى: توسيع الزر
         expand();
+      } else {
+        // الضغطة الثانية (عندما يكون متوسعاً): الانتقال المباشر للمنصة
+        window.location.href = 'index.html';
       }
     });
   }
