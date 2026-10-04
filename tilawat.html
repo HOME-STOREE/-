@@ -2758,7 +2758,7 @@ function downloadBlob(content, filename, type) {
 }
 function csvCell(value) {
   const s = value === null || value === undefined ? '' : String(value);
-  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  if (/[";,\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
 function readAutoPref() {
@@ -2766,6 +2766,69 @@ function readAutoPref() {
     const raw = localStorage.getItem(AUTO_BACKUP_KEY);
     return raw ? JSON.parse(raw) : { enabled: false, frequency: 'weekly', lastRun: null };
   } catch (e) { return { enabled: false, frequency: 'weekly', lastRun: null }; }
+}
+
+function xlsxEsc(v) {
+  return String(v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function xlsxColName(i) {
+  let n = '', x = i + 1;
+  while (x > 0) { const m = (x - 1) % 26; n = String.fromCharCode(65 + m) + n; x = Math.floor((x - 1) / 26); }
+  return n;
+}
+function crc32(bytes) {
+  if (!crc32.t) {
+    crc32.t = [];
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; crc32.t[n] = c >>> 0; }
+  }
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = crc32.t[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function zipStore(files) {
+  const enc = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+  const u16 = (v) => [v & 255, (v >>> 8) & 255];
+  const u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+  files.forEach((f) => {
+    const name = enc.encode(f.name), data = enc.encode(f.data), crc = crc32(data);
+    const local = new Uint8Array([...u32(0x04034b50), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21),
+      ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0)]);
+    parts.push(local, name, data);
+    central.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21),
+      ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+      ...u32(0), ...u32(offset)]), name);
+    offset += local.length + name.length + data.length;
+  });
+  const cdSize = central.reduce((a, b) => a + b.length, 0);
+  const end = new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length),
+    ...u32(cdSize), ...u32(offset), ...u16(0)]);
+  return new Blob([...parts, ...central, end], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+function buildXlsx(header, rows, widths) {
+  const cell = (v, r, c, style) => {
+    const ref = xlsxColName(c) + (r + 1), s = style ? ' s="1"' : '';
+    if (typeof v === 'number' && isFinite(v)) return '<c r="' + ref + '"' + s + '><v>' + v + '</v></c>';
+    const str = v === null || v === undefined ? '' : String(v);
+    if (str === '') return '<c r="' + ref + '"' + s + '/>';
+    return '<c r="' + ref + '"' + s + ' t="inlineStr"><is><t xml:space="preserve">' + xlsxEsc(str) + '</t></is></c>';
+  };
+  const all = [header, ...rows];
+  const sheetRows = all.map((row, r) => '<row r="' + (r + 1) + '">' + row.map((v, c) => cell(v, r, c, r === 0)).join('') + '</row>').join('');
+  const cols = widths.map((w, i) => '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>').join('');
+  const head = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+  const rel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  return zipStore([
+    { name: '[Content_Types].xml', data: head + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
+    { name: '_rels/.rels', data: head + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + rel + '/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name: 'xl/workbook.xml', data: head + '<workbook ' + ns + ' xmlns:r="' + rel + '"><sheets><sheet name="سجلات التلاوة" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+    { name: 'xl/_rels/workbook.xml.rels', data: head + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + rel + '/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="' + rel + '/styles" Target="styles.xml"/></Relationships>' },
+    { name: 'xl/styles.xml', data: head + '<styleSheet ' + ns + '><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8E2D6"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>' },
+    { name: 'xl/worksheets/sheet1.xml', data: head + '<worksheet ' + ns + '><sheetViews><sheetView rightToLeft="1" workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>' + cols + '</cols><sheetData>' + sheetRows + '</sheetData></worksheet>' },
+  ]);
 }
 
 function DataManagement() {
@@ -2783,8 +2846,7 @@ function DataManagement() {
         l.surah || '', l.pages ?? '', l.notes || '',
       ];
     });
-    const csv = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\n');
-    downloadBlob('\uFEFF' + 'sep=,\n' + csv, `tilawat-export-${fileTimestamp()}.csv`, 'text/csv;charset=utf-8;');
+    downloadBlob(buildXlsx(header, rows, [12, 14, 22, 16, 24, 14, 18, 12, 30]), `tilawat-export-${fileTimestamp()}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     toast.success('تم تصدير الملف', `${rows.length} سجل`);
   };
 
@@ -2899,10 +2961,10 @@ function DataManagement() {
       React.createElement('div', { className: 'card card-pad' },
         React.createElement('div', { className: 'flex items-center gap-2' },
           React.createElement(lucide_react_1.Save, { className: 'h-5 w-5 text-line' }),
-          React.createElement('h2', { className: 'font-extrabold' }, 'تصدير البيانات (CSV)')),
-        React.createElement('p', { className: 'mt-1 text-sm text-ink-soft' }, 'تصدير جميع سجلات التلاوة اليومية إلى ملف متوافق مع Excel (ترميز UTF-8 مع BOM).'),
+          React.createElement('h2', { className: 'font-extrabold' }, 'تصدير البيانات (Excel)')),
+        React.createElement('p', { className: 'mt-1 text-sm text-ink-soft' }, 'تصدير جميع سجلات التلاوة اليومية إلى ملف Excel (.xlsx) يعمل على أي جهاز، وكل معلومة في عمود مستقل.'),
         React.createElement('button', { className: 'btn-primary mt-4', onClick: exportCsv, disabled: !recitation_logs.length },
-          React.createElement(lucide_react_1.Save, { className: 'h-4 w-4' }), ' تصدير CSV (' + recitation_logs.length + ' سجل)')),
+          React.createElement(lucide_react_1.Save, { className: 'h-4 w-4' }), ' تصدير Excel (' + recitation_logs.length + ' سجل)')),
       React.createElement('div', { className: 'card card-pad' },
         React.createElement('div', { className: 'flex items-center gap-2' },
           React.createElement(lucide_react_1.Database, { className: 'h-5 w-5 text-line' }),
