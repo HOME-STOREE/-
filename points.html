@@ -1238,7 +1238,7 @@
     // 3) gray out / disable data-editing controls for users without "edit"/"delete"
     const canEdit = rbacHasPerm('edit');
     const canDelete = rbacHasPerm('delete');
-    document.querySelectorAll('#submitDayBtn, #vacationDayBtn, .item-row').forEach(el=>{
+    document.querySelectorAll('#submitDayBtn, #vacationDayBtn, #excuseBtn, .item-row').forEach(el=>{
       el.setAttribute('data-perm-locked', canEdit ? 'false' : 'true');
     });
     document.querySelectorAll('.btn-danger, [id^="remove"], [data-remove-group], [data-remove-item], [data-remove-student]').forEach(el=>{
@@ -1511,7 +1511,10 @@
       // (so it never counts toward any student's totals/percentages) and,
       // crucially, does NOT bump streakDayCounter — so no student's streak
       // is broken by it. See submitVacationDay() below.
-      vacationDays: {}
+      vacationDays: {},
+      // غياب بعذر: { 'studentId|day': ±ts } — موجب = غائب بعذر في ذلك اليوم، سالب = أُلغي العذر.
+      // اليوم المعذور لا يُسجَّل له شيء ولا يكسر الستريك ولا يزيده. انظر finalizeStreakForDay().
+      excused: {}
     };
   }
 
@@ -1585,6 +1588,7 @@
     if(!g.currentDay) g.currentDay = 1;
     if(typeof g.streakDayCounter !== 'number') g.streakDayCounter = 0;
     if(!g.vacationDays || typeof g.vacationDays !== 'object') g.vacationDays = {};
+    if(!g.excused || typeof g.excused !== 'object') g.excused = {};
     g.students.forEach(s => ensureStudentStreakShape(s, g.streakDayCounter));
     // Migrate any old-format day entries — plain arrays of "on" item ids —
     // into the new toggle-map format { itemId: {on, ts} }. Old data has no
@@ -1644,6 +1648,8 @@
   // without mutating anything.
   function computeLiveStreak(group, student){
     ensureStudentStreakShape(student, group.streakDayCounter);
+    // غائب بعذر اليوم: الستريك يبقى كما هو بالضبط (لا يزيد ولا ينقص).
+    if(isExcused(group, student.id, group.currentDay)) return { count: student.streak.count || 0 };
     const todayList = toggleMapToArray(group.todayEntries[student.id]);
     const hasDeduction = todayList.some(id => {
       const it = group.items.find(x => x.id === id);
@@ -1674,6 +1680,14 @@
   // student ended up with today.
   function finalizeStreakForDay(group, student){
     ensureStudentStreakShape(student, group.streakDayCounter);
+    // غائب بعذر: لا نغيّر العدّاد، لكن نمرّر "آخر يوم نشاط" إلى هذا اليوم
+    // حتى لا يعتبره checkStreakInactivity() يوماً فائتاً فيصفّر الستريك.
+    if(isExcused(group, student.id, group.currentDay)){
+      if((student.streak.count || 0) > 0 && student.streak.lastActiveDay === group.streakDayCounter - 1){
+        student.streak.lastActiveDay = group.streakDayCounter;
+      }
+      return;
+    }
     const todayList = toggleMapToArray(group.todayEntries[student.id]);
     const hasDeduction = todayList.some(id => {
       const it = group.items.find(x => x.id === id);
@@ -2006,6 +2020,8 @@
     // "بدء شهر جديد".
     const aVac = aFresh ? a.vacationDays : {};
     const bVac = bFresh ? b.vacationDays : {};
+    const aExc = aFresh ? (a.excused || {}) : {};
+    const bExc = bFresh ? (b.excused || {}) : {};
 
     // todayEntries gets its OWN freshness gate, separate from records/
     // resetAt/currentDay above. Those three should still union/merge
@@ -2041,6 +2057,7 @@
       records: mergeRecordsMap(aRec, bRec),
       resetAt: mergeResetAtMap(aReset, bReset),
       vacationDays: mergeTombstoneMap(aVac, bVac),
+      excused: mergeExcusedMap(aExc, bExc),
       archives: mergeArchivesArray(a.archives, b.archives),
       deletedStudentIds: deletedStudentIds,
       deletedItemIds: deletedItemIds,
@@ -2487,6 +2504,26 @@
   function dayLabel(day){ return `الأسبوع ${weekOf(day)} · اليوم ${dayInWeekOf(day)} من ٤ (اليوم ${day} من ١٦)`; }
   function isVacationDay(group, day){ return !!(group.vacationDays && group.vacationDays[day]); }
 
+  // ---- غائب بعذر ----
+  // group.excused[studentId + '|' + day] = +ts (غائب بعذر) أو -ts (أُلغي العذر).
+  // الإشارة تسمح للدمج بين الأجهزة بأن يحتفظ بآخر إجراء فعلي (تفعيل أو إلغاء).
+  function excusedKey(studentId, day){ return studentId + '|' + day; }
+  function isExcused(group, studentId, day){
+    return !!(group.excused && group.excused[excusedKey(studentId, day)] > 0);
+  }
+  function setExcused(group, studentId, day, on){
+    if(!group.excused) group.excused = {};
+    const ts = Date.now();
+    group.excused[excusedKey(studentId, day)] = on ? ts : -ts;
+  }
+  function mergeExcusedMap(a, b){
+    const out = Object.assign({}, a || {});
+    Object.keys(b || {}).forEach(k => {
+      if(!(k in out) || Math.abs(b[k]) > Math.abs(out[k])) out[k] = b[k];
+    });
+    return out;
+  }
+
   // ---- Day-entry storage format ----
   // Each student's marks for a given day are stored as a "toggle map":
   //   { itemId: { on: boolean, ts: number } }
@@ -2774,7 +2811,7 @@
     const staging = isStagingDay(group, selectedDay);
     const readOnly = !staging;   // any day other than the current one is view-only
     const staged = getDayList(group, selectedDay, student.id);
-    const markedCount = group.students.filter(s => getDayList(group, selectedDay, s.id).length > 0).length;
+    const markedCount = group.students.filter(s => getDayList(group, selectedDay, s.id).length > 0 || isExcused(group, s.id, selectedDay)).length;
 
     let dayChipsHtml = '';
     for(let d=1; d<=16; d++){
@@ -2791,16 +2828,19 @@
     }
 
     let rosterHtml = group.students.map(s => {
-      const has = getDayList(group, selectedDay, s.id).length > 0;
+      const has = getDayList(group, selectedDay, s.id).length > 0 || isExcused(group, s.id, selectedDay);
       return `<button class="pill ${s.id===activeStudentId?'active':''} ${has?'marked':'' }" data-student="${s.id}">
-        <span class="pill-dot"></span>${escapeHtml(s.name)}${streakBadgeHtml(s, group)}
+        <span class="pill-dot"></span>${escapeHtml(s.name)}${isExcused(group, s.id, selectedDay) ? ' 🩺' : ''}${streakBadgeHtml(s, group)}
       </button>`;
     }).join('');
 
     const dayIsVacation = isVacationDay(group, selectedDay);
+    const excusedNow = isExcused(group, student.id, selectedDay);
     let itemsHtml;
     if(dayIsVacation){
       itemsHtml = `<p class="empty-state">🌴 هذا اليوم مسجّل كإجازة — لا توجد بنود ولا نقاط لهذا اليوم، ولم يتأثر تتابع أي مشارك بسببه.</p>`;
+    } else if(excusedNow){
+      itemsHtml = `<p class="empty-state">🩺 ${escapeHtml(student.name)} غائب بعذر في هذا اليوم — لا نقاط ولا بنود، والستريك محفوظ ولن يتأثر.</p>`;
     } else {
       itemsHtml = group.items.length ? group.items.map(it => {
         const on = staged.includes(it.id);
@@ -2838,6 +2878,7 @@
             <button class="icon-btn" id="nextBtn" ${idx===group.students.length-1?'disabled':''}>›</button>
           </div>
         </div>
+        ${(staging && !dayIsVacation) ? `<div style="margin:2px 0 10px;"><button type="button" class="btn btn-ghost" id="excuseBtn">${excusedNow ? '↩︎ إلغاء الغياب بعذر' : '🩺 غائب بعذر'}</button></div>` : (excusedNow ? `<div class="submit-note" style="margin:2px 0 10px;">🩺 غائب بعذر</div>` : '')}
         <div id="itemsList">${itemsHtml}</div>
 
         ${staging ? `
@@ -2901,6 +2942,15 @@
 
     const submitBtn = document.getElementById('submitDayBtn');
     if(submitBtn) submitBtn.addEventListener('click', ()=> submitDay(group));
+    const excuseBtn = document.getElementById('excuseBtn');
+    if(excuseBtn) excuseBtn.addEventListener('click', ()=>{
+      if(readOnly) return;
+      const on = !isExcused(group, student.id, selectedDay);
+      if(on) setDayList(group, selectedDay, student.id, []);   // العذر يلغي أي بنود محددة اليوم
+      setExcused(group, student.id, selectedDay, on);
+      saveState();
+      renderEval();
+    });
     const vacationBtn = document.getElementById('vacationDayBtn');
     if(vacationBtn) vacationBtn.addEventListener('click', ()=> submitVacationDay(group));
     const backBtn = document.getElementById('backTodayBtn');
@@ -2925,7 +2975,7 @@
 
   async function submitDay(group){
     if(group.currentDay > 16) return;
-    const unmarked = group.students.length - group.students.filter(s => toggleMapToArray(group.todayEntries[s.id]).length>0).length;
+    const unmarked = group.students.length - group.students.filter(s => toggleMapToArray(group.todayEntries[s.id]).length>0 || isExcused(group, s.id, group.currentDay)).length;
     let msg = `سيتم احتساب نقاط اليوم ${group.currentDay} لجميع مشاركي حلقة "${group.name}".`;
     if(unmarked>0) msg += `\n(${unmarked} لم يُسجَّل لهم أي بند وسيُحتسب لهم صفر اليوم)`;
     if(!confirm(msg + '\n\nهل تريد المتابعة؟')) return;
@@ -2937,6 +2987,8 @@
       // Commit today's streak change permanently, using whatever the student
       // ended up with today — must run BEFORE todayEntries is cleared below.
       finalizeStreakForDay(group, s);
+      // اليوم المعذور لا يُسجَّل في السجلات حتى لا يُحسب يوماً فائتاً في الإحصائيات.
+      if(isExcused(group, s.id, group.currentDay)) return;
       if(!group.records[s.id]) group.records[s.id] = {};
       group.records[s.id][group.currentDay] = group.todayEntries[s.id] || {};
     });
@@ -3563,6 +3615,7 @@ alter publication supabase_realtime add table ${RBAC_SYNC_TABLE};</div>
       archiveGroupMonth(group, finalLabel);
       group.records = {}; group.todayEntries = {}; group.resetAt = {}; group.currentDay = 1;
       group.vacationDays = {};
+      group.excused = {};
       group.recordsResetAt = Date.now();
       group.todayEntriesResetAt = group.recordsResetAt;
       selectedDay = null;
