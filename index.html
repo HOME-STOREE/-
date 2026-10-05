@@ -272,11 +272,13 @@ create trigger trg_cards_default_sort_order
    - زائر بلا جلسة بوابة            → warehouse.html مباشرة (وضع العرض الخارجي)
    - حساب مستودع فقط (دخل من المستودع) → warehouse.html مباشرة
    - جلسة بوابة (Supabase)            → يكمل التحميل، ويقرّر التوجيه بعد قراءة الصلاحيات
-   - index.html?login (أو #login)      → يعرض شاشة دخول البوابة بدون تحويل
+   - index.html?login (أو ?forceLogin=true أو ?action=login أو #login) → يعرض شاشة دخول البوابة بدون تحويل،
+     وإن وُجدت جلسة قائمة تُسجَّل خروجاً محلياً أولاً (هذا ما يكسر الحلقة المفرغة مع المستودع)
    ============================================================ */
 (function () {
   var qs = location.search + '&' + location.hash.replace('#', '&');
-  window.__PORTAL_LOGIN_MODE = /(^|[?&])login(=|&|$)/.test(qs);
+  window.__PORTAL_LOGIN_MODE = /(^|[?&])(login|forceLogin|force_login)(=(1|true|yes))?(&|$)/i.test(qs) ||
+                                /(^|[?&])action=login(&|$)/i.test(qs);
   if (window.__PORTAL_LOGIN_MODE) return;
   var hasPortalSession = false;
   try { hasPortalSession = localStorage.getItem('sb-nzommukbtzmeytjibizy-auth-token') !== null; } catch (e) {}
@@ -2133,6 +2135,16 @@ function routeAfterAuth() {
   return false;   // صفر أو أكثر من صلاحية → البوابة وبطاقاتها
 }
 
+// تسجيل خروج محلي (scope:'local' حتى لا نُخرج الحساب من أجهزته الأخرى) وتنظيف كل ما كتبته البوابة
+async function forceFreshLogin() {
+  clearPortalAccess(true);
+  try { await sb.auth.signOut({ scope: 'local' }); } catch (_) {}
+  state.session = null;
+  state.profile = null;
+  state.cards = [];
+  state.myPermittedCardIds = new Set();
+}
+
 async function init() {
   startWatchdog(12000);
   try {
@@ -2140,7 +2152,12 @@ async function init() {
     if (error) throw error;
     state.session = data.session;
 
-    if (state.session) {
+    if (state.session && LOGIN_MODE) {
+      // جاء من زر "الدخول للمستخدمين": لا توجيه تلقائي أبداً. نُنهي الجلسة الحالية (على هذا الجهاز فقط)
+      // ونعرض شاشة الدخول ليكتب المستخدم حساباً آخر. بدون هذا كانت البوابة تحوّله فوراً للمستودع (حلقة مفرغة).
+      await forceFreshLogin();
+      showLogin();
+    } else if (state.session) {
       await loadProfileAndData();
       if (routeAfterAuth()) { clearWatchdog(); return; }
       showApp();
@@ -2193,6 +2210,9 @@ el('login-form').addEventListener('submit', async (e) => {
     // دخول جديد للبوابة: لا نُبقي أي جلسة مستودع قديمة لهوية أخرى
     lsDrop(LS_WH_SESSION);
     try { sessionStorage.removeItem(WH_ROLE_KEY); } catch (_) {}
+
+    // دخول ناجح: نزيل علامة ?login من الرابط حتى لا يُعاد تسجيل الخروج عند تحديث الصفحة
+    try { if (LOGIN_MODE) history.replaceState(null, '', location.pathname); } catch (_) {}
 
     startWatchdog(12000);
     await loadProfileAndData();
