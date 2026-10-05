@@ -336,6 +336,111 @@ window.TILAWAT_CONFIG = {
   }
 })();
 </script>
+<style id="platform-nav-css">
+  .pn-slot{display:inline-flex;align-items:center;gap:6px;vertical-align:middle}
+  .pn-btn{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border-radius:10px;
+    border:1px solid var(--pn-line,rgba(127,127,127,.38));background:var(--pn-bg,transparent);color:inherit;
+    font:inherit;font-size:13px;font-weight:700;line-height:1;text-decoration:none;white-space:nowrap;cursor:pointer;
+    transition:background .15s,border-color .15s}
+  .pn-btn:hover{background:rgba(127,127,127,.16)}
+  .pn-btn:active{transform:translateY(1px)}
+  .pn-btn:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+  .pn-btn[hidden]{display:none!important}
+  .pn-btn svg{width:18px;height:18px;flex:none}
+  @media (max-width:520px){.pn-btn{padding:0 10px}.pn-btn .pn-label{display:none}}
+  .pn-float{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);inset-inline-start:10px;z-index:9999;
+    --pn-bg:rgba(255,255,255,.92);color:#2b1c13;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+  @media print{.pn-slot,.pn-float{display:none!important}}
+</style>
+<script id="platform-nav-js">
+/* setupPlatformNavigation() — نفس الدالة في كل المواقع التابعة للمنصة.
+   تقرأ الصلاحيات من localStorage (allowedPages / portalSession / رمز جلسة Supabase للبوابة)
+   وتتحكم بظهور زر الرئيسية وزر الدخول للمستخدمين وبوجهة كل منهما. */
+(function () {
+  'use strict';
+  var CFG = {
+    homeUrl: 'index.html',                 // المنصة الرئيسية (نفس الحساب)
+    loginUrl: 'index.html?login=1',        // شاشة الدخول بدون توجيه تلقائي (تتجاهله المنصة وتسجّل خروجاً محلياً)
+    tokenKey: 'sb-nzommukbtzmeytjibizy-auth-token',
+    homeLabel: 'الرئيسية',
+    loginLabel: 'الدخول للمستخدمين',
+    floatFallbackMs: 2500                  // إن لم يوجد عنصر [data-platform-nav] تظهر الأزرار عائمة
+  };
+  var ICON_HOME = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/></svg>';
+  var ICON_USERS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+
+  function readJSON(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+  function abs(u) { try { return new URL(u, location.href).href; } catch (e) { return u; } }
+
+  // true = مستخدم بوابة (جلسة فعّالة) لديه أكثر من صلاحية أو مدير
+  function hasMultiAccess() {
+    var ps = readJSON('portalSession'), allowed = readJSON('allowedPages'), live = false;
+    try { live = localStorage.getItem(CFG.tokenKey) !== null; } catch (e) {}
+    if (!live || !ps || ps.source !== 'portal') return false;       // زائر / حساب مستودع فقط → صلاحية واحدة
+    if (ps.role === 'admin') return true;                              // المدير يحتاج لوحة المنصة
+    return Array.isArray(allowed) && allowed.length > 1;
+  }
+
+  function build(mount) {
+    mount.innerHTML =
+      '<a class="pn-btn" data-pn="home" href="' + abs(CFG.homeUrl) + '" title="الرجوع إلى المنصة الرئيسية" aria-label="الرجوع إلى المنصة الرئيسية">' +
+        ICON_HOME + '<span class="pn-label">' + CFG.homeLabel + '</span></a>' +
+      '<a class="pn-btn" data-pn="login" href="' + abs(CFG.loginUrl) + '" title="الدخول بحساب مستخدم آخر" aria-label="الدخول للمستخدمين" rel="nofollow">' +
+        ICON_USERS + '<span class="pn-label">' + CFG.loginLabel + '</span></a>';
+    mount.setAttribute('data-pn-ready', '1');
+  }
+
+  function apply(mount, multi) {
+    if (!mount.getAttribute('data-pn-ready')) build(mount);
+    var home = mount.querySelector('[data-pn="home"]'), login = mount.querySelector('[data-pn="login"]');
+    if (home) home.hidden = !multi;       // أكثر من صلاحية → 🏠 فقط
+    if (login) login.hidden = multi;      // صلاحية واحدة/زائر → "الدخول للمستخدمين" فقط
+  }
+
+  function refresh() {
+    var multi = hasMultiAccess();
+    var mounts = document.querySelectorAll('[data-platform-nav]:not(.pn-float)');
+    var i;
+    for (i = 0; i < mounts.length; i++) apply(mounts[i], multi);
+    var fl = document.querySelector('.pn-float');
+    if (mounts.length && fl) fl.parentNode.removeChild(fl);            // وُجد مكان في الـNavbar → لا حاجة للعائم
+    else if (fl) apply(fl, multi);
+  }
+
+  function ensureFloat() {
+    if (document.querySelector('[data-platform-nav]:not(.pn-float)') || document.querySelector('.pn-float')) return;
+    var d = document.createElement('div');
+    d.className = 'pn-slot pn-float';
+    d.setAttribute('data-platform-nav', '');
+    document.body.appendChild(d);
+    refresh();
+  }
+
+  window.setupPlatformNavigation = function (opts) {
+    if (opts) for (var k in opts) if (Object.prototype.hasOwnProperty.call(opts, k)) CFG[k] = opts[k];
+    if (window.__platformNavReady) { refresh(); return; }
+    window.__platformNavReady = true;
+
+    var queued = false;
+    function schedule() {
+      if (queued) return; queued = true;
+      (window.requestAnimationFrame || setTimeout)(function () { queued = false; refresh(); });
+    }
+    // مواقع React تعيد رسم الـNavbar: نراقب ظهور/اختفاء عنصر الأزرار ونعيد تهيئته
+    try { new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true }); } catch (e) {}
+    window.addEventListener('pageshow', refresh);                      // الرجوع من الكاش (bfcache)
+    window.addEventListener('storage', refresh);                       // دخول/خروج من تبويب آخر
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    setTimeout(ensureFloat, CFG.floatFallbackMs);
+    refresh();
+  };
+
+  function start() { window.setupPlatformNavigation(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
+</script>
+
 </head>
 <body>
 <div id="root"></div>
@@ -549,6 +654,7 @@ function Layout() {
                     React.createElement(lucide_react_1.Menu, { className: "h-4 w-4" })),
                 React.createElement("div", { className: profile && profile.role !== 'admin' ? "min-w-0 flex-1 truncate text-sm font-extrabold" : "hidden lg:block" }, profile && profile.role !== 'admin' ? dutyLabel(profile.role, profile.slot_keys) + (mosqueLabel ? ` — ${mosqueLabel}` : '') : null),
                 React.createElement("div", { className: "flex items-center gap-2" },
+                    React.createElement("span", { className: "pn-slot", "data-platform-nav": "" }),
                     isAdmin && ready && React.createElement(NotificationBell_jsx_1.default, null),
                     React.createElement(ui_jsx_1.SyncBadge, { status: sync }))),
             React.createElement("main", { key: loc.pathname, className: "print-flat mx-auto max-w-7xl p-4 sm:p-6" }, loadError ? (React.createElement("div", { className: "card card-pad text-center" },
