@@ -6,27 +6,44 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))
 
 self.addEventListener('push', (event) => {
   let d = {}
-  try { d = event.data ? event.data.json() : {} } catch (e) { d = { title: 'تلاوات', body: event.data ? event.data.text() : '' } }
+  try { d = event.data ? event.data.json() : {} }
+  catch (e) { d = { title: 'تلاوات', body: event.data ? event.data.text() : '' } }
 
-  event.waitUntil((async () => {
-    await self.registration.showNotification(d.title || 'تلاوات', {
+  // يدعم الصيغة الجديدة data.url والقديمة url
+  const url = (d.data && d.data.url) || d.url || ''
+
+  event.waitUntil(
+    self.registration.showNotification(d.title || 'تلاوات', {
       body: d.body || '',
       icon: ICON,
       badge: ICON,
       tag: d.tag,
       dir: 'rtl',
       lang: 'ar',
-      data: { url: d.url },
+      data: { url },
     })
-  })())
+  )
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = (event.notification.data && event.notification.data.url) || self.registration.scope
+
+  const raw = event.notification.data && event.notification.data.url
+  const scope = self.registration.scope
+  const target = new URL(raw || scope, scope).href
+
   event.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-    for (const w of wins) { if ('focus' in w) return w.focus() }
-    return self.clients.openWindow(url)
+    // نافذة تلاوات فقط (وليس بقية صفحات المنصة على نفس النطاق)
+    const mine = wins.find((w) => w.url.startsWith(scope))
+
+    if (mine) {
+      try {
+        await mine.focus()
+        if (mine.url !== target) await mine.navigate(target)
+        return
+      } catch (e) { /* بعض المتصفحات (مثل iOS) لا تدعم navigate */ }
+    }
+    return self.clients.openWindow(target)
   })())
 })
