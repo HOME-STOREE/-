@@ -786,7 +786,7 @@ function PushToggle({ compact = false }) {
             if (next) {
                 await (0, push_js_1.enablePush)(session.user.id);
                 setState('on');
-                toast.success('تم تفعيل الإشعارات', 'ستصلك رسالة عند كل تسجيل جديد حتى والموقع مغلق.');
+                toast.success('تم تفعيل الإشعارات', 'ستصلك التنبيهات حتى والموقع مغلق.');
             }
             else {
                 await (0, push_js_1.disablePush)();
@@ -2276,6 +2276,7 @@ const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
 const ReciterCombobox_jsx_1 = __importDefault(require("src/components/ReciterCombobox.jsx"));
 const ReciterAvailableList_jsx_1 = __importDefault(require("src/components/ReciterAvailableList.jsx"));
+const PushToggle_jsx_1 = __importDefault(require("src/components/PushToggle.jsx"));
 const WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 function DailyLog() {
     const { profile, isAdmin } = (0, AuthContext_jsx_1.useAuth)();
@@ -2499,6 +2500,7 @@ function DailyLog() {
     const editable = (l) => !isNight && (isAdmin || (myIds.includes(l.mosque_id) && l.slot_key !== 'fri' && scope === 'night'));
     return (React.createElement(React.Fragment, null,
         React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A", subtitle: "\u0633\u062C\u0651\u0644 \u0627\u0644\u0642\u0627\u0631\u0626 \u0623\u0648 \u0633\u0628\u0628 \u0639\u062F\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u0644\u0643\u0644 \u062E\u0627\u0646\u0629 \u062A\u0644\u0627\u0648\u0629." }),
+        !isAdmin && React.createElement(PushToggle_jsx_1.default, null),
         React.createElement("div", { className: "mb-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-line p-5 text-white" },
             React.createElement("div", null,
                 React.createElement("p", { className: "text-sm font-semibold text-white/80" },
