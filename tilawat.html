@@ -628,7 +628,11 @@ function Layout() {
             React.createElement(Logo, null)),
         hasDualRole && (React.createElement("div", { className: "border-b border-cardline px-4 py-3.5" },
             React.createElement("p", { className: "mb-2 text-[11px] font-bold text-ink-soft" }, "\u0627\u0644\u062F\u062E\u0648\u0644 \u0628\u0635\u0641\u0629:"),
-            React.createElement(ui_jsx_1.Segmented, { options: duties.map((d) => ({ value: d.key, label: dutyLabel(d.role, d.slot_keys) })), value: personaKey, onChange: setPersona }))),
+            React.createElement("select", { className: "input w-full text-sm font-semibold", value: personaKey, onChange: (e) => setPersona(e.target.value) }, duties.map((d) => {
+                const ms = (d.mosque_ids || []).map((id) => mosqueById[id]?.name).filter(Boolean);
+                const where = ms.length === 1 ? ` — ${ms[0]}` : ms.length > 1 ? ` — ${ms.length} مساجد` : '';
+                return React.createElement("option", { key: d.key, value: d.key }, dutyLabel(d.role, d.slot_keys) + where);
+            })))),
         React.createElement("nav", { className: "flex-1 space-y-1 overflow-y-auto p-3" }, items.map(({ to, label, icon: Icon, end }) => (React.createElement(react_router_dom_1.NavLink, { key: to, to: to, end: end, onClick: () => setOpen(false), className: ({ isActive }) => `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-colors ${isActive ? 'bg-line text-white' : 'text-ink hover:bg-hover'}` },
             React.createElement(Icon, { className: "h-[18px] w-[18px]" }),
             label)))),
@@ -1298,21 +1302,22 @@ function AuthProvider({ children }) {
         if (!profile)
             return [];
         const list = [{
-                key: profile.role,
+                key: 'd0',
                 role: profile.role,
                 mosque_ids: profile.mosque_ids || [],
                 slot_keys: profile.slot_keys || [],
                 scope: profile.scope,
             }];
-        if (profile.second_role && profile.second_role !== profile.role) {
-            list.push({
-                key: profile.second_role,
-                role: profile.second_role,
-                mosque_ids: profile.second_mosque_ids || [],
-                slot_keys: profile.second_slot_keys || [],
-                scope: profile.second_scope,
-            });
+        // الصفة الثانية (الأعمدة القديمة second_*) ثم أي صفات إضافية (extra_duties) — بلا حد وبلا شرط اختلاف الدور
+        const more = [];
+        if (profile.second_role) {
+            more.push({ role: profile.second_role, mosque_ids: profile.second_mosque_ids || [], slot_keys: profile.second_slot_keys || [], scope: profile.second_scope });
         }
+        (Array.isArray(profile.extra_duties) ? profile.extra_duties : []).forEach((d) => {
+            if (d && d.role)
+                more.push({ role: d.role, mosque_ids: d.mosque_ids || [], slot_keys: d.slot_keys || [], scope: d.scope });
+        });
+        more.forEach((d, i) => list.push({ key: `d${i + 1}`, ...d }));
         return list;
     }, [profile]);
     const personaStorageKey = uid ? `tilawat_persona_${uid}` : null;
@@ -2412,8 +2417,12 @@ function DailyLog() {
                 setPending({ id: reciter.id, name: reciter.name });
                 return;
             }
-            if (slot !== 'fri' && (pages === '' || Number(pages) <= 0))
-                return toast.warn('أدخل عدد الصفحات', 'حقل «عدد الصفحات» مطلوب عند تسجيل قراءة.');
+            if (slot !== 'fri') {
+                if (pages === '' || Number(pages) <= 0)
+                    return toast.warn('أدخل عدد الصفحات', 'حقل «عدد الصفحات» مطلوب عند تسجيل قراءة.');
+                if (Number(pages) > 10)
+                    return toast.error('عدد الصفحات غير صحيح', 'الحد الأقصى المسموح 10 صفحات.');
+            }
         }
         else {
             if (!reasonCode)
@@ -2431,7 +2440,7 @@ function DailyLog() {
             status,
             notes: notes.trim() || null,
             ...(status === 'read'
-                ? { reciter_id: reciter.id, reciter_name: reciter.name, is_exception: !isApproved, surah: surah.trim() || null, pages: pages !== '' ? Number(pages) : null, reason_code: null, reason_text: null }
+                ? { reciter_id: reciter.id, reciter_name: reciter.name, is_exception: !isApproved, surah: slot === 'fri' ? null : (surah.trim() || null), pages: slot === 'fri' ? null : (pages !== '' ? Number(pages) : null), reason_code: null, reason_text: null }
                 : { reciter_id: null, reciter_name: null, is_exception: false, surah: null, pages: null, reason_code: reasonCode, reason_text: reasonCode === 'other' ? reasonText.trim() : null }),
         };
         setBusy(true);
@@ -2575,10 +2584,10 @@ function DailyLog() {
                         " \u062A\u0645 \u0627\u062E\u062A\u064A\u0627\u0631: ",
                         reciter.name,
                         reciter.confirmedFor && React.createElement("span", { className: "badge-warn" }, "\u0627\u0633\u062A\u062B\u0646\u0627\u0621")))),
-                React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0633\u0648\u0631\u0629 / \u0627\u0644\u0645\u0642\u0637\u0639 \u0627\u0644\u0645\u0642\u0631\u0648\u0621 (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)" },
+                slot !== 'fri' && React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0633\u0648\u0631\u0629 / \u0627\u0644\u0645\u0642\u0637\u0639 \u0627\u0644\u0645\u0642\u0631\u0648\u0621 (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)" },
                     React.createElement("input", { className: "input", value: surah, onChange: (e) => setSurah(e.target.value), placeholder: "\u0645\u062B\u0627\u0644: \u0633\u0648\u0631\u0629 \u0627\u0644\u0643\u0647\u0641" })),
-                React.createElement(ui_jsx_1.Field, { label: slot === 'fri' ? "\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)" : "\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A *" },
-                    React.createElement("input", { type: "number", min: slot === 'fri' ? "0" : "1", required: slot !== 'fri', className: "input", value: pages, onChange: (e) => setPages(e.target.value) })),
+                slot !== 'fri' && React.createElement(ui_jsx_1.Field, { label: "\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A *", hint: "\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 10 \u0635\u0641\u062D\u0627\u062A" },
+                    React.createElement("input", { type: "number", min: "1", max: "10", step: "1", required: true, className: "input", value: pages, onChange: (e) => setPages(e.target.value) })),
                 React.createElement(ui_jsx_1.Field, { label: "\u0645\u0644\u0627\u062D\u0638\u0627\u062A (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)", className: "md:col-span-2" },
                     React.createElement("input", { className: "input", value: notes, onChange: (e) => setNotes(e.target.value) })))) : (React.createElement("div", { className: "grid gap-4 md:grid-cols-2" },
                 React.createElement(ui_jsx_1.Field, { label: "\u0633\u0628\u0628 \u0639\u062F\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629", className: reasonCode === 'other' ? '' : 'md:col-span-2' },
@@ -3559,7 +3568,17 @@ const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
 const constants_js_1 = require("src/lib/constants.js");
 const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
-const blank = { full_name: '', password: '', role: 'supervisor', mosque_ids: [], slot_keys: [], scope: 'both', second_role: '', second_mosque_ids: [], second_slot_keys: [], second_scope: 'both', is_active: true };
+const blank = { full_name: '', password: '', role: 'supervisor', mosque_ids: [], slot_keys: [], scope: 'both', extras: [], is_active: true };
+// صفات المستخدم الإضافية في النموذج: الأولى تُحفظ في second_* (للتوافق مع القاعدة الحالية) والبقية في extra_duties
+const extrasOf = (p) => [
+    ...(p.second_role ? [{ role: p.second_role, mosque_ids: p.second_mosque_ids || [], slot_keys: p.second_slot_keys || [], scope: p.second_scope || 'both' }] : []),
+    ...((Array.isArray(p.extra_duties) ? p.extra_duties : []).map((d) => ({ role: d.role, mosque_ids: d.mosque_ids || [], slot_keys: d.slot_keys || [], scope: d.scope || 'both' }))),
+];
+const normDuty = (d) => {
+    const slots = d.role === 'night_supervisor' ? constants_js_1.SLOT_KEYS.filter((k) => d.slot_keys.includes(k)) : [];
+    const f = slots.includes('fri'), n = slots.some((k) => k !== 'fri');
+    return { role: d.role, mosque_ids: d.mosque_ids, slot_keys: slots, scope: d.role === 'night_supervisor' ? (f && n ? 'both' : f ? 'friday' : 'night') : (d.scope || 'both') };
+};
 // الصفة الثانية الممكنة (عكس الصفة الأساسية) — لا صفة ثانية لدور المدير
 const otherRole = (role) => (role === 'supervisor' ? 'night_supervisor' : role === 'night_supervisor' ? 'supervisor' : '');
 const MIN_PASSWORD = 6;
@@ -3612,23 +3631,26 @@ function UsersPage() {
             return toast.warn('اختر مسجداً واحداً على الأقل');
         if (form.role === 'night_supervisor' && form.slot_keys.length === 0)
             return toast.warn('اختر الليلة أو الجمعة', 'يحتاج هذا الدور خانة واحدة على الأقل.');
-        if (form.second_role && form.second_mosque_ids.length === 0)
-            return toast.warn('اختر مسجداً للصفة الثانية', 'حدّد المسجد الذي يمارس فيه صفته الأخرى.');
-        if (form.second_role === 'night_supervisor' && form.second_slot_keys.length === 0)
-            return toast.warn('اختر الليلة أو الجمعة للصفة الثانية', 'يحتاج هذا الدور خانة واحدة على الأقل.');
+        for (let i = 0; i < form.extras.length; i++) {
+            const x = form.extras[i];
+            if (x.mosque_ids.length === 0)
+                return toast.warn(`اختر مسجداً للصفة الإضافية ${i + 1}`, 'حدّد المسجد الذي يمارس فيه هذه الصفة.');
+            if (x.role === 'night_supervisor' && x.slot_keys.length === 0)
+                return toast.warn(`اختر الليلة أو الجمعة للصفة الإضافية ${i + 1}`, 'يحتاج هذا الدور خانة واحدة على الأقل.');
+        }
         const effSlots = form.role === 'night_supervisor' ? constants_js_1.SLOT_KEYS.filter((k) => form.slot_keys.includes(k)) : [];
         const hasFri = effSlots.includes('fri');
         const hasNight = effSlots.some((k) => k !== 'fri');
         const effScope = form.role === 'night_supervisor' ? (hasFri && hasNight ? 'both' : hasFri ? 'friday' : 'night') : form.scope;
-        const effSecondSlots = form.second_role === 'night_supervisor' ? constants_js_1.SLOT_KEYS.filter((k) => form.second_slot_keys.includes(k)) : [];
-        const hasSecondFri = effSecondSlots.includes('fri');
-        const hasSecondNight = effSecondSlots.some((k) => k !== 'fri');
-        const effSecondScope = form.second_role === 'night_supervisor' ? (hasSecondFri && hasSecondNight ? 'both' : hasSecondFri ? 'friday' : 'night') : form.second_scope;
+        const ex = form.role === 'admin' ? [] : form.extras.map(normDuty);
+        const first = ex[0];
         const secondPatch = {
-            second_role: form.second_role || null,
-            second_mosque_ids: form.second_role ? form.second_mosque_ids : [],
-            second_slot_keys: form.second_role ? effSecondSlots : [],
-            second_scope: form.second_role ? effSecondScope : null,
+            second_role: first ? first.role : null,
+            second_mosque_ids: first ? first.mosque_ids : [],
+            second_slot_keys: first ? first.slot_keys : [],
+            second_scope: first ? first.scope : null,
+            // العمود extra_duties يُرسل فقط عند الحاجة، حتى لا يفشل الحفظ قبل تشغيل ملف التحديث
+            ...((ex.length > 1 || (Array.isArray(form.extra_duties) && form.extra_duties.length)) ? { extra_duties: ex.slice(1) } : {}),
         };
         if (!isNew) {
             setBusy(true);
@@ -3750,15 +3772,14 @@ function UsersPage() {
                         React.createElement("td", { className: "td" },
                             React.createElement("div", { className: "flex flex-wrap gap-1" },
                                 p.role === 'admin' ? React.createElement("span", { className: "badge-brand" }, constants_js_1.ROLES.admin) : p.role === 'night_supervisor' ? React.createElement("span", { className: "badge-warn" }, constants_js_1.ROLES.night_supervisor) : React.createElement("span", { className: "badge-neutral" }, constants_js_1.ROLES.supervisor)),
-                            p.second_role && (React.createElement("div", { className: "mt-1 flex flex-wrap gap-1" },
-                                React.createElement("span", { className: "badge-neutral text-[10px]" },
-                                    "+ ",
-                                    constants_js_1.ROLES[p.second_role])))),
+                            extrasOf(p).length > 0 && (React.createElement("div", { className: "mt-1 flex flex-wrap gap-1" }, extrasOf(p).map((x, i) => React.createElement("span", { key: i, className: "badge-neutral text-[10px]" },
+                                "+ ",
+                                constants_js_1.ROLES[x.role]))))),
                         React.createElement("td", { className: "td" }, React.createElement("div", null,
                             p.role === 'admin' && ms.length === 0 ? React.createElement("span", { className: "text-xs text-ink-soft" }, "\u0643\u0644 \u0627\u0644\u0645\u0633\u0627\u062C\u062F")
                                 : ms.length === 0 ? React.createElement("span", { className: "badge-warn" }, "\u0628\u0644\u0627 \u0645\u0633\u062C\u062F")
                                     : React.createElement("div", { className: "flex flex-wrap gap-1" }, ms.map((m) => React.createElement("span", { key: m.id, className: "badge-neutral" }, m.name))),
-                            p.second_role && (React.createElement("div", { className: "mt-1 flex flex-wrap gap-1" }, (p.second_mosque_ids || []).map((id) => mosqueById[id]).filter(Boolean).map((m) => React.createElement("span", { key: m.id, className: "badge-neutral text-[10px]" }, m.name)))))),
+                            extrasOf(p).map((x, i) => React.createElement("div", { key: i, className: "mt-1 flex flex-wrap gap-1" }, x.mosque_ids.map((id) => mosqueById[id]).filter(Boolean).map((m) => React.createElement("span", { key: m.id, className: "badge-neutral text-[10px]" }, m.name)))))),
                         React.createElement("td", { className: "td text-sm" }, p.role === 'admin' ? 'كل التلاوات' : p.role === 'night_supervisor' ? ((p.slot_keys || []).map((k) => constants_js_1.SLOTS[k]?.label).join('، ') || '—') : constants_js_1.SCOPES[p.scope]),
                         React.createElement("td", { className: "td" }, secrets[p.id] ? (React.createElement("span", { className: "flex items-center gap-2" },
                             React.createElement("code", { dir: "ltr", className: "rounded bg-hover px-2 py-0.5 text-xs" }, reveal[p.id] ? secrets[p.id] : '••••••••'),
@@ -3766,7 +3787,7 @@ function UsersPage() {
                         React.createElement("td", { className: "td" }, p.is_active ? React.createElement("span", { className: "badge-ok" }, "\u0645\u0641\u0639\u0651\u0644") : React.createElement("span", { className: "badge-bad" }, "\u0645\u0639\u0637\u0651\u0644")),
                         React.createElement("td", { className: "td" },
                             React.createElement("div", { className: "flex gap-1" },
-                                React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => setForm({ ...p, mosque_ids: p.mosque_ids || [], slot_keys: p.slot_keys || [], second_role: p.second_role || '', second_mosque_ids: p.second_mosque_ids || [], second_slot_keys: p.second_slot_keys || [], second_scope: p.second_scope || 'both' }), "aria-label": "\u062A\u0639\u062F\u064A\u0644" },
+                                React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => setForm({ ...p, mosque_ids: p.mosque_ids || [], slot_keys: p.slot_keys || [], extras: extrasOf(p) }), "aria-label": "\u062A\u0639\u062F\u064A\u0644" },
                                     React.createElement(lucide_react_1.Pencil, { className: "h-4 w-4" })),
                                 React.createElement("button", { className: "btn-ghost btn-sm !px-2", onClick: () => setPw({ user: p, password: '', old: '' }), "aria-label": "\u062A\u063A\u064A\u064A\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631" },
                                     React.createElement(lucide_react_1.KeyRound, { className: "h-4 w-4" })),
@@ -3785,9 +3806,7 @@ function UsersPage() {
             React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u062F\u0648\u0631", hint: form.id === me ? 'لا يمكنك تغيير دورك أو تعطيل حسابك بنفسك.' : undefined },
                 React.createElement("select", { className: "input", value: form.role, disabled: form.id === me, onChange: (e) => {
                         const role = e.target.value;
-                        set(role === 'admin' || role === form.second_role
-                            ? { role, second_role: '', second_mosque_ids: [], second_slot_keys: [], second_scope: 'both' }
-                            : { role });
+                        set(role === 'admin' ? { role, extras: [] } : { role });
                     } }, Object.entries(constants_js_1.ROLES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v)))),
             React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0645\u0633\u0627\u062C\u062F \u0627\u0644\u0645\u0633\u0646\u062F\u0629", hint: form.role === 'admin' ? 'المدير يرى كل المساجد؛ الاختيار هنا اختياري.' : form.role === 'night_supervisor' ? 'المسجد الذي يشرف على ليلته.' : 'يمكن اختيار مسجد واحد أو عدة مساجد.' },
                 React.createElement(ui_jsx_1.MultiSelect, { options: mosqueOptions, value: form.mosque_ids, onChange: (v) => set({ mosque_ids: v }) })),
@@ -3799,23 +3818,31 @@ function UsersPage() {
             form.role === 'supervisor' && (React.createElement(ui_jsx_1.Field, { label: "\u0646\u0637\u0627\u0642 \u0627\u0644\u062A\u0633\u062C\u064A\u0644", hint: "\u064A\u0631\u0649 \u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u0645\u0633\u062C\u062F \u0643\u0644 \u0645\u0627 \u064A\u062E\u0635 \u0645\u0633\u0627\u062C\u062F\u0647 (\u0627\u0644\u0625\u062D\u0635\u0627\u0626\u064A\u0627\u062A \u0648\u063A\u064A\u0631\u0647\u0627)\u060C \u0648\u0647\u0630\u0627 \u0627\u0644\u062E\u064A\u0627\u0631 \u064A\u062D\u062F\u062F \u0645\u0627 \u064A\u0633\u062A\u0637\u064A\u0639 \u062A\u0633\u062C\u064A\u0644\u0647." + " \u062A\u0646\u0628\u064A\u0647: \u062A\u0633\u062C\u064A\u0644 \u062A\u0644\u0627\u0648\u0629 \u0627\u0644\u062C\u0645\u0639\u0629 \u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0641\u0642\u0637\u060C \u0641\u0647\u0648 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D \u0644\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u0645\u0633\u062C\u062F \u0645\u0647\u0645\u0627 \u0643\u0627\u0646 \u0627\u0644\u0646\u0637\u0627\u0642." },
                 React.createElement("select", { className: "input", value: form.scope, onChange: (e) => set({ scope: e.target.value }) }, Object.entries(constants_js_1.SCOPES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v))))),
             form.role !== 'admin' && (React.createElement("div", { className: "rounded-xl border border-cardline bg-hover p-4" },
-                React.createElement(ui_jsx_1.Switch, { disabled: form.id === me, checked: Boolean(form.second_role), onChange: (v) => set(v
-                        ? { second_role: otherRole(form.role), second_mosque_ids: [], second_slot_keys: [], second_scope: 'both' }
-                        : { second_role: '', second_mosque_ids: [], second_slot_keys: [], second_scope: 'both' }), label: "\u0644\u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0635\u0641\u0629 \u0625\u0636\u0627\u0641\u064A\u0629 \u0641\u064A \u0646\u0641\u0633 \u0627\u0644\u0648\u0642\u062A" }),
-                form.second_role && (React.createElement("div", { className: "mt-4 space-y-4" },
-                    React.createElement("p", { className: "text-xs leading-6 text-ink-soft" },
-                        "\u0633\u064A\u0645\u0644\u0643 \u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0627\u0644\u0635\u0641\u0629 \u0627\u0644\u0625\u0636\u0627\u0641\u064A\u0629 \u00AB",
-                        constants_js_1.ROLES[form.second_role],
-                        "\u00BB\u060C \u0648\u064A\u062E\u062A\u0627\u0631 \u0645\u0646 \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062C\u0627\u0646\u0628\u064A\u0629 \u0623\u064A \u0627\u0644\u0635\u0641\u0629 \u064A\u062F\u062E\u0644 \u0628\u0647\u0627 \u0627\u0644\u0622\u0646\u061F \u0643\u0644 \u0635\u0641\u062D\u0629 \u062A\u0639\u0631\u0636 \u0644\u0647 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0635\u0641\u0629 \u0627\u0644\u0645\u062E\u062A\u0627\u0631\u0629 \u0641\u0642\u0637."),
-                    React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0645\u0633\u0627\u062C\u062F \u0627\u0644\u0645\u0633\u0646\u062F\u0629 (\u0644\u0644\u0635\u0641\u0629 \u0627\u0644\u0625\u0636\u0627\u0641\u064A\u0629)", disabled: form.id === me },
-                        React.createElement(ui_jsx_1.MultiSelect, { options: mosqueOptions, value: form.second_mosque_ids, onChange: (v) => set({ second_mosque_ids: v }) })),
-                    form.second_role === 'night_supervisor' && (React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0644\u064A\u0644\u0629 / \u0627\u0644\u062A\u0644\u0627\u0648\u0629 \u0627\u0644\u0645\u0633\u0645\u0648\u062D\u0629 (\u0644\u0644\u0635\u0641\u0629 \u0627\u0644\u0625\u0636\u0627\u0641\u064A\u0629)" },
-                        React.createElement("div", { className: "flex flex-wrap gap-2" }, constants_js_1.SLOT_KEYS.map((k) => {
-                            const on = form.second_slot_keys.includes(k);
-                            return (React.createElement("button", { key: k, type: "button", "aria-pressed": on, onClick: () => set({ second_slot_keys: on ? form.second_slot_keys.filter((x) => x !== k) : [...form.second_slot_keys, k] }), className: `rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${on ? 'border-line bg-line text-white' : 'border-cardline bg-white text-ink hover:bg-hover'}` }, constants_js_1.SLOTS[k].label));
-                        })))),
-                    form.second_role === 'supervisor' && (React.createElement(ui_jsx_1.Field, { label: "\u0646\u0637\u0627\u0642 \u0627\u0644\u062A\u0633\u062C\u064A\u0644 (\u0644\u0644\u0635\u0641\u0629 \u0627\u0644\u0625\u0636\u0627\u0641\u064A\u0629)" },
-                        React.createElement("select", { className: "input", value: form.second_scope, onChange: (e) => set({ second_scope: e.target.value }) }, Object.entries(constants_js_1.SCOPES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v))))))))),
+                React.createElement("p", { className: "text-sm font-bold" }, "صفات إضافية في نفس الوقت"),
+                React.createElement("p", { className: "mt-1 text-xs leading-6 text-ink-soft" }, "أضف أي عدد من الصفات: مسؤول مسجد، أو مسؤول ليلة في مسجد معيّن، ولو كان أكثر من مسجد. يختار المستخدم من القائمة الجانبية بأي صفة يدخل."),
+                form.extras.map((x, i) => {
+                    const upd = (patch) => set({ extras: form.extras.map((y, j) => (j === i ? { ...y, ...patch } : y)) });
+                    return (React.createElement("div", { key: i, className: "mt-4 space-y-4 rounded-xl border border-cardline bg-white p-4" },
+                        React.createElement("div", { className: "flex items-center justify-between gap-2" },
+                            React.createElement("span", { className: "text-sm font-bold" }, `الصفة الإضافية ${i + 1}`),
+                            React.createElement("button", { type: "button", className: "btn-ghost btn-sm !px-2 text-bad", disabled: form.id === me, onClick: () => set({ extras: form.extras.filter((_, j) => j !== i) }), "aria-label": "حذف الصفة" },
+                                React.createElement(lucide_react_1.Trash2, { className: "h-4 w-4" }))),
+                        React.createElement(ui_jsx_1.Field, { label: "الدور" },
+                            React.createElement("select", { className: "input", value: x.role, disabled: form.id === me, onChange: (e) => upd({ role: e.target.value, slot_keys: [], scope: 'both' }) },
+                                ['supervisor', 'night_supervisor'].map((k) => React.createElement("option", { key: k, value: k }, constants_js_1.ROLES[k])))),
+                        React.createElement(ui_jsx_1.Field, { label: "المساجد المسندة" },
+                            React.createElement(ui_jsx_1.MultiSelect, { options: mosqueOptions, value: x.mosque_ids, onChange: (v) => upd({ mosque_ids: v }) })),
+                        x.role === 'night_supervisor' && (React.createElement(ui_jsx_1.Field, { label: "الليلة / التلاوة المسموحة" },
+                            React.createElement("div", { className: "flex flex-wrap gap-2" }, constants_js_1.SLOT_KEYS.map((k) => {
+                                const on = x.slot_keys.includes(k);
+                                return (React.createElement("button", { key: k, type: "button", "aria-pressed": on, onClick: () => upd({ slot_keys: on ? x.slot_keys.filter((y) => y !== k) : [...x.slot_keys, k] }), className: `rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${on ? 'border-line bg-line text-white' : 'border-cardline bg-white text-ink hover:bg-hover'}` }, constants_js_1.SLOTS[k].label));
+                            })))),
+                        x.role === 'supervisor' && (React.createElement(ui_jsx_1.Field, { label: "نطاق التسجيل" },
+                            React.createElement("select", { className: "input", value: x.scope, onChange: (e) => upd({ scope: e.target.value }) }, Object.entries(constants_js_1.SCOPES).map(([k, v]) => React.createElement("option", { key: k, value: k }, v)))))));
+                }),
+                React.createElement("button", { type: "button", className: "btn-outline btn-sm mt-4", disabled: form.id === me, onClick: () => set({ extras: [...form.extras, { role: form.extras.length ? 'night_supervisor' : (form.role === 'supervisor' ? 'night_supervisor' : 'supervisor'), mosque_ids: [], slot_keys: [], scope: 'both' }] }) },
+                    React.createElement(lucide_react_1.Plus, { className: "h-4 w-4" }),
+                    " إضافة صفة"))),
             !isNew && form.id !== me && React.createElement(ui_jsx_1.Switch, { checked: form.is_active, onChange: (v) => set({ is_active: v }), label: "\u0627\u0644\u062D\u0633\u0627\u0628 \u0645\u0641\u0639\u0651\u0644" })))),
         React.createElement(ui_jsx_1.Modal, { open: Boolean(pw), onClose: () => setPw(null), title: `تغيير كلمة مرور: ${pw?.user.full_name ?? ''}`, size: "sm", footer: React.createElement(React.Fragment, null,
                 React.createElement("button", { className: "btn-outline", onClick: () => setPw(null) }, "\u0625\u0644\u063A\u0627\u0621"),
