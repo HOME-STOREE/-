@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>منصة الأحداث — EventDesk</title>
-<link rel="manifest" href="data:application/json,{%22name%22:%22EventDesk%22,%22short_name%22:%22EventDesk%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%23f0f2f8%22,%22theme_color%22:%22%236355e8%22,%22icons%22:[{%22src%22:%22data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%93%3C/text%3E%3C/svg%3E%22,%22sizes%22:%22any%22,%22type%22:%22image/svg+xml%22}]}">
-<meta name="theme-color" content="#6355e8">
+<link rel="manifest" href="data:application/json,{%22name%22:%22EventDesk%22,%22short_name%22:%22EventDesk%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%23F1EFE9%22,%22theme_color%22:%22%2375685A%22,%22icons%22:[{%22src%22:%22data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%93%3C/text%3E%3C/svg%3E%22,%22sizes%22:%22any%22,%22type%22:%22image/svg+xml%22}]}">
+<meta name="theme-color" content="#75685A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="EventDesk">
@@ -18,17 +18,17 @@
    ROOT & RESET
 ═══════════════════════════════════════════════ */
 :root {
-  --bg: #f0f2f8;
-  --surface: #ffffff;
-  --surface2: #f5f6fc;
-  --surface3: #eaecf5;
-  --border: rgba(0,0,0,0.08);
-  --border2: rgba(0,0,0,0.13);
-  --text: #1a1a2e;
-  --text2: #5a5a80;
-  --text3: #aaaacc;
-  --accent: #6355e8;
-  --accent2: #9a55e8;
+  --bg: #F1EFE9;
+  --surface: #FAF9F6;
+  --surface2: #EFECE6;
+  --surface3: #E4DFD5;
+  --border: rgba(117,104,90,0.14);
+  --border2: rgba(117,104,90,0.26);
+  --text: #7A5C4F;
+  --text2: #8A7768;
+  --text3: #B9AC9F;
+  --accent: #75685A;
+  --accent2: #968374;
   --cyan: #0088cc;
   --green: #00a870;
   --amber: #e0900a;
@@ -73,7 +73,7 @@ img{display:block}
   width:36px;height:36px;border-radius:10px;
   background:linear-gradient(135deg,var(--accent),var(--accent2));
   display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;
-  box-shadow:0 4px 16px rgba(99,85,232,.3);
+  box-shadow:0 4px 16px rgba(117,104,90,.3);
 }
 .logo-text{font-size:14px;font-weight:800;letter-spacing:-.01em}
 .logo-sub{font-size:10px;color:var(--text3);margin-top:1px}
@@ -85,7 +85,7 @@ img{display:block}
   cursor:pointer;transition:all .18s;text-align:right;margin-bottom:2px;
 }
 .nav-btn:hover{background:var(--surface2);color:var(--text)}
-.nav-btn.active{background:rgba(99,85,232,.1);color:var(--accent)}
+.nav-btn.active{background:rgba(117,104,90,.1);color:var(--accent)}
 .nav-btn .ni{font-size:15px;width:20px;text-align:center}
 .nav-div{height:1px;background:var(--border);margin:10px 0}
 .open-display-btn{
@@ -94,10 +94,10 @@ img{display:block}
   border:none;border-radius:12px;color:#fff;
   font-family:var(--font);font-size:13px;font-weight:800;cursor:pointer;
   display:flex;align-items:center;justify-content:center;gap:7px;
-  box-shadow:0 6px 24px rgba(99,85,232,.25);
+  box-shadow:0 6px 24px rgba(117,104,90,.25);
   transition:all .2s;
 }
-.open-display-btn:hover{opacity:.88;transform:translateY(-1px);box-shadow:0 10px 32px rgba(99,85,232,.35)}
+.open-display-btn:hover{opacity:.88;transform:translateY(-1px);box-shadow:0 10px 32px rgba(117,104,90,.35)}
 
 /* MAIN */
 .main{flex:1;padding:28px 32px;min-width:0;overflow-x:hidden}
@@ -111,7 +111,7 @@ img{display:block}
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);
   padding:18px 20px;position:relative;overflow:hidden;
 }
-.stat-card::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent 55%,rgba(99,85,232,.04))}
+.stat-card::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent 55%,rgba(117,104,90,.04))}
 .stat-num{font-size:28px;font-weight:900;margin-bottom:3px}
 .stat-lbl{font-size:11px;color:var(--text2);font-weight:600}
 .stat-ico{position:absolute;top:14px;left:14px;font-size:20px;opacity:.45}
@@ -119,7 +119,7 @@ img{display:block}
 /* SECTION CARD */
 .sc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r3);padding:22px;margin-bottom:22px}
 .sc-title{font-size:15px;font-weight:700;margin-bottom:18px;display:flex;align-items:center;gap:8px}
-.sc-title .badge{font-size:10px;padding:2px 8px;border-radius:999px;background:rgba(99,85,232,.1);color:var(--accent);font-weight:700}
+.sc-title .badge{font-size:10px;padding:2px 8px;border-radius:999px;background:rgba(117,104,90,.1);color:var(--accent);font-weight:700}
 
 /* FORM */
 .fg{display:flex;flex-direction:column;gap:5px;margin-bottom:0}
@@ -130,7 +130,7 @@ input[type=text],input[type=datetime-local],input[type=number],textarea,select{
   padding:9px 13px;color:var(--text);font-family:var(--font);font-size:13px;outline:none;
   transition:border .18s;width:100%;
 }
-input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,111,255,.12)}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(117,104,90,.12)}
 textarea{resize:vertical;min-height:65px}
 select option{background:var(--surface)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -146,7 +146,7 @@ select option{background:var(--surface)}
   text-align:center;cursor:pointer;transition:all .2s;background:var(--surface2);
   position:relative;overflow:hidden;
 }
-.upload-zone:hover{border-color:var(--accent);background:rgba(99,85,232,.06)}
+.upload-zone:hover{border-color:var(--accent);background:rgba(117,104,90,.06)}
 .upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .upload-zone .uz-icon{font-size:22px;margin-bottom:5px}
 .upload-zone p{font-size:12px;color:var(--text2);line-height:1.5}
@@ -158,7 +158,7 @@ select option{background:var(--surface)}
   font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;
   display:inline-flex;align-items:center;gap:6px;transition:all .18s;white-space:nowrap;
 }
-.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 4px 16px rgba(99,85,232,.25)}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 4px 16px rgba(117,104,90,.25)}
 .btn-primary:hover{opacity:.85;transform:translateY(-1px)}
 .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border2)}
 .btn-secondary:hover{background:var(--surface3)}
@@ -186,7 +186,7 @@ select option{background:var(--surface)}
 
 /* STATUS BADGES */
 .bs{font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;letter-spacing:.05em;white-space:nowrap}
-.bs-upcoming{background:rgba(99,85,232,.12);color:var(--accent)}
+.bs-upcoming{background:rgba(117,104,90,.12);color:var(--accent)}
 .bs-open{background:rgba(0,168,112,.12);color:var(--green)}
 .bs-ended{background:rgba(100,100,120,.1);color:var(--text3)}
 .bs-soon{background:rgba(224,144,10,.12);color:var(--amber)}
@@ -637,9 +637,10 @@ select option{background:var(--surface)}
 
 /* DARK MODE */
 body.dark-mode{
-  --bg:#090912;--surface:#10101e;--surface2:#181828;--surface3:#1f1f34;
-  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
-  --text:#eeeef8;--text2:#8888aa;--text3:#44445a;
+  --bg:#1d1915;--surface:#27211b;--surface2:#302921;--surface3:#3b3228;
+  --border:rgba(241,239,233,0.08);--border2:rgba(241,239,233,0.15);
+  --text:#F1EFE9;--text2:#B9AC9F;--text3:#7d7064;
+  --accent:#B39F8A;--accent2:#968374;
 }
 .dark-toggle{
   width:44px;height:24px;border-radius:12px;border:none;cursor:pointer;
@@ -761,7 +762,7 @@ input[type=date]{background:var(--surface);border:1px solid var(--border2);borde
 .cal-panel{margin-top:18px}
 .cal-ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .cal-ph b{font-size:15px}
-.cal-add{width:44px;height:44px;border-radius:50%;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:26px;line-height:1;cursor:pointer;box-shadow:0 6px 18px rgba(99,85,232,.35)}
+.cal-add{width:44px;height:44px;border-radius:50%;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:26px;line-height:1;cursor:pointer;box-shadow:0 6px 18px rgba(117,104,90,.35)}
 .cal-item{display:flex;gap:10px;align-items:center;background:var(--surface2);border-radius:14px;padding:10px 12px;margin-bottom:8px;border-inline-start:5px solid var(--accent)}
 .cal-item .ci{flex:1;min-width:0}
 .cal-item .ci b{display:block;font-size:13px;margin-bottom:2px}
@@ -769,9 +770,13 @@ input[type=date]{background:var(--surface);border:1px solid var(--border2);borde
 .cal-tag{font-size:10px;font-weight:700;padding:1px 8px;border-radius:999px;margin-inline-start:4px;white-space:nowrap}
 .cal-tag.on{background:rgba(0,168,112,.12);color:var(--green)}
 .cal-tag.off{background:rgba(224,32,74,.1);color:var(--red)}
-.cal-tag.rc{background:rgba(99,85,232,.12);color:var(--accent)}
+.cal-tag.rc{background:rgba(117,104,90,.12);color:var(--accent)}
 .cal-empty{text-align:center;color:var(--text3);font-size:13px;padding:18px}
-@media(max-width:700px){.cal-cell{min-height:66px}.cal-bar{font-size:9px;padding:0 3px}.cal-week{grid-template-columns:1fr}.cal-wcol{min-height:0}}
+.cal-dr{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.cal-dr .cal-dn{margin-bottom:0}
+.cal-hj{font-size:10px;color:var(--text2);font-weight:700;padding:0 3px;white-space:nowrap}
+.cal-hjt{display:block;font-size:12px;color:var(--text2);font-weight:600;margin-top:2px}
+@media(max-width:700px){.cal-hj{font-size:9px}.cal-cell{min-height:66px}.cal-bar{font-size:9px;padding:0 3px}.cal-week{grid-template-columns:1fr}.cal-wcol{min-height:0}}
 </style>
 </head>
 <body>
@@ -1074,7 +1079,7 @@ input[type=date]{background:var(--surface);border:1px solid var(--border2);borde
 <!-- ════════════════════════════════════════════════════
      DISPLAY VIEW (also rendered in popup via JS)
 ════════════════════════════════════════════════════ -->
-<div id="display-view" style="display:none;--dv-accent:#7c6fff;--dv-glow:rgba(124,111,255,.4)">
+<div id="display-view" style="display:none;--dv-accent:#75685A;--dv-glow:rgba(117,104,90,.4)">
   <button onclick="closeInlineDisplay()" id="close-inline-btn" style="position:absolute;top:14px;left:14px;z-index:200;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:10px;padding:7px 16px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;backdrop-filter:blur(8px);display:flex;align-items:center;gap:6px">✕ إغلاق</button>
   <!-- BG layers (2 for crossfade) -->
   <div class="dv-bg-layer" id="dv-bg-a" style="opacity:1"></div>
@@ -1223,7 +1228,7 @@ input[type=date]{background:var(--surface);border:1px solid var(--border2);borde
 // ══════════════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════════════
-const COLORS=['#7c6fff','#00e5ff','#00e5a0','#ffc947','#ff4f6a','#b06fff','#ff5fa0','#3b9eff','#ff8c42','#22d3ee'];
+const COLORS=['#75685A','#968374','#7A5C4F','#8A9A7B','#B08968','#A0705A','#6F8F8A','#C2A27C','#9B7E9B','#5E7C8A'];
 
 // ══════════════════════════════════════════════════════
 // FIREBASE INIT
@@ -1484,8 +1489,8 @@ function buildDisplayHTML(){
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="UTF-8">
 <title>${settings.title} — شاشة العرض</title>
-<link rel="manifest" href="data:application/json,{%22name%22:%22EventDesk%22,%22short_name%22:%22EventDesk%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%23f0f2f8%22,%22theme_color%22:%22%236355e8%22,%22icons%22:[{%22src%22:%22data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%93%3C/text%3E%3C/svg%3E%22,%22sizes%22:%22any%22,%22type%22:%22image/svg+xml%22}]}">
-<meta name="theme-color" content="#6355e8">
+<link rel="manifest" href="data:application/json,{%22name%22:%22EventDesk%22,%22short_name%22:%22EventDesk%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%23F1EFE9%22,%22theme_color%22:%22%2375685A%22,%22icons%22:[{%22src%22:%22data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%93%3C/text%3E%3C/svg%3E%22,%22sizes%22:%22any%22,%22type%22:%22image/svg+xml%22}]}">
+<meta name="theme-color" content="#75685A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="EventDesk">
@@ -1509,9 +1514,9 @@ initDisplay(_events,_settings);
 function getDisplayCSS(){
 return `
 :root{
-  --dv-accent:#7c6fff;
+  --dv-accent:#75685A;
   --dv-accent2:#b06fff;
-  --dv-glow:rgba(124,111,255,.4);
+  --dv-glow:rgba(117,104,90,.4);
   --dv-h:260;
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1634,7 +1639,7 @@ html,body{width:100%;height:100%;overflow:hidden}
 .bento-badge{display:inline-block;font-size:9px;font-weight:800;padding:3px 9px;border-radius:999px;backdrop-filter:blur(8px);margin-bottom:5px;border:1px solid rgba(255,255,255,.2);letter-spacing:.06em}
 .bento-ctr{font-size:11px;color:rgba(255,255,255,.7);margin-top:4px;font-variant-numeric:tabular-nums}
 
-.bs-upcoming{background:rgba(124,111,255,.25);color:#b0aaff}
+.bs-upcoming{background:rgba(117,104,90,.25);color:#b0aaff}
 .bs-open{background:rgba(0,229,160,.2);color:#00e5a0}
 .bs-ended{background:rgba(80,80,110,.25);color:rgba(255,255,255,.4)}
 .bs-soon{background:rgba(255,201,71,.2);color:#ffc947}
@@ -1765,7 +1770,7 @@ function buildCard(ev,extraClass){
   var regMs=ev.reg?(new Date(ev.reg).getTime()-now):null;
   var st=evStatus(ev);
   var al=isAlert(ev)?'alert-mode':''; var urg=isUrgent(ev)?'urgent-mode':'';
-  var clr=ev.color||'#7c6fff';
+  var clr=ev.color||'#75685A';
   var cardH=ev.evCardH||settings.cardH||35;
   var fs=ev.evFs||settings.fontSize||3.2;
   var imgOp=((ev.evImgOp!=null?ev.evImgOp:null)||settings.imgOpacity||50)/100;
@@ -1860,7 +1865,7 @@ function renderSlide(){
   var anims=['anim-fade','anim-slide-up','anim-zoom','anim-flip','anim-slide-right'];
   var anim=anims[curSlide%anims.length];
   sl.innerHTML='<div class="slide-wrap '+anim+'">'+buildCard(ev,'')+'</div>';
-  var clr=ev.color||'#7c6fff';
+  var clr=ev.color||'#75685A';
   setTheme(hueFromColor(clr));
   var dots=document.getElementById('sdots');
   if(dots)dots.innerHTML=sorted.map(function(e,i){return'<div class="sd'+(i===curSlide?' active':'')+'" onclick="goSlide('+i+')"></div>'}).join('');
@@ -1917,7 +1922,7 @@ function updateCtrs(){
     var con=document.getElementById('ctrs-'+ev.id); if(!con)return;
     var startMs=new Date(ev.start).getTime()-now;
     var regMs=ev.reg?(new Date(ev.reg).getTime()-now):null;
-    con.innerHTML=buildCtrs(ev,startMs,regMs,ev.color||'#7c6fff');
+    con.innerHTML=buildCtrs(ev,startMs,regMs,ev.color||'#75685A');
   });
   // refresh bento counters
   if(dispMode==='grid'){
@@ -2398,7 +2403,7 @@ function renderBgList(){
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:center">
         <label style="font-size:10px;color:var(--text3)">لون</label>
-        <input type="color" value="${bg.themeColor||'#7c6fff'}" style="width:36px;height:36px;border:none;border-radius:8px;cursor:pointer;background:none" onchange="bgSlots[${i}].themeColor=this.value;bgSlots[${i}].hue=hueFromHex(this.value)">
+        <input type="color" value="${bg.themeColor||'#75685A'}" style="width:36px;height:36px;border:none;border-radius:8px;cursor:pointer;background:none" onchange="bgSlots[${i}].themeColor=this.value;bgSlots[${i}].hue=hueFromHex(this.value)">
       </div>
       <button class="btn btn-danger btn-icon btn-sm" onclick="removeBg(${i})">✕</button>
     </div>`).join('');
@@ -2421,7 +2426,7 @@ function handleBgImg(input,i){
   };
   r.readAsDataURL(file);
 }
-function addBgSlot(){bgSlots.push({data:'',hue:220,themeColor:'#7c6fff'});renderBgList()}
+function addBgSlot(){bgSlots.push({data:'',hue:220,themeColor:'#75685A'});renderBgList()}
 function removeBg(i){bgSlots.splice(i,1);renderBgList()}
 async function saveSettings(){
   settings.title=document.getElementById('s-title').value.trim()||'منصة الأحداث';
@@ -2741,7 +2746,7 @@ function inlineRenderSlide(){
   if(dots2) dots2.style.display='flex';
   if(inlineCurSlide>=sorted.length) inlineCurSlide=0;
   const ev=sorted[inlineCurSlide];
-  const clr=ev.color||'#7c6fff';
+  const clr=ev.color||'#75685A';
   const ov=((ev.evOverlay!=null?ev.evOverlay:null)||(settings.overlayDark!=null?settings.overlayDark:65))/100;
   const imgOp=((ev.evImgOp!=null?ev.evImgOp:null)||(settings.imgOpacity!=null?settings.imgOpacity:55))/100;
   const cardH=(ev.evCardH||settings.cardH||62);
@@ -2791,7 +2796,7 @@ function inlineRenderSlide(){
     const pill=document.getElementById('dv-event-counter-pill');
     if(pill) pill.textContent=`${inlineCurSlide+1} / ${sorted.length}`;
     // Update theme accent from event color
-    const hueIO=hueFromColorAdmin(ev.color||'#7c6fff');
+    const hueIO=hueFromColorAdmin(ev.color||'#75685A');
     document.getElementById('display-view').style.setProperty('--dv-accent',`hsl(${hueIO},100%,68%)`);
     document.getElementById('display-view').style.setProperty('--dv-glow',`hsla(${hueIO},100%,62%,.38)`);
     return;
@@ -2846,7 +2851,7 @@ function inlineTickCtrs(){
   const now=Date.now();
   const startMs=new Date(ev.start).getTime()-now;
   const regMs=ev.reg?(new Date(ev.reg).getTime()-now):null;
-  const clr=ev.color||'#7c6fff';
+  const clr=ev.color||'#75685A';
 
   function buildCtrHTML(ms,lbl,accent){
     if(!ms||ms<=0) return `<div class="ev-ctr-block"><div class="ev-ctr-label">${lbl}</div><div style="color:rgba(255,255,255,.4);font-size:13px">انتهى ✓</div></div>`;
@@ -2898,7 +2903,7 @@ function inlineRenderGrid(){
   if(!sorted.length){gv.innerHTML='';return;}
   const now=Date.now();
   gv.innerHTML=sorted.map((ev,idx)=>{
-    const clr=ev.color||'#7c6fff';
+    const clr=ev.color||'#75685A';
     const startMs=new Date(ev.start).getTime()-now;
     const st=inlineBadgeStatus(ev,now);
     const animDelay=(idx*0.08).toFixed(2);
@@ -2951,7 +2956,7 @@ function inlineGridTick(){
     sorted.forEach(ev=>{
       const wrap=document.getElementById('gctr-wrap-'+ev.id); if(!wrap)return;
       const startMs=new Date(ev.start).getTime()-now;
-      const clr=ev.color||'#7c6fff';
+      const clr=ev.color||'#75685A';
       if(startMs<=0){wrap.innerHTML='<div style="color:rgba(255,255,255,.3);font-size:13px">انتهى ✓</div>';return;}
       const p=diff2(startMs);
       if(ev.ctype==='days'){
@@ -3173,20 +3178,8 @@ function extractColorFromImg(imgData, callback){
 // TIME-BASED COLOR THEME
 // ══════════════════════════════════════════════════════
 function applyTimeTheme(){
-  const h=new Date().getHours();
-  let accent,accent2,bg;
-  if(h>=5&&h<12){       // صباح — أزرق دافئ
-    accent='#2196f3';accent2='#00bcd4';bg='#eef4fb';
-  } else if(h>=12&&h<17){ // ظهر — بنفسجي
-    accent='#6355e8';accent2='#9a55e8';bg='#f0f2f8';
-  } else if(h>=17&&h<20){ // مساء — برتقالي ذهبي
-    accent='#e8830a';accent2='#e84a0a';bg='#faf4ee';
-  } else {               // ليل — بنفسجي داكن
-    accent='#9c55e8';accent2='#c455e8';bg='#f2eefa';
-  }
-  document.documentElement.style.setProperty('--accent',accent);
-  document.documentElement.style.setProperty('--accent2',accent2);
-  document.documentElement.style.setProperty('--bg',bg);
+  const r=document.documentElement.style;
+  r.setProperty('--accent','#75685A');r.setProperty('--accent2','#968374');r.setProperty('--bg','#F1EFE9');
 }
 applyTimeTheme();
 setInterval(applyTimeTheme,60000);
@@ -3219,6 +3212,17 @@ const CAL_DAYS=['الأحد','الاثنين','الثلاثاء','الأربعا
 let cal={view:'month',date:new Date(),sel:new Date()};
 const $id=i=>document.getElementById(i);
 function calEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+const HJ_M=['محرم','صفر','ربيع الأول','ربيع الآخر','جمادى الأولى','جمادى الآخرة','رجب','شعبان','رمضان','شوال','ذو القعدة','ذو الحجة'];
+let _hjF=null;try{_hjF=new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{day:'numeric',month:'numeric',year:'numeric'})}catch(e){}
+function toAr(n){return String(n).replace(/\d/g,x=>'٠١٢٣٤٥٦٧٨٩'[x])}
+function hijri(d){if(!_hjF)return null;try{const p={};_hjF.formatToParts(d).forEach(x=>p[x.type]=x.value);return {d:+p.day,m:+p.month,y:parseInt(p.year)}}catch(e){return null}}
+function hjFull(d){const h=hijri(d);return h?toAr(h.d)+' '+HJ_M[h.m-1]+' '+toAr(h.y)+' هـ':''}
+function hjRange(a,b){const x=hijri(a),y=hijri(b);if(!x||!y)return '';
+  if(x.y===y.y&&x.m===y.m)return HJ_M[x.m-1]+' '+toAr(x.y)+' هـ';
+  if(x.y===y.y)return HJ_M[x.m-1]+' – '+HJ_M[y.m-1]+' '+toAr(x.y)+' هـ';
+  return HJ_M[x.m-1]+' '+toAr(x.y)+' – '+HJ_M[y.m-1]+' '+toAr(y.y)+' هـ'}
+function calNum(day){const h=hijri(day);
+  return `<div class="cal-dr"><div class="cal-dn">${day.getDate()}</div>`+(h?`<div class="cal-hj">${toAr(h.d)}${h.d===1?' '+HJ_M[h.m-1]:''}</div>`:'')+'</div>'}
 function dstr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function dayStart(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate())}
 function addDays(d,n){return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n)}
@@ -3346,7 +3350,7 @@ async function calToggle(id){
 }
 function calBar(o){
   const ev=o.ev,ic=(ev.showDisp!==false?'📺':'🚫')+(evRec(ev)?'🔁':'');
-  return `<div class="cal-bar" style="background:${calEsc(ev.color||'#6355e8')}" title="${calEsc(evTitle(ev))}">${ic} ${calEsc(evTitle(ev))}</div>`;
+  return `<div class="cal-bar" style="background:${calEsc(ev.color||'#75685A')}" title="${calEsc(evTitle(ev))}">${ic} ${calEsc(evTitle(ev))}</div>`;
 }
 function renderCalendar(){
   const root=$id('cal-root');if(!root)return;
@@ -3355,6 +3359,9 @@ function renderCalendar(){
   if(cal.view==='month')title=CAL_MONTHS[m]+' '+y;
   else if(cal.view==='week'){const s=addDays(dayStart(d),-d.getDay()),e=addDays(s,6);title=s.getDate()+' '+CAL_MONTHS[s.getMonth()]+' – '+e.getDate()+' '+CAL_MONTHS[e.getMonth()]+' '+e.getFullYear()}
   else title=CAL_DAYS[d.getDay()]+'، '+d.getDate()+' '+CAL_MONTHS[m]+' '+y;
+  {const a=cal.view==='month'?new Date(y,m,1):cal.view==='week'?addDays(dayStart(d),-d.getDay()):dayStart(d);
+   const b=cal.view==='month'?new Date(y,m+1,0):cal.view==='week'?addDays(a,6):a;
+   title+='<small class="cal-hjt">'+(cal.view==='day'?hjFull(a):hjRange(a,b))+'</small>';}
   let yrs='';for(let i=y-6;i<=y+12;i++)yrs+=`<option value="${i}"${i===y?' selected':''}>${i}</option>`;
   let mos='';CAL_MONTHS.forEach((n,i)=>{mos+=`<option value="${i}"${i===m?' selected':''}>${n}</option>`});
   let h=`<div class="cal-head">
@@ -3373,7 +3380,7 @@ function renderCalendar(){
     h+='<div class="cal-grid">'+CAL_DAYS.map(n=>`<div class="cal-wd">${n}</div>`).join('');
     for(let i=0;i<42;i++){
       const day=addDays(start,i),list=eventsOnDay(day),ds=dstr(day);
-      h+=`<div class="cal-cell${day.getMonth()!==m?' om':''}${sameDay(day,today)?' td':''}${sameDay(day,cal.sel)?' sel':''}" onclick="calSel('${ds}')"><div class="cal-dn">${day.getDate()}</div>`
+      h+=`<div class="cal-cell${day.getMonth()!==m?' om':''}${sameDay(day,today)?' td':''}${sameDay(day,cal.sel)?' sel':''}" onclick="calSel('${ds}')">${calNum(day)}`
         +list.slice(0,3).map(calBar).join('')+(list.length>3?`<div class="cal-more">+${list.length-3} أخرى</div>`:'')+'</div>';
     }
     h+='</div>';
@@ -3382,7 +3389,7 @@ function renderCalendar(){
     h+='<div class="cal-week">';
     for(let i=0;i<7;i++){
       const day=addDays(s,i),list=eventsOnDay(day),ds=dstr(day);
-      h+=`<div class="cal-wcol${sameDay(day,today)?' td':''}${sameDay(day,cal.sel)?' sel':''}" onclick="calSel('${ds}')"><div class="cal-wn">${CAL_DAYS[i]}</div><div class="cal-dn">${day.getDate()}</div>`
+      h+=`<div class="cal-wcol${sameDay(day,today)?' td':''}${sameDay(day,cal.sel)?' sel':''}" onclick="calSel('${ds}')"><div class="cal-wn">${CAL_DAYS[i]}</div>${calNum(day)}`
         +list.map(o=>calBar(o)).join('')+'</div>';
     }
     h+='</div>';
@@ -3394,12 +3401,12 @@ function renderCalPanel(){
   const p=$id('cal-panel');if(!p)return;
   const day=cal.view==='day'?cal.date:cal.sel,list=eventsOnDay(day),ds=dstr(day);
   const fmt=t=>t.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'});
-  let h=`<div class="cal-ph"><b>${CAL_DAYS[day.getDay()]}، ${day.getDate()} ${CAL_MONTHS[day.getMonth()]} ${day.getFullYear()} <span style="color:var(--text3);font-weight:600;font-size:12px">(${list.length} حدث)</span></b>
+  let h=`<div class="cal-ph"><b>${CAL_DAYS[day.getDay()]}، ${day.getDate()} ${CAL_MONTHS[day.getMonth()]} ${day.getFullYear()} م · ${hjFull(day)} <span style="color:var(--text3);font-weight:600;font-size:12px">(${list.length} حدث)</span></b>
     <button class="cal-add" onclick="calAdd('${ds}')" title="إضافة حدث في هذا اليوم">+</button></div>`;
   if(!list.length)h+='<div class="cal-empty">لا توجد أحداث في هذا اليوم — اضغط + للإضافة</div>';
   list.forEach(o=>{
     const ev=o.ev,shown=ev.showDisp!==false,r=evRec(ev);
-    h+=`<div class="cal-item" style="border-inline-start-color:${calEsc(ev.color||'#6355e8')}">
+    h+=`<div class="cal-item" style="border-inline-start-color:${calEsc(ev.color||'#75685A')}">
       <div class="ci"><b>${calEsc(evTitle(ev))}</b><small>🕒 ${fmt(o.at)}</small>
         <span class="cal-tag ${shown?'on':'off'}">${shown?'معروض':'مخفي'}</span>${r?`<span class="cal-tag rc">🔁 ${calEsc(recLabel(r))}</span>`:''}</div>
       <button class="btn btn-secondary btn-sm" onclick="calToggle('${ev.id}')">${shown?'🙈 إخفاء':'📺 إظهار'}</button>
