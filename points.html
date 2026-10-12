@@ -1,6 +1,23 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+<script id="last-platform-marker">
+/* يسجّل في هذا الجهاز أن هذه المنصة هي منصة المستخدم (بعد تسجيل دخوله فيها)،
+   لتوجّهه إليها المنصة الرئيسية عند فتح الرابط الأساسي مباشرة دون الحاجة لحساب بوابة. */
+(function () {
+  var URL_ = 'points.html', KEY = 'lastPlatformUrl';
+  function mark() { try { localStorage.setItem(KEY, URL_); } catch (e) {} }
+  try { var o = JSON.parse(localStorage.getItem('points-app-rbac-v1')); if (o && o.currentUserId) mark(); } catch (e) {}
+  try {
+    var _set = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (k, v) {
+      var r = _set.apply(this, arguments);
+      try { if (k === 'points-app-rbac-v1' && this === window.localStorage) { var o = JSON.parse(v); if (o && o.currentUserId) mark(); } } catch (e) {}
+      return r;
+    };
+  } catch (e) {}
+})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>برنامج نقاط التجميع الشهري</title>
@@ -494,6 +511,7 @@
   var BASE = new URL('./', location.href).href;
   var IS_INDEX_PAGE = /\/(index(\.html)?)?$/i.test(location.pathname);   // البوابة نفسها
 
+  var P = location.pathname;
   var APPS = {
     warehouse: {
       mode: 'warehouse',
@@ -503,11 +521,47 @@
     },
     platform: {
       mode: 'platform',
-      name: 'المنصة الرئيسية / الأنظمة', short: 'الأنظمة', title: 'الأنظمة',
+      name: 'الأنظمة', short: 'الأنظمة', title: 'الأنظمة',
       desc: 'البوابة الرئيسية للوصول إلى المستودع وبقية الأنظمة المتاحة لك',
       start: 'index.html', theme: '#4a3020', bg: '#fdfbf8'
+    },
+    tilawat: {
+      mode: 'tilawat',
+      name: 'التلاوات', short: 'التلاوات', title: 'التلاوات',
+      desc: 'نظام إدارة وتنظيم قراء وتلاوات المساجد',
+      start: 'tilawat.html', theme: '#75685A', bg: '#fffdfa'
+    },
+    points: {
+      mode: 'points',
+      name: 'النقاط', short: 'النقاط', title: 'النقاط',
+      desc: 'برنامج نقاط التجميع الشهري',
+      start: 'points.html', theme: '#4a3020', bg: '#f7efe2'
+    },
+    quran: {
+      mode: 'quran',
+      name: 'خطة القرآن', short: 'خطة القرآن', title: 'خطة القرآن',
+      desc: 'خطة القرآن الكريم',
+      start: 'quran-plan.html', theme: '#4a3020', bg: '#fffdfa'
     }
   };
+  /* اسم التطبيق عند التثبيت (الأيقونة واحدة للجميع، الاسم فقط يتغيّر):
+       - مسجَّل بأكثر من صلاحية أو مدير بوابة → "الأنظمة" (يبدأ من index.html)
+       - مسجَّل بالبوابة بصلاحية واحدة          → اسم تلك المنصة ("التلاوات" / "النقاط" ...)
+       - موظف دخل منصته مباشرة بحسابها          → اسم الصفحة التي ثبّت منها
+     لإضافة منصة جديدة: أضيفي عنصراً في APPS وسطراً في PAGE_APP و appForCard. */
+  var PAGE_APP = /\/tilawat(\.html)?$/i.test(P) ? 'tilawat'
+    : /\/points(\.html)?$/i.test(P) ? 'points'
+    : /\/quran-plan(\.html)?$/i.test(P) ? 'quran'
+    : /\/warehouse(\.html)?$/i.test(P) ? 'warehouse' : 'platform';
+
+  function appForCard(card, key) {
+    var s = ((card && card.url) || '') + ' ' + ((card && card.title) || '');
+    if (key === 'warehouse' || /warehouse|مستودع/i.test(s)) return 'warehouse';
+    if (/tilawat|تلاوات/i.test(s)) return 'tilawat';
+    if (/points|نقاط/i.test(s)) return 'points';
+    if (/quran-plan|خطة القرآن|خطة القران/i.test(s)) return 'quran';
+    return null;
+  }
 
   function readJSON(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
 
@@ -528,23 +582,23 @@
       if (Array.isArray(allowed) && allowed.length === 1) {
         var key = allowed[0], card = null, cards = Array.isArray(ps.cards) ? ps.cards : [];
         for (var i = 0; i < cards.length; i++) { if (cards[i] && cards[i].key === key) { card = cards[i]; break; } }
+        var known = appForCard(card, key);
+        if (known === 'warehouse') return APPS.warehouse;
+        // منصة معروفة: اسمها الثابت، ونبدأ من البوابة وهي تحوّله تلقائياً (الموقع قد يكون خارج هذا النطاق)
+        if (known) { var a = {}; for (var k in APPS[known]) a[k] = APPS[known][k]; a.start = 'index.html'; return a; }
         var title = card && card.title ? String(card.title).trim() : '';
-        var isWh = key === 'warehouse';
         return {
-          mode: isWh ? 'warehouse' : 'single',
-          name: title || (isWh ? APPS.warehouse.name : APPS.platform.name),
-          short: clip(title || (isWh ? APPS.warehouse.short : APPS.platform.short), 12),
-          title: clip(title || (isWh ? APPS.warehouse.title : APPS.platform.title), 14),
-          desc: isWh ? APPS.warehouse.desc : ('الدخول إلى ' + (title || 'النظام')),
-          // الموقع غير المستودع قد يكون خارج هذا النطاق: نبدأ من البوابة وهي تحوّله تلقائياً
-          start: isWh ? 'warehouse.html' : 'index.html',
-          theme: isWh ? APPS.warehouse.theme : APPS.platform.theme,
-          bg: isWh ? APPS.warehouse.bg : APPS.platform.bg
+          mode: 'single',
+          name: title || APPS.platform.name,
+          short: clip(title || APPS.platform.short, 12),
+          title: clip(title || APPS.platform.title, 14),
+          desc: 'الدخول إلى ' + (title || 'النظام'),
+          start: 'index.html', theme: APPS.platform.theme, bg: APPS.platform.bg
         };
       }
       return APPS.platform;                       // أكثر من صلاحية أو لا شيء بعد
     }
-    return IS_INDEX_PAGE ? APPS.platform : APPS.warehouse;   // زائر / حساب مستودع فقط (الافتراضي = المستودع)
+    return APPS[PAGE_APP];                        // موظف بمنصة واحدة: اسم الصفحة الحالية (الافتراضي في البوابة = الأنظمة)
   }
 
   function fileIcons() {
@@ -573,7 +627,7 @@
   function apply() {
     var app = decideApp(), mode = app.mode;
     var manifest = {
-      id: BASE + app.start,
+      id: BASE,
       name: app.name, short_name: app.short, description: app.desc,
       lang: 'ar', dir: 'rtl',
       start_url: BASE + app.start, scope: BASE,
@@ -594,10 +648,93 @@
     setAppleIcon(BASE + 'apple-touch-icon.png');
 
     window.__pwaMode = mode;
+    try { checkIdentity(app); } catch (e) {}
     return mode;
   }
 
-  try { apply(); } catch (e) {}
+/* ---------- تحديث التطبيق عند تغيّر الصلاحيات (يعمل داخل التطبيق المثبَّت فقط) ----------
+   نحفظ "هوية" التطبيق وقت التثبيت (الاسم + صفحة البدء). عند كل فتح، إن اختلفت الهوية الحالية
+   (بسبب إضافة/حذف صلاحيات) يظهر شريط "تحديث متاح"؛ وبالضغط عليه نثبّت الهوية الجديدة
+   ونحدّث الـ manifest وننقل المستخدم إلى صفحة البدء الجديدة. تغيير اسم الأيقونة على الشاشة
+   الرئيسية نفسه يقرّره المتصفح/النظام (على iPhone يلزم حذف التطبيق وإضافته من جديد). */
+  var ID_KEY = 'pwa-installed-identity', SNOOZE_KEY = 'pwa-update-snoozed', SEEN_KEY = 'pwa-launch-seen';
+  function inStandalone() {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  }
+  function saveIdent(app) {
+    try { localStorage.setItem(ID_KEY, JSON.stringify({ name: app.name, start: app.start, mode: app.mode, at: Date.now() })); } catch (e) {}
+  }
+  function updateBar() {
+    var b = document.getElementById('pwa-update-bar');
+    if (b) return b;
+    b = document.createElement('div');
+    b.id = 'pwa-update-bar'; b.setAttribute('dir', 'rtl'); b.setAttribute('role', 'alert');
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483000;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px;' +
+      'background:#0F766E;color:#fff;font:700 14px/1.6 system-ui,-apple-system,"Segoe UI",Tajawal,sans-serif;display:flex;flex-wrap:wrap;' +
+      'align-items:center;gap:8px;box-shadow:0 4px 16px rgba(0,0,0,.3)';
+    document.body.appendChild(b);
+    return b;
+  }
+  function barBtn(label, onclick, primary) {
+    var x = document.createElement('button');
+    x.type = 'button'; x.textContent = label;
+    x.style.cssText = 'all:unset;cursor:pointer;padding:6px 14px;border-radius:999px;white-space:nowrap;' +
+      (primary ? 'background:#fff;color:#0F766E' : 'border:1px solid rgba(255,255,255,.7);color:#fff');
+    x.addEventListener('click', onclick);
+    return x;
+  }
+  function hideUpdate() {
+    var b = document.getElementById('pwa-update-bar');
+    if (b && !b.getAttribute('data-done') && b.parentNode) b.parentNode.removeChild(b);
+  }
+  function showUpdate(app) {
+    try { if (sessionStorage.getItem(SNOOZE_KEY)) return; } catch (e) {}
+    if (!document.body) { document.addEventListener('DOMContentLoaded', function () { showUpdate(app); }); return; }
+    var b = updateBar();
+    if (b.getAttribute('data-done')) return;
+    b.innerHTML = '';
+    var t = document.createElement('span');
+    t.style.cssText = 'flex:1;min-width:200px';
+    t.textContent = '🔄 تحديث متاح: تغيّرت صلاحياتك، وسيصبح اسم التطبيق «' + app.name + '»';
+    b.appendChild(t);
+    b.appendChild(barBtn('تحديث الآن', function () { doUpdate(app); }, true));
+    b.appendChild(barBtn('لاحقاً', function () {
+      try { sessionStorage.setItem(SNOOZE_KEY, '1'); } catch (e) {}
+      hideUpdate();
+    }, false));
+  }
+  function doUpdate(app) {
+    saveIdent(app);
+    try { apply(); } catch (e) {}
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistration)
+        navigator.serviceWorker.getRegistration().then(function (r) { if (r) r.update(); });
+    } catch (e) {}
+    var old = document.getElementById('pwa-update-bar'); if (old && old.parentNode) old.parentNode.removeChild(old);
+    var ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var b = updateBar(); b.setAttribute('data-done', '1'); b.innerHTML = '';
+    var t = document.createElement('span');
+    t.style.cssText = 'flex:1;min-width:200px';
+    t.textContent = ios
+      ? '✅ تم التحديث. لتغيير الاسم على الشاشة الرئيسية: احذف التطبيق ثم افتح الموقع في Safari وأضفه من جديد.'
+      : '✅ تم التحديث. سيظهر الاسم الجديد «' + app.name + '» على جهازك خلال لحظات؛ وإن بقي الاسم القديم فاحذف التطبيق وثبّته من جديد.';
+    b.appendChild(t);
+    b.appendChild(barBtn('متابعة', function () { location.href = BASE + app.start; }, true));
+  }
+  function checkIdentity(app) {
+    if (!inStandalone()) return;
+    var rec = readJSON(ID_KEY), first = false;
+    try { first = !sessionStorage.getItem(SEEN_KEY); sessionStorage.setItem(SEEN_KEY, '1'); } catch (e) {}
+    if (!rec) {
+      // تثبيت قديم قبل هذه الميزة: إن فُتح على صفحة منصة بعينها فهي هويته الأصلية، وإلا نعتمد الحالية
+      saveIdent((first && PAGE_APP !== 'platform' && APPS[PAGE_APP]) || app);
+      rec = readJSON(ID_KEY);
+    }
+    if (rec && rec.name !== app.name) showUpdate(app); else hideUpdate();
+  }
+  window.addEventListener('appinstalled', function () { try { saveIdent(decideApp()); } catch (e) {} });
+
+    try { apply(); } catch (e) {}
   document.addEventListener('DOMContentLoaded', function () { try { apply(); } catch (e) {} });
   window.addEventListener('pageshow', function () { try { apply(); } catch (e) {} });
   window.addEventListener('storage', function () { try { apply(); } catch (e) {} });   // دخول/خروج من تبويب آخر
