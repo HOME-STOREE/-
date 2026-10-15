@@ -1089,7 +1089,7 @@ function useAllMosquesCounts(kind, hijriNow, refreshKey) {
                 return;
             if (error || !Array.isArray(data)) {
                 console.warn('reciter_period_counts:', error?.message || 'unexpected response');
-                setRes({ byId: null, failed: true });
+                setRes({ byId: null, failed: true, error: error?.message || 'unexpected response' });
                 return;
             }
             const byId = {};
@@ -1152,7 +1152,7 @@ function ReciterAvailableList({ approved, recitation_logs, hijriNow, selectedId,
         const pickBtn = React.createElement("button", { type: "button", onClick: () => onPick({ id: r.id, name: r.name, approved: true, kind: 'approved' }), className: `flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl border-2 px-4 py-3 text-start font-semibold transition-colors ${active ? 'border-ok bg-ok/10 text-ok' : 'border-cardline bg-white text-ink hover:bg-hover'}` }, nameSpan, countSpan);
         return React.createElement("div", { key: r.id, className: "flex items-center gap-2" }, pickBtn, r.phone && React.createElement(ui_jsx_1.PhoneMenu, { phone: r.phone, name: r.name }));
     });
-    return React.createElement(React.Fragment, null, all.failed && React.createElement("p", { className: "mb-2 text-xs font-semibold text-bad" }, "تعذّر جلب أعداد كل المساجد؛ المعروض أعداد مسجدك فقط."), React.createElement("div", { className: "grid gap-2 sm:grid-cols-2" }, cards));
+    return React.createElement(React.Fragment, null, all.failed && React.createElement("p", { className: "mb-2 text-xs font-semibold text-bad" }, "تعذّر جلب أعداد كل المساجد؛ المعروض أعداد مسجدك فقط." + (all.error ? " [" + all.error + "]" : "")), React.createElement("div", { className: "grid gap-2 sm:grid-cols-2" }, cards));
 }
 
 };
@@ -1185,7 +1185,7 @@ function ReciterHistoryModal({ open, onClose, reciterKeyValue, name, periodFrom 
                 return;
             if (error || !Array.isArray(data)) {
                 console.warn('reciter_history:', error?.message || 'unexpected response');
-                setRemote({ rows: null, failed: true });
+                setRemote({ rows: null, failed: true, error: error?.message || 'unexpected response' });
                 return;
             }
             setRemote({ rows: data, failed: false });
@@ -1212,7 +1212,7 @@ function ReciterHistoryModal({ open, onClose, reciterKeyValue, name, periodFrom 
             React.createElement("span", { className: "badge-warn" },
                 "\u0627\u0633\u062A\u062B\u0646\u0627\u0621\u0627\u062A: ",
                 rows.filter((r) => r.is_exception).length)),
-        remote.failed && React.createElement("p", { className: "mb-3 text-xs font-semibold text-bad" }, "تعذّر جلب سجل كل المساجد؛ المعروض سجل مساجدك فقط."),
+        remote.failed && React.createElement("p", { className: "mb-3 text-xs font-semibold text-bad" }, "تعذّر جلب سجل كل المساجد؛ المعروض سجل مساجدك فقط." + (remote.error ? " [" + remote.error + "]" : "")),
         loading ? React.createElement("p", { className: "py-8 text-center text-sm text-ink-soft" }, "جارٍ جلب السجل…") : rows.length === 0 ? (React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062A\u0644\u0627\u0648\u0627\u062A \u0645\u0633\u062C\u0644\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u0642\u0627\u0631\u0626" })) : (React.createElement("div", { className: "overflow-x-auto rounded-xl border border-cardline" },
             React.createElement("table", { className: "w-full min-w-[640px]" },
                 React.createElement("thead", null,
@@ -3746,7 +3746,7 @@ function NightReciters() {
                 return (React.createElement("div", { key: slotKey, className: "card mb-4 overflow-hidden" },
                     React.createElement("div", { className: "flex items-center justify-between border-b border-cardline px-5 py-3.5" },
                         React.createElement("h2", { className: "font-extrabold" }, constants_js_1.SLOTS[slotKey]?.label),
-                        React.createElement("span", { className: "text-sm font-semibold text-ink-soft" }, `${rows.length} قارئاً · ${allK.failed ? 'تعذّر جلب أعداد كل المساجد' : 'العدد في جميع المساجد'}`)),
+                        React.createElement("span", { className: "text-sm font-semibold text-ink-soft" }, `${rows.length} قارئاً · ${allK.failed ? ('تعذّر جلب أعداد كل المساجد' + (allK.error ? ' [' + allK.error + ']' : '')) : 'العدد في جميع المساجد'}`)),
                     rows.length === 0 ? (React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u0642\u0631\u0627\u0621 \u0645\u0639\u062A\u0645\u062F\u0648\u0646", hint: "\u0631\u0627\u062C\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u0625\u0636\u0627\u0641\u0629 \u0642\u0631\u0627\u0621 \u0644\u0647\u0630\u0647 \u0627\u0644\u062E\u0627\u0646\u0629." })) : (React.createElement("div", { className: "overflow-x-auto" },
                         React.createElement("table", { className: "w-full min-w-[520px]" },
                             React.createElement("thead", null,
