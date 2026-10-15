@@ -1062,6 +1062,46 @@ function ReciterCombobox({ approved, others, initial = '', onPick, onEdit, place
 }
 
 };
+defs["src/lib/allCounts.js"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.useAllMosquesCounts = useAllMosquesCounts;
+const react_1 = require("react");
+const supabase_js_1 = require("src/lib/supabase.js");
+/**
+ * أعداد مشاركات القراء في «كل المساجد» (وليس مساجد المسؤول فقط) خلال الشهرين الهجريين: الحالي + الماضي.
+ * kind = 'night' → التلاوات الليلية (كل الخانات ما عدا الجمعة) | 'fri' → التلاوة النهارية (الجمعة) | null → لا شيء.
+ * تُجلب كأعداد مجمّعة فقط عبر الدالة reciter_period_counts في Supabase (لا تصل سجلات المساجد الأخرى للمتصفح).
+ * عند تعذّر الدالة يرجع failed=true ويبقى العرض على بيانات مساجد المسؤول كما كان.
+ */
+function useAllMosquesCounts(kind, hijriNow, refreshKey) {
+    const [res, setRes] = (0, react_1.useState)({ byId: null, failed: false });
+    const curM = hijriNow?.month, curY = hijriNow?.year;
+    (0, react_1.useEffect)(() => {
+        if (!kind || !curM || !curY)
+            return undefined;
+        let alive = true;
+        const prevM = curM === 1 ? 12 : curM - 1;
+        const prevY = curM === 1 ? curY - 1 : curY;
+        supabase_js_1.supabase.rpc('reciter_period_counts', { p_kind: kind, p_cur_m: curM, p_cur_y: curY, p_prev_m: prevM, p_prev_y: prevY })
+            .then(({ data, error }) => {
+            if (!alive)
+                return;
+            if (error || !Array.isArray(data)) {
+                console.warn('reciter_period_counts:', error?.message || 'unexpected response');
+                setRes({ byId: null, failed: true });
+                return;
+            }
+            const byId = {};
+            data.forEach((r) => { byId[r.reciter_id] = { cur: r.cur_count || 0, prev: r.prev_count || 0, last: r.last_date || '' }; });
+            setRes({ byId, failed: false });
+        });
+        return () => { alive = false; };
+    }, [kind, curM, curY, refreshKey]);
+    return res;
+}
+
+};
 defs["src/components/ReciterAvailableList.jsx"] = function(exports, require, module, React){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1070,12 +1110,13 @@ const react_1 = require("react");
 const lucide_react_1 = require("lucide-react");
 const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
+const allCounts_js_1 = require("src/lib/allCounts.js");
 /**
  * قائمة القراء المتاحين (المعتمدين) لهذه الخانة فقط — لمسؤول الليلة ومسؤول تلاوة الجمعة.
  * أمام كل قارئ عدد مشاركاته (تلاوات مقروءة) خلال الشهرين الهجريين: الحالي + الماضي.
  * تتحدّث تلقائياً مع أي تسجيل جديد لأنها محسوبة من recitation_logs الحيّة (متزامنة عبر Realtime).
  */
-function ReciterAvailableList({ approved, recitation_logs, hijriNow, selectedId, onPick }) {
+function ReciterAvailableList({ approved, recitation_logs, hijriNow, selectedId, onPick, kind }) {
     const counts = (0, react_1.useMemo)(() => {
         const map = {};
         if (!hijriNow?.month || !hijriNow?.year)
@@ -1094,21 +1135,24 @@ function ReciterAvailableList({ approved, recitation_logs, hijriNow, selectedId,
         });
         return map;
     }, [recitation_logs, hijriNow]);
+    // الأعداد في كل المساجد (ليلية للّيالي، نهارية للجمعة) — تتجدد عند أي تسجيل جديد من هذا المسؤول
+    const all = (0, allCounts_js_1.useAllMosquesCounts)(kind, hijriNow, recitation_logs.length);
     if (!approved.length) {
         return React.createElement("p", { className: "rounded-xl border border-dashed border-cardline bg-hover px-4 py-6 text-center text-sm text-ink-soft" }, "لا يوجد قراء معتمدون لهذه الخانة بعد. راجع مدير النظام لإضافة قراء.");
     }
     const cards = approved.map((r) => {
-        const count = counts[(0, util_js_1.reciterKey)({ reciter_id: r.id, reciter_name: r.name })] || 0;
+        const a = all.byId && all.byId[r.id];
+        const count = a ? a.cur + a.prev : (counts[(0, util_js_1.reciterKey)({ reciter_id: r.id, reciter_name: r.name })] || 0);
         const active = selectedId === r.id;
         const icon = active
             ? React.createElement(lucide_react_1.CheckCircle2, { className: "h-4 w-4 shrink-0" })
             : React.createElement(lucide_react_1.UserRound, { className: "h-4 w-4 shrink-0 text-ink-soft" });
         const nameSpan = React.createElement("span", { className: "flex items-center gap-2" }, icon, r.name);
-        const countSpan = React.createElement("span", { className: `shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold ${count > 0 ? 'bg-brand/10 text-brand' : 'bg-hover text-ink-soft'}`, title: "\u0639\u062F\u062F \u0627\u0644\u0645\u0634\u0627\u0631\u0643\u0627\u062A \u062E\u0644\u0627\u0644 \u0627\u0644\u0634\u0647\u0631\u064A\u0646 \u0627\u0644\u0623\u062E\u064A\u0631\u064A\u0646" }, count);
+        const countSpan = React.createElement("span", { className: `shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold ${count > 0 ? 'bg-brand/10 text-brand' : 'bg-hover text-ink-soft'}`, title: "عدد المشاركات في جميع المساجد خلال الشهرين الأخيرين" }, count);
         const pickBtn = React.createElement("button", { type: "button", onClick: () => onPick({ id: r.id, name: r.name, approved: true, kind: 'approved' }), className: `flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl border-2 px-4 py-3 text-start font-semibold transition-colors ${active ? 'border-ok bg-ok/10 text-ok' : 'border-cardline bg-white text-ink hover:bg-hover'}` }, nameSpan, countSpan);
         return React.createElement("div", { key: r.id, className: "flex items-center gap-2" }, pickBtn, r.phone && React.createElement(ui_jsx_1.PhoneMenu, { phone: r.phone, name: r.name }));
     });
-    return React.createElement("div", { className: "grid gap-2 sm:grid-cols-2" }, cards);
+    return React.createElement(React.Fragment, null, all.failed && React.createElement("p", { className: "mb-2 text-xs font-semibold text-bad" }, "تعذّر جلب أعداد كل المساجد؛ المعروض أعداد مسجدك فقط."), React.createElement("div", { className: "grid gap-2 sm:grid-cols-2" }, cards));
 }
 
 };
@@ -1122,14 +1166,38 @@ const DataContext_jsx_1 = require("src/context/DataContext.jsx");
 const constants_js_1 = require("src/lib/constants.js");
 const util_js_1 = require("src/lib/util.js");
 const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
+const supabase_js_1 = require("src/lib/supabase.js");
 /** سجل تتبّع كامل لقارئ: التاريخ، المسجد، الخانة، السورة، الملاحظات */
-function ReciterHistoryModal({ open, onClose, reciterKeyValue, name, periodFrom = '', periodTo = '', periodMatch = null }) {
+function ReciterHistoryModal({ open, onClose, reciterKeyValue, name, periodFrom = '', periodTo = '', periodMatch = null, allKind = null }) {
     const { recitation_logs, mosqueById } = (0, DataContext_jsx_1.useData)();
     const { isAdmin } = (0, AuthContext_jsx_1.useAuth)();
-    const rows = (0, react_1.useMemo)(() => (open ? recitation_logs.filter((l) => l.status === 'read' && (isAdmin || l.slot_key !== 'fri') && (0, util_js_1.reciterKey)(l) === reciterKeyValue) : []), [open, recitation_logs, reciterKeyValue, isAdmin]);
+    // سجل «كل المساجد» لمسؤول الليلة (allKind='night' تلاوات ليلية) ومسؤول الجمعة (allKind='fri' تلاوات نهارية)
+    const [remote, setRemote] = (0, react_1.useState)({ rows: null, failed: false });
+    (0, react_1.useEffect)(() => {
+        if (!open || !allKind || !reciterKeyValue) {
+            setRemote({ rows: null, failed: false });
+            return undefined;
+        }
+        let alive = true;
+        setRemote({ rows: null, failed: false });
+        supabase_js_1.supabase.rpc('reciter_history', { p_kind: allKind, p_reciter_id: String(reciterKeyValue) }).then(({ data, error }) => {
+            if (!alive)
+                return;
+            if (error || !Array.isArray(data)) {
+                console.warn('reciter_history:', error?.message || 'unexpected response');
+                setRemote({ rows: null, failed: true });
+                return;
+            }
+            setRemote({ rows: data, failed: false });
+        });
+        return () => { alive = false; };
+    }, [open, allKind, reciterKeyValue]);
+    const localRows = (0, react_1.useMemo)(() => (open ? recitation_logs.filter((l) => l.status === 'read' && (isAdmin || l.slot_key !== 'fri') && (0, util_js_1.reciterKey)(l) === reciterKeyValue) : []), [open, recitation_logs, reciterKeyValue, isAdmin]);
+    const rows = remote.rows || localRows;
+    const loading = Boolean(open && allKind && !remote.rows && !remote.failed);
     const inPeriod = rows.filter((l) => (periodMatch ? periodMatch(l) : (!periodFrom || l.log_date >= periodFrom) && (!periodTo || l.log_date <= periodTo))).length;
     const pages = rows.reduce((s, l) => s + (l.pages || 0), 0);
-    return (React.createElement(ui_jsx_1.Modal, { open: open, onClose: onClose, title: `سجل تلاوات: ${name}`, size: "xl" },
+    return (React.createElement(ui_jsx_1.Modal, { open: open, onClose: onClose, title: `سجل تلاوات: ${name}${allKind ? (allKind === 'fri' ? ' — كل المساجد (النهارية)' : ' — كل المساجد (الليلية)') : ''}`, size: "xl" },
         React.createElement("div", { className: "mb-4 flex flex-wrap gap-2" },
             React.createElement("span", { className: "badge-brand" },
                 "\u0627\u0644\u0625\u062C\u0645\u0627\u0644\u064A: ",
@@ -1144,7 +1212,8 @@ function ReciterHistoryModal({ open, onClose, reciterKeyValue, name, periodFrom 
             React.createElement("span", { className: "badge-warn" },
                 "\u0627\u0633\u062A\u062B\u0646\u0627\u0621\u0627\u062A: ",
                 rows.filter((r) => r.is_exception).length)),
-        rows.length === 0 ? (React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062A\u0644\u0627\u0648\u0627\u062A \u0645\u0633\u062C\u0644\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u0642\u0627\u0631\u0626" })) : (React.createElement("div", { className: "overflow-x-auto rounded-xl border border-cardline" },
+        remote.failed && React.createElement("p", { className: "mb-3 text-xs font-semibold text-bad" }, "تعذّر جلب سجل كل المساجد؛ المعروض سجل مساجدك فقط."),
+        loading ? React.createElement("p", { className: "py-8 text-center text-sm text-ink-soft" }, "جارٍ جلب السجل…") : rows.length === 0 ? (React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062A\u0644\u0627\u0648\u0627\u062A \u0645\u0633\u062C\u0644\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u0642\u0627\u0631\u0626" })) : (React.createElement("div", { className: "overflow-x-auto rounded-xl border border-cardline" },
             React.createElement("table", { className: "w-full min-w-[640px]" },
                 React.createElement("thead", null,
                     React.createElement("tr", null,
@@ -1153,7 +1222,7 @@ function ReciterHistoryModal({ open, onClose, reciterKeyValue, name, periodFrom 
                         React.createElement("th", { className: "th" }, "\u0627\u0644\u062E\u0627\u0646\u0629"),
                         React.createElement("th", { className: "th" }, "\u0627\u0644\u0633\u0648\u0631\u0629"),
                         React.createElement("th", { className: "th" }, "\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A"),
-                        React.createElement("th", { className: "th" }, "\u0645\u0644\u0627\u062D\u0638\u0627\u062A"))),
+                        !allKind && React.createElement("th", { className: "th" }, "\u0645\u0644\u0627\u062D\u0638\u0627\u062A"))),
                 React.createElement("tbody", null, rows.map((l) => (React.createElement("tr", { key: l.id, className: "tr-hover" },
                     React.createElement("td", { className: "td whitespace-nowrap" },
                         (0, util_js_1.fmtDate)(l.log_date),
@@ -1163,13 +1232,13 @@ function ReciterHistoryModal({ open, onClose, reciterKeyValue, name, periodFrom 
                             constants_js_1.HIJRI_MONTHS[(l.hijri_month || 1) - 1],
                             " ",
                             l.hijri_year)),
-                    React.createElement("td", { className: "td" }, mosqueById[l.mosque_id]?.name ?? '—'),
+                    React.createElement("td", { className: "td" }, l.mosque_name ?? mosqueById[l.mosque_id]?.name ?? '—'),
                     React.createElement("td", { className: "td whitespace-nowrap" },
                         constants_js_1.SLOTS[l.slot_key]?.short,
                         l.is_exception && React.createElement("span", { className: "badge-warn ms-2" }, "\u0627\u0633\u062A\u062B\u0646\u0627\u0621")),
                     React.createElement("td", { className: "td" }, l.surah || '—'),
                     React.createElement("td", { className: "td" }, l.pages ?? '—'),
-                    React.createElement("td", { className: "td" }, l.notes || '—'))))))))));
+                    !allKind && React.createElement("td", { className: "td" }, l.notes || '—'))))))))));
 }
 
 };
@@ -2713,10 +2782,10 @@ function DailyLog() {
                     " \u0644\u0645 \u062A\u062A\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629")),
             status === 'read' ? (React.createElement("div", { className: "grid gap-4 md:grid-cols-2" },
                 React.createElement(ui_jsx_1.Field, { label: "\u0627\u0644\u0642\u0627\u0631\u0626", className: "md:col-span-2", hint: isNight
-                        ? `${approved.length} قارئاً متاحاً ${slot === 'fri' ? 'لهذه الجمعة' : 'لهذه الليلة'}. الرقم أمام كل اسم هو عدد مشاركاته خلال الشهرين الهجريين الحالي والماضي.`
+                        ? `${approved.length} قارئاً متاحاً ${slot === 'fri' ? 'لهذه الجمعة' : 'لهذه الليلة'}. الرقم أمام كل اسم هو عدد مشاركاته ${slot === 'fri' ? 'النهارية' : 'الليلية'} في جميع المساجد خلال الشهرين الهجريين الحالي والماضي.`
                         : `${approved.length} قارئاً معتمداً في «${constants_js_1.SLOTS[slot]?.label}». يمكنك أيضاً كتابة اسم غير موجود.` },
                     isNight
-                        ? React.createElement(ReciterAvailableList_jsx_1.default, { approved: approved, recitation_logs: recitation_logs, hijriNow: nowHijri, selectedId: reciter?.id, onPick: handlePick })
+                        ? React.createElement(ReciterAvailableList_jsx_1.default, { approved: approved, recitation_logs: recitation_logs, hijriNow: nowHijri, selectedId: reciter?.id, onPick: handlePick, kind: slot === 'fri' ? 'fri' : 'night' })
                         : React.createElement(ReciterCombobox_jsx_1.default, { key: comboKey, approved: approved, others: others, initial: reciter?.name || '', onPick: handlePick, onEdit: () => setReciter(null) }),
                     reciter && (React.createElement("p", { className: "mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-ok" },
                         React.createElement(lucide_react_1.CheckCircle2, { className: "h-3.5 w-3.5" }),
@@ -3591,6 +3660,7 @@ const hijri_js_1 = require("src/lib/hijri.js");
 const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
 const ReciterHistoryModal_jsx_1 = __importDefault(require("src/components/ReciterHistoryModal.jsx"));
+const allCounts_js_1 = require("src/lib/allCounts.js");
 /**
  * قراء الليلة — نسخة من «دليل القراء» مخصّصة لمسؤول الليلة (والجمعة):
  * تعرض دائماً القراء المعتمدين لليلته/ليالِيه المسندة إليه (بصرف النظر عن تاريخ اليوم)،
@@ -3609,6 +3679,9 @@ function NightReciters() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [(profile.slot_keys || []).join(',')]);
     const nowHijri = (0, react_1.useMemo)(() => (0, hijri_js_1.toHijri)((0, util_js_1.todayStr)()), []);
+    // أعداد «كل المساجد»: الليلية للّيالي المسندة، والنهارية (الجمعة) للجمعة المسندة
+    const allNight = (0, allCounts_js_1.useAllMosquesCounts)(mySlots.some((k) => k !== 'fri') ? 'night' : null, nowHijri, recitation_logs.length);
+    const allFri = (0, allCounts_js_1.useAllMosquesCounts)(mySlots.includes('fri') ? 'fri' : null, nowHijri, recitation_logs.length);
     // عدد التلاوات المقروءة لكل قارئ خلال الشهرين الهجريين: الحالي + الماضي
     const counts = (0, react_1.useMemo)(() => {
         const map = { cur: {}, prev: {} };
@@ -3649,8 +3722,10 @@ function NightReciters() {
         return list
             .map((r) => {
             const k = (0, util_js_1.reciterKey)({ reciter_id: r.id, reciter_name: r.name });
-            const cur = counts.cur[k] || 0, prev = counts.prev[k] || 0;
-            return { r, cur, prev, count: cur + prev, last: lastDate[k] || '' };
+            const all = slotKey === 'fri' ? allFri : allNight;
+            const a = all.byId && all.byId[r.id];
+            const cur = a ? a.cur : (counts.cur[k] || 0), prev = a ? a.prev : (counts.prev[k] || 0);
+            return { r, cur, prev, count: cur + prev, last: (a ? a.last : lastDate[k]) || '' };
         })
             .sort((a, b) => (sortOrder === 'asc' ? a.count - b.count : b.count - a.count));
     };
@@ -3667,10 +3742,11 @@ function NightReciters() {
                     React.createElement("option", { value: "asc" }, "\u0627\u0644\u0623\u0642\u0644 \u062A\u0644\u0627\u0648\u0629"))),
             mySlots.map((slotKey) => {
                 const rows = buildRows(slotKey);
+                const allK = slotKey === 'fri' ? allFri : allNight;
                 return (React.createElement("div", { key: slotKey, className: "card mb-4 overflow-hidden" },
                     React.createElement("div", { className: "flex items-center justify-between border-b border-cardline px-5 py-3.5" },
                         React.createElement("h2", { className: "font-extrabold" }, constants_js_1.SLOTS[slotKey]?.label),
-                        React.createElement("span", { className: "text-sm font-semibold text-ink-soft" }, `${rows.length} \u0642\u0627\u0631\u0626\u0627\u064B`)),
+                        React.createElement("span", { className: "text-sm font-semibold text-ink-soft" }, `${rows.length} قارئاً · ${allK.failed ? 'تعذّر جلب أعداد كل المساجد' : 'العدد في جميع المساجد'}`)),
                     rows.length === 0 ? (React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u0642\u0631\u0627\u0621 \u0645\u0639\u062A\u0645\u062F\u0648\u0646", hint: "\u0631\u0627\u062C\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u0625\u0636\u0627\u0641\u0629 \u0642\u0631\u0627\u0621 \u0644\u0647\u0630\u0647 \u0627\u0644\u062E\u0627\u0646\u0629." })) : (React.createElement("div", { className: "overflow-x-auto" },
                         React.createElement("table", { className: "w-full min-w-[520px]" },
                             React.createElement("thead", null,
@@ -3679,7 +3755,7 @@ function NightReciters() {
                                     React.createElement("th", { className: "th" }, curName, React.createElement("span", { className: "ms-1 text-[11px] font-semibold text-ink-soft" }, "(الحالي)")),
                                     React.createElement("th", { className: "th" }, prevName, React.createElement("span", { className: "ms-1 text-[11px] font-semibold text-ink-soft" }, "(الماضي)")),
                                     React.createElement("th", { className: "th" }, "\u0622\u062E\u0631 \u062A\u0644\u0627\u0648\u0629"))),
-                            React.createElement("tbody", null, rows.map(({ r, cur, prev, last }) => (React.createElement("tr", { key: r.id, className: "tr-hover cursor-pointer", onClick: () => setHist({ key: r.id, name: r.name }) },
+                            React.createElement("tbody", null, rows.map(({ r, cur, prev, last }) => (React.createElement("tr", { key: r.id, className: "tr-hover cursor-pointer", onClick: () => setHist({ key: r.id, name: r.name, kind: slotKey === 'fri' ? 'fri' : 'night' }) },
                                 React.createElement("td", { className: "td font-bold" },
                                     React.createElement("div", { className: "flex flex-wrap items-center gap-2" },
                                         r.name,
@@ -3690,7 +3766,7 @@ function NightReciters() {
                                     React.createElement("span", { className: `rounded-full px-2.5 py-0.5 text-xs font-bold ${prev > 0 ? 'bg-brand/10 text-brand' : 'bg-hover text-ink-soft'}` }, prev)),
                                 React.createElement("td", { className: "td text-sm" }, last ? (0, util_js_1.fmtDate)(last) : '\u2014'))))))))));
             }))),
-        React.createElement(ReciterHistoryModal_jsx_1.default, { open: Boolean(hist), onClose: () => setHist(null), reciterKeyValue: hist?.key, name: hist?.name })));
+        React.createElement(ReciterHistoryModal_jsx_1.default, { open: Boolean(hist), onClose: () => setHist(null), reciterKeyValue: hist?.key, name: hist?.name, allKind: hist?.kind })));
 }
 
 };
