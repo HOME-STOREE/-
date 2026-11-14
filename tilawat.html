@@ -610,6 +610,7 @@ const DataContext_jsx_1 = require("src/context/DataContext.jsx");
 const Layout_jsx_1 = __importDefault(require("src/components/Layout.jsx"));
 const ui_jsx_1 = require("src/components/ui.jsx");
 const supabase_js_1 = require("src/lib/supabase.js");
+const contacts_js_1 = require("src/lib/contacts.js");
 const react_1 = require("react");
 const Login_jsx_1 = __importDefault(require("src/pages/Login.jsx"));
 const Dashboard_jsx_1 = __importDefault(require("src/pages/Dashboard.jsx"));
@@ -682,6 +683,7 @@ function App() {
     if (!profile.is_active)
         return React.createElement(Blocked, { title: "\u0627\u0644\u062D\u0633\u0627\u0628 \u0645\u0639\u0637\u0651\u0644", message: "\u062A\u0645 \u062A\u0639\u0637\u064A\u0644 \u062D\u0633\u0627\u0628\u0643. \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u0625\u0639\u0627\u062F\u0629 \u062A\u0641\u0639\u064A\u0644\u0647." });
     return (React.createElement(DataContext_jsx_1.DataProvider, null,
+        React.createElement(contacts_js_1.ContactsProvider, null,
         React.createElement(react_router_dom_1.Routes, null,
             React.createElement(react_router_dom_1.Route, { element: React.createElement(Layout_jsx_1.default, null) },
                 React.createElement(react_router_dom_1.Route, { index: true, element: React.createElement(react_router_dom_1.Navigate, { to: defaultPathFor(profile.role), replace: true }) }),
@@ -701,7 +703,7 @@ function App() {
                         React.createElement(Reciters_jsx_1.default, null)) }),
                 React.createElement(react_router_dom_1.Route, { path: "reciters-tonight", element: React.createElement(Only, { roles: ['night_supervisor'] },
                         React.createElement(NightReciters_jsx_1.default, null)) }),
-                React.createElement(react_router_dom_1.Route, { path: "*", element: React.createElement(react_router_dom_1.Navigate, { to: "/", replace: true }) })))));
+                React.createElement(react_router_dom_1.Route, { path: "*", element: React.createElement(react_router_dom_1.Navigate, { to: "/", replace: true }) }))))));
 }
 
 };
@@ -2483,11 +2485,13 @@ const ui_jsx_1 = require("src/components/ui.jsx");
 const ReciterCombobox_jsx_1 = __importDefault(require("src/components/ReciterCombobox.jsx"));
 const ReciterAvailableList_jsx_1 = __importDefault(require("src/components/ReciterAvailableList.jsx"));
 const PushToggle_jsx_1 = __importDefault(require("src/components/PushToggle.jsx"));
+const contacts_js_1 = require("src/lib/contacts.js");
 const WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 function DailyLog() {
     const { profile, isAdmin } = (0, AuthContext_jsx_1.useAuth)();
-    const { mosques, mosqueById, approvedBySlot, reciters, recitation_logs, profileById, upsertLocal, removeLocal } = (0, DataContext_jsx_1.useData)();
+    const { mosques, mosqueById, approvedBySlot, reciters, reciterById, recitation_logs, profileById, upsertLocal, removeLocal } = (0, DataContext_jsx_1.useData)();
     const toast = (0, ToastContext_jsx_1.useToast)();
+    const contactsApi = (0, contacts_js_1.useContacts)();
     // ----- المساجد المسندة ونطاق المسؤولية -----
     const myIds = profile.mosque_ids || [];
     const activeMosques = (0, react_1.useMemo)(() => mosques.filter((m) => m.is_active && (isAdmin || myIds.includes(m.id))), 
@@ -2541,6 +2545,9 @@ function DailyLog() {
     const [busy, setBusy] = (0, react_1.useState)(false);
     const [showDate, setShowDate] = (0, react_1.useState)(true);
     const [delTarget, setDelTarget] = (0, react_1.useState)(null);
+    const [changePending, setChangePending] = (0, react_1.useState)(null); // تنبيه تغيير القارئ عمّن تم التواصل معه
+    const [changeOk, setChangeOk] = (0, react_1.useState)('');
+    const autoPicked = (0, react_1.useRef)('');
     (0, react_1.useEffect)(() => {
         if (!allowedSlots.length)
             return setSlot('');
@@ -2575,10 +2582,17 @@ function DailyLog() {
     const others = (0, react_1.useMemo)(() => reciters.filter((r) => r.is_active && !approvedIds.has(r.id)), [reciters, approvedIds]);
     const hijriText = hijri.day && hijri.month ? `${hijri.day} ${constants_js_1.HIJRI_MONTHS[hijri.month - 1]} ${hijri.year || ''} هـ`.trim() : '';
     const slotWord = slot === 'fri' ? 'لهذه الجمعة' : 'لهذه الليلة';
+    // القراء الذين تواصل معهم مسؤول الليلة لهذا المسجد وهذه الخانة (هذا الأسبوع)
+    const contacted = (0, react_1.useMemo)(() => (!isNight && mosque && slot
+        ? contactsApi.rows.filter((c) => c.status === 'contacted' && String(c.mosque_id) === String(mosque.id) && c.slot_key === slot).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+        : []), [contactsApi.rows, isNight, mosque, slot]);
+    const nameOfContact = (c) => (reciterById[c.reciter_id] && reciterById[c.reciter_id].name) || '—';
     const resetEntry = () => {
         setHijriTouched(false);
         setReciter(null);
         setPending(null);
+        setChangePending(null);
+        setChangeOk('');
         setSurah('');
         setPages('');
         setNotes('');
@@ -2604,8 +2618,40 @@ function DailyLog() {
         setReciter(null);
         setComboKey((k) => k + 1);
     };
+    // اختيار القارئ الذي تم التواصل معه
+    const pickContacted = (c) => {
+        const r = reciterById[c.reciter_id];
+        if (!r)
+            return;
+        setStatus('read');
+        setComboKey((k) => k + 1);
+        handlePick({ id: r.id, name: r.name, approved: approvedIds.has(r.id), kind: approvedIds.has(r.id) ? 'approved' : 'other' });
+    };
+    // تعبئة تلقائية للقارئ الذي تم التواصل معه (إن كان معتمداً للخانة) — مرة واحدة لكل حالة
+    (0, react_1.useEffect)(() => {
+        if (isNight || editing || reciter || status !== 'read' || !contacted.length)
+            return;
+        const sig = `${mosque && mosque.id}|${slot}|${contacted.map((c) => c.id).join(',')}`;
+        if (autoPicked.current === sig)
+            return;
+        autoPicked.current = sig;
+        const r = reciterById[contacted[0].reciter_id];
+        if (r && approvedIds.has(r.id)) {
+            setReciter({ id: r.id, name: r.name });
+            setComboKey((k) => k + 1);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [contacted, editing, reciter, status, approvedIds]);
+    const cancelChange = () => setChangePending(null);
+    const confirmChange = () => {
+        if (!changePending)
+            return;
+        setChangeOk(changePending.key);
+        setChangePending(null);
+        save({ changeOk: true });
+    };
     // ----- الحفظ -----
-    const save = async () => {
+    const save = async (force = {}) => {
         if (!mosque || !slot)
             return;
         if (slot === 'fri' && !isAdmin)
@@ -2619,6 +2665,14 @@ function DailyLog() {
         if (status === 'read') {
             if (!reciter)
                 return toast.warn('اختر القارئ', 'اختر اسماً من القائمة، أو اضغط «استخدام … كاسم يدوي».');
+            // تنبيه: تسجيل قارئ مختلف عمّن تم التواصل معه (للتسجيلات الجديدة فقط، وبعده تتبع بقية الخطوات كما هي)
+            if (!editing && contacted.length && !contacted.some((c) => reciter.id && String(c.reciter_id) === String(reciter.id))) {
+                const key = `${slot}|${reciter.id || reciter.name}`;
+                if (!force.changeOk && changeOk !== key) {
+                    setChangePending({ key, names: contacted.map(nameOfContact).join('، '), to: reciter.name });
+                    return;
+                }
+            }
             isApproved = Boolean(reciter.id && approvedIds.has(reciter.id));
             if (!isApproved && reciter.confirmedFor !== slot) {
                 setPending({ id: reciter.id, name: reciter.name });
@@ -2662,6 +2716,8 @@ function DailyLog() {
             return toast.error('تعذّر الحفظ', error.message);
         }
         upsertLocal('recitation_logs', saved);
+        if (!editing)
+            contactsApi.clearSlot(mosque.id, slot); // انتهت مهمة التواصل لهذه الخانة
         toast.success(editing ? 'تم تحديث التسجيل' : 'تم حفظ التسجيل', status === 'read' ? saved.reciter_name : 'سُجّل عدم القراءة');
         resetEntry();
     };
@@ -2703,6 +2759,11 @@ function DailyLog() {
             React.createElement("div", { className: "card" },
                 React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0645 \u064A\u062A\u0645 \u0631\u0628\u0637\u0643 \u0628\u0623\u064A \u0645\u0633\u062C\u062F \u0628\u0639\u062F", hint: "\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u064A\u0633\u0646\u062F \u0625\u0644\u064A\u0643 \u0645\u0633\u062C\u062F\u0627\u064B \u0623\u0648 \u0623\u0643\u062B\u0631 \u0648\u0646\u0637\u0627\u0642 \u0645\u0633\u0624\u0648\u0644\u064A\u0629." }))));
     }
+    const contactedBanner = contacted.length ? React.createElement("div", { className: "flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ok/30 bg-ok/10 px-4 py-3 text-sm" },
+        React.createElement("div", { className: "flex items-start gap-2 text-ok" },
+            React.createElement(lucide_react_1.CheckCircle2, { className: "mt-0.5 h-4 w-4 shrink-0" }),
+            React.createElement("p", { className: "font-semibold leading-7" }, 'تم التواصل مع: ', React.createElement("b", null, contacted.map(nameOfContact).join('، ')), ' — بواسطة مسؤول الليلة')),
+        !editing && React.createElement("div", { className: "flex flex-wrap gap-2" }, contacted.map((c) => React.createElement("button", { key: c.id, type: "button", className: "btn-outline btn-sm", onClick: () => pickContacted(c) }, 'اختيار ', nameOfContact(c))))) : null;
     const editable = (l) => !isNight && (isAdmin || (myIds.includes(l.mosque_id) && l.slot_key !== 'fri' && scope === 'night'));
     return (React.createElement(React.Fragment, null,
         React.createElement(ui_jsx_1.PageHeader, { title: "\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A", subtitle: "\u0633\u062C\u0651\u0644 \u0627\u0644\u0642\u0627\u0631\u0626 \u0623\u0648 \u0633\u0628\u0628 \u0639\u062F\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u0644\u0643\u0644 \u062E\u0627\u0646\u0629 \u062A\u0644\u0627\u0648\u0629." }),
@@ -2773,6 +2834,7 @@ function DailyLog() {
                     ' ',
                     React.createElement("b", null, sameSlot.map((l) => (l.status === 'read' ? l.reciter_name : 'لم تتم القراءة')).join('، ')),
                     ". \u064A\u0645\u0643\u0646\u0643 \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0625\u0646 \u0643\u0627\u0646 \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062C\u062F\u064A\u062F \u0644\u0642\u0627\u0631\u0626 \u0622\u062E\u0631."))),
+            contactedBanner,
             React.createElement("div", { className: "grid grid-cols-2 gap-3" },
                 React.createElement("button", { type: "button", onClick: () => setStatus('read'), className: `flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-3.5 font-bold transition-colors ${status === 'read' ? 'border-ok bg-ok/10 text-ok' : 'border-cardline bg-white text-ink hover:bg-hover'}` },
                     React.createElement(lucide_react_1.CheckCircle2, { className: "h-5 w-5" }),
@@ -2811,7 +2873,7 @@ function DailyLog() {
                     React.createElement("input", { className: "input", value: notes, onChange: (e) => setNotes(e.target.value) })))),
             React.createElement("div", { className: "flex justify-end gap-2 border-t border-cardline pt-4" },
                 editing && React.createElement("button", { className: "btn-outline", onClick: resetEntry }, "\u0625\u0644\u063A\u0627\u0621"),
-                React.createElement("button", { className: "btn-primary min-w-40", onClick: save, disabled: busy },
+                React.createElement("button", { className: "btn-primary min-w-40", onClick: () => save(), disabled: busy },
                     busy ? React.createElement(ui_jsx_1.Spinner, { className: "!text-white h-4 w-4" }) : React.createElement(lucide_react_1.Save, { className: "h-4 w-4" }),
                     " ",
                     editing ? 'حفظ التعديل' : 'حفظ التسجيل'))))),
@@ -2857,6 +2919,12 @@ function DailyLog() {
                     " \u063A\u064A\u0631 \u0645\u062F\u0631\u062C \u0636\u0645\u0646 \u0627\u0644\u062C\u062F\u0648\u0644 \u0627\u0644\u0645\u0639\u062A\u0645\u062F ",
                     slotWord,
                     ". \u0647\u0644 \u062A\u0631\u063A\u0628 \u0628\u062A\u0633\u062C\u064A\u0644\u0647 \u0643\u0627\u0633\u062A\u062B\u0646\u0627\u0621\u061F"))),
+        React.createElement(ui_jsx_1.Modal, { open: Boolean(changePending), onClose: cancelChange, title: "تنبيه: تغيير القارئ", size: "sm", footer: React.createElement(React.Fragment, null,
+                React.createElement("button", { className: "btn-outline", onClick: cancelChange }, "رجوع"),
+                React.createElement("button", { className: "btn-primary", onClick: confirmChange }, "تأكيد وحفظ باسم القارئ الجديد")) },
+            React.createElement("div", { className: "flex gap-3" },
+                React.createElement(lucide_react_1.AlertTriangle, { className: "mt-1 h-6 w-6 shrink-0 text-warn" }),
+                React.createElement("p", { className: "text-sm leading-8" }, '⚠️ تنبيه: تم التواصل مع القارئ ', React.createElement("b", null, changePending && changePending.names), ' ' + slotWord + '، وأنت تسجّل التلاوة باسم ', React.createElement("b", null, changePending && changePending.to), '. هل تريد المتابعة وحفظ التلاوة باسم القارئ الجديد؟'))),
         React.createElement(ui_jsx_1.ConfirmDialog, { open: Boolean(delTarget), danger: true, busy: busy, onClose: () => setDelTarget(null), onConfirm: doDelete, title: "\u062D\u0630\u0641 \u0627\u0644\u062A\u0633\u062C\u064A\u0644", confirmLabel: "\u062D\u0630\u0641", message: "\u0633\u064A\u064F\u062D\u0630\u0641 \u0647\u0630\u0627 \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0646\u0647\u0627\u0626\u064A\u0627\u064B \u0645\u0646 \u062C\u0645\u064A\u0639 \u0627\u0644\u0623\u062C\u0647\u0632\u0629. \u0647\u0644 \u0623\u0646\u062A \u0645\u062A\u0623\u0643\u062F\u061F" })));
 }
 
@@ -2878,6 +2946,7 @@ const slots_js_1 = require("src/lib/slots.js");
 const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
 const PushToggle_jsx_1 = __importDefault(require("src/components/PushToggle.jsx"));
+const contacts_js_1 = require("src/lib/contacts.js");
 function Coverage({ title, date, slot, mosques, logs }) {
     const list = slot
         ? mosques.filter((m) => m.is_active && (slot === 'fri' ? m.enable_friday : m.enable_night && m.night_days?.includes(slot)))
@@ -2893,6 +2962,31 @@ function Coverage({ title, date, slot, mosques, logs }) {
                 es.length === 0 ? (React.createElement("span", { className: "badge-warn" }, "\u0644\u0645 \u064A\u064F\u0633\u062C\u064E\u0651\u0644 \u0628\u0639\u062F")) : (React.createElement("span", { className: "flex flex-wrap justify-end gap-1.5" }, es.map((l) => l.status === 'read'
                     ? React.createElement("span", { key: l.id, className: "badge-ok" }, l.reciter_name)
                     : React.createElement("span", { key: l.id, className: "badge-bad" }, "\u0644\u0645 \u062A\u062A\u0645 \u0627\u0644\u0642\u0631\u0627\u0621\u0629"))))));
+        })))));
+}
+/** قراء تم التواصل معهم من مسؤول الليلة — تنتقل هنا تلقائياً (لحظياً) لمسؤول المسجد المعني */
+function ContactedPanel() {
+    const { mosques, mosqueById, reciterById, profileById } = (0, DataContext_jsx_1.useData)();
+    const contactsApi = (0, contacts_js_1.useContacts)();
+    const list = contactsApi.rows.filter((c) => c.status === 'contacted' && c.slot_key !== 'fri' && mosqueById[c.mosque_id]);
+    return (React.createElement("div", { className: "card mb-5 overflow-hidden" },
+        React.createElement("div", { className: "flex items-center justify-between border-b border-cardline px-5 py-3.5" },
+            React.createElement("h2", { className: "font-extrabold" }, "قراء تم التواصل معهم"),
+            React.createElement("span", { className: "text-xs font-semibold text-ink-soft" }, list.length ? `${list.length} بانتظار التسجيل` : '')),
+        list.length === 0 ? (React.createElement("p", { className: "px-5 py-6 text-sm text-ink-soft" }, "لا يوجد قراء بانتظار التسجيل حالياً. ستظهر هنا أسماء من يتواصل معهم مسؤول الليلة.")) : (React.createElement("ul", { className: "divide-y divide-cardline" }, list.map((c) => {
+            const r = reciterById[c.reciter_id];
+            const by = profileById[c.created_by];
+            return (React.createElement("li", { key: c.id, className: "flex flex-wrap items-center justify-between gap-3 px-5 py-3" },
+                React.createElement("div", { className: "min-w-0" },
+                    React.createElement("div", { className: "flex flex-wrap items-center gap-2" },
+                        React.createElement("span", { className: "text-sm font-bold" }, r ? r.name : '—'),
+                        React.createElement("span", { className: "badge-ok" }, "تم التواصل"),
+                        React.createElement("span", { className: "badge-neutral" }, constants_js_1.SLOTS[c.slot_key] ? constants_js_1.SLOTS[c.slot_key].label : c.slot_key),
+                        r && r.phone && React.createElement(ui_jsx_1.PhoneMenu, { phone: r.phone, name: r.name })),
+                    React.createElement("p", { className: "mt-0.5 text-xs text-ink-soft" },
+                        mosques.length > 1 && mosqueById[c.mosque_id] ? `${mosqueById[c.mosque_id].name} — ` : '',
+                        by ? `بواسطة ${by.full_name}` : 'بواسطة مسؤول الليلة')),
+                React.createElement(react_router_dom_1.Link, { to: "/log", className: "btn-primary btn-sm" }, "تسجيل التلاوة")));
         })))));
 }
 function Dashboard() {
@@ -2921,6 +3015,7 @@ function Dashboard() {
                 React.createElement(lucide_react_1.ClipboardList, { className: "h-4 w-4" }),
                 " \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u064A\u0648\u0645\u064A") }),
         isAdmin && React.createElement(PushToggle_jsx_1.default, null),
+        profile.role === 'supervisor' && React.createElement(ContactedPanel, null),
         React.createElement("div", { className: "grid grid-cols-2 gap-3 lg:grid-cols-4" },
             React.createElement(ui_jsx_1.StatCard, { label: "\u062A\u0644\u0627\u0648\u0627\u062A \u0647\u0630\u0627 \u0627\u0644\u0634\u0647\u0631", value: s.month, hint: "\u062D\u0633\u0628 \u0627\u0644\u062A\u0642\u0648\u064A\u0645 \u0627\u0644\u0645\u064A\u0644\u0627\u062F\u064A" }),
             React.createElement(ui_jsx_1.StatCard, { label: "\u062A\u0633\u062C\u064A\u0644\u0627\u062A \u0627\u0644\u064A\u0648\u0645", value: s.todayCount }),
@@ -3493,10 +3588,16 @@ const constants_js_1 = require("src/lib/constants.js");
 const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
 const ReciterHistoryModal_jsx_1 = __importDefault(require("src/components/ReciterHistoryModal.jsx"));
+const contacts_js_1 = require("src/lib/contacts.js");
 const blank = { name: '', phone: '', notes: '', is_active: true, slots: [] };
 function Reciters() {
     const { isAdmin } = (0, AuthContext_jsx_1.useAuth)();
-    const { reciters, slotsByReciter, recitation_logs, upsertLocal, removeLocal } = (0, DataContext_jsx_1.useData)();
+    const { reciters: reciters0, slotsByReciter: slotsByReciter0, recitation_logs, upsertLocal, removeLocal } = (0, DataContext_jsx_1.useData)();
+    // مسؤول المسجد يرى كل القراء في النظام (مع أعداد تلاواتهم في جميع المساجد)، والمدير كما كان
+    const dir = (0, contacts_js_1.useReciterDirectory)(!isAdmin, recitation_logs.length);
+    const reciters = dir.list || reciters0;
+    const slotsByReciter = dir.slots || slotsByReciter0;
+    const dirNotice = dir.failed ? React.createElement("p", { className: "mb-3 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm font-semibold text-warn" }, "تعذّر جلب الدليل الكامل لكل المساجد؛ يُعرض ما تسمح به الصلاحيات حالياً. تأكد من تطبيق ملف SQL الخاص بالتحديث في Supabase.") : null;
     const toast = (0, ToastContext_jsx_1.useToast)();
     const [q, setQ] = (0, react_1.useState)('');
     const [slotFilter, setSlotFilter] = (0, react_1.useState)('all');
@@ -3507,6 +3608,8 @@ function Reciters() {
     const [del, setDel] = (0, react_1.useState)(null);
     const [busy, setBusy] = (0, react_1.useState)(false);
     const stats = (0, react_1.useMemo)(() => {
+        if (dir.stats)
+            return dir.stats;
         const m = {};
         recitation_logs.forEach((l) => {
             var _a;
@@ -3518,7 +3621,7 @@ function Reciters() {
                 e.last = l.log_date;
         });
         return m;
-    }, [recitation_logs]);
+    }, [recitation_logs, dir.stats]);
     const rows = (0, react_1.useMemo)(() => {
         const list = reciters.filter((r) => (showInactive || r.is_active) &&
             (!q || (0, util_js_1.matchesQuery)(r.name, q)) &&
@@ -3576,6 +3679,7 @@ function Reciters() {
         React.createElement(ui_jsx_1.PageHeader, { title: "\u062F\u0644\u064A\u0644 \u0627\u0644\u0642\u0631\u0627\u0621", subtitle: "\u0627\u0644\u0642\u0631\u0627\u0621 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0648\u0646 \u0648\u062E\u0627\u0646\u0627\u062A\u0647\u0645. \u0627\u0636\u063A\u0637 \u0639\u0644\u0649 \u0642\u0627\u0631\u0626 \u0644\u0639\u0631\u0636 \u0633\u062C\u0644 \u062A\u0644\u0627\u0648\u0627\u062A\u0647 \u0627\u0644\u0643\u0627\u0645\u0644.", actions: isAdmin && React.createElement("button", { className: "btn-primary", onClick: () => setForm({ ...blank }) },
                 React.createElement(lucide_react_1.Plus, { className: "h-4 w-4" }),
                 " \u0625\u0636\u0627\u0641\u0629 \u0642\u0627\u0631\u0626") }),
+        dirNotice,
         React.createElement("div", { className: "card card-pad mb-4 flex flex-wrap items-end gap-3" },
             React.createElement("div", { className: "relative min-w-56 flex-1" },
                 React.createElement(lucide_react_1.Search, { className: "pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" }),
@@ -3661,19 +3765,29 @@ const util_js_1 = require("src/lib/util.js");
 const ui_jsx_1 = require("src/components/ui.jsx");
 const ReciterHistoryModal_jsx_1 = __importDefault(require("src/components/ReciterHistoryModal.jsx"));
 const allCounts_js_1 = require("src/lib/allCounts.js");
+const ToastContext_jsx_1 = require("src/context/ToastContext.jsx");
+const contacts_js_1 = require("src/lib/contacts.js");
 /**
  * قراء الليلة — نسخة من «دليل القراء» مخصّصة لمسؤول الليلة (والجمعة):
  * تعرض دائماً القراء المعتمدين لليلته/ليالِيه المسندة إليه (بصرف النظر عن تاريخ اليوم)،
  * مع عدد تلاواتهم خلال الشهرين الهجريين: الحالي + الماضي، وبحث بالاسم وترتيب بعدد التلاوات.
  */
 function NightReciters() {
-    const { profile } = (0, AuthContext_jsx_1.useAuth)();
+    const { profile, session } = (0, AuthContext_jsx_1.useAuth)();
+    const toast = (0, ToastContext_jsx_1.useToast)();
+    const contactsApi = (0, contacts_js_1.useContacts)();
     // مسؤول تلاوة الجمعة (خانته «الجمعة» فقط) → «قراء الجمعة»
     const isFri = (profile.slot_keys || []).length > 0 && (profile.slot_keys || []).every((k) => k === 'fri');
-    const { approvedBySlot, recitation_logs } = (0, DataContext_jsx_1.useData)();
+    const { approvedBySlot, recitation_logs, mosques } = (0, DataContext_jsx_1.useData)();
     const [q, setQ] = (0, react_1.useState)('');
     const [sortOrder, setSortOrder] = (0, react_1.useState)('desc');
     const [hist, setHist] = (0, react_1.useState)(null);
+    const [mosquePick, setMosquePick] = (0, react_1.useState)('');
+    const [busyKey, setBusyKey] = (0, react_1.useState)('');
+    const activeMosques = (0, react_1.useMemo)(() => mosques.filter((m) => m.is_active), [mosques]);
+    // المسجد الذي ينتقل إليه القارئ عند «تم التواصل» (مسجد مسؤول الليلة، أو المختار إن كان له أكثر من مسجد)
+    const mosque = activeMosques.find((m) => String(m.id) === String(mosquePick)) || activeMosques[0] || null;
+    const uid = session && session.user ? session.user.id : null;
     // الخانات/الليالي المسندة إلى هذا المسؤول (بصرف النظر عن كونها الليلة أم لا)
     const mySlots = (0, react_1.useMemo)(() => constants_js_1.SLOT_KEYS.filter((k) => (profile.slot_keys || []).includes(k)), 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3716,6 +3830,52 @@ function NightReciters() {
         });
         return map;
     }, [recitation_logs]);
+    const apologizedRow = (rid) => contactsApi.rows.find((c) => c.status === 'apologized' && String(c.reciter_id) === String(rid));
+    const contactedRow = (rid, slotKey) => (mosque ? contactsApi.rows.find((c) => c.status === 'contacted' && String(c.reciter_id) === String(rid) && c.slot_key === slotKey && String(c.mosque_id) === String(mosque.id)) : null);
+    const tagsFor = (r, slotKey) => {
+        const ap = apologizedRow(r.id);
+        const ct = contactedRow(r.id, slotKey);
+        return React.createElement(React.Fragment, null, ap && React.createElement("span", { className: "badge-warn" }, "معتذر"), !ap && ct && React.createElement("span", { className: "badge-ok" }, "تم التواصل"));
+    };
+    const act = async (kind, r, slotKey) => {
+        if (!mosque)
+            return toast.warn('لا يوجد مسجد مرتبط بحسابك', 'تواصل مع مدير النظام لربطك بمسجد.');
+        setBusyKey(`${r.id}-${slotKey}`);
+        const res = await contactsApi.add(kind, { reciter_id: r.id, mosque_id: mosque.id, slot_key: slotKey });
+        setBusyKey('');
+        if (!res.ok)
+            return toast.error('تعذّر الحفظ', res.error);
+        if (kind === 'contacted')
+            toast.success('تم تسجيل التواصل', `انتقل «${r.name}» إلى لوحة مسؤول ${mosque.name}.`);
+        else
+            toast.success('تم تسجيل الاعتذار', `وُسم «${r.name}» بـ «معتذر».`);
+    };
+    const undo = async (row) => {
+        setBusyKey(`${row.reciter_id}-${row.slot_key}`);
+        const res = await contactsApi.remove(row.id);
+        setBusyKey('');
+        if (!res.ok)
+            toast.error('تعذّر التراجع', res.error);
+    };
+    const actionCell = (r, slotKey) => {
+        const ap = apologizedRow(r.id);
+        const ct = contactedRow(r.id, slotKey);
+        const row = ap || ct;
+        const busyHere = busyKey === `${r.id}-${slotKey}`;
+        let body;
+        if (row)
+            body = (!row.created_by || row.created_by === uid)
+                ? [React.createElement("button", { key: "u", type: "button", className: "btn-ghost btn-sm", disabled: busyHere, onClick: () => undo(row) }, "تراجع")]
+                : [React.createElement("span", { key: "x", className: "text-xs text-ink-soft" }, "\u2014")];
+        else
+            body = [
+                React.createElement("button", { key: "c", type: "button", className: "btn-outline btn-sm !border-ok/40 !text-ok", disabled: busyHere || !contactsApi.available, onClick: () => act('contacted', r, slotKey) }, "تم التواصل"),
+                React.createElement("button", { key: "a", type: "button", className: "btn-outline btn-sm !border-warn/40 !text-warn", disabled: busyHere || !contactsApi.available, onClick: () => act('apologized', r, slotKey) }, "اعتذر"),
+            ];
+        return React.createElement("td", { className: "td", onClick: (e) => e.stopPropagation() }, React.createElement("div", { className: "flex flex-wrap gap-1.5" }, body));
+    };
+    const mosqueSelect = activeMosques.length > 1 ? React.createElement("select", { className: "input w-auto", value: mosque ? String(mosque.id) : '', onChange: (e) => setMosquePick(e.target.value), "aria-label": "المسجد المعني بالتواصل" }, activeMosques.map((m) => React.createElement("option", { key: m.id, value: String(m.id) }, 'التواصل لمسجد: ' + m.name))) : null;
+    const unavailNote = !contactsApi.available ? React.createElement("p", { className: "w-full basis-full text-xs font-semibold text-bad" }, "تعذّر تحميل حالات التواصل — تأكد من تطبيق ملف SQL الخاص بالتحديث في Supabase.") : null;
     const buildRows = (slotKey) => {
         const approved = approvedBySlot[slotKey] || [];
         const list = approved.filter((r) => !q || (0, util_js_1.matchesQuery)(r.name, q));
@@ -3737,7 +3897,7 @@ function NightReciters() {
                 React.createElement("div", { className: "relative min-w-56 flex-1" },
                     React.createElement(lucide_react_1.Search, { className: "pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" }),
                     React.createElement("input", { className: "input ps-9", placeholder: "\u0627\u0628\u062D\u062B \u0628\u0627\u0633\u0645 \u0627\u0644\u0642\u0627\u0631\u0626\u2026", value: q, onChange: (e) => setQ(e.target.value) })),
-                React.createElement("select", { className: "input w-auto", value: sortOrder, onChange: (e) => setSortOrder(e.target.value), "aria-label": "\u062A\u0631\u062A\u064A\u0628 \u0627\u0644\u0642\u0627\u0626\u0645\u0629" },
+                mosqueSelect, unavailNote, React.createElement("select", { className: "input w-auto", value: sortOrder, onChange: (e) => setSortOrder(e.target.value), "aria-label": "\u062A\u0631\u062A\u064A\u0628 \u0627\u0644\u0642\u0627\u0626\u0645\u0629" },
                     React.createElement("option", { value: "desc" }, "\u0627\u0644\u0623\u0643\u062B\u0631 \u062A\u0644\u0627\u0648\u0629"),
                     React.createElement("option", { value: "asc" }, "\u0627\u0644\u0623\u0642\u0644 \u062A\u0644\u0627\u0648\u0629"))),
             mySlots.map((slotKey) => {
@@ -3748,23 +3908,24 @@ function NightReciters() {
                         React.createElement("h2", { className: "font-extrabold" }, constants_js_1.SLOTS[slotKey]?.label),
                         React.createElement("span", { className: "text-sm font-semibold text-ink-soft" }, `${rows.length} قارئاً · ${allK.failed ? ('تعذّر جلب أعداد كل المساجد' + (allK.error ? ' [' + allK.error + ']' : '')) : 'العدد في جميع المساجد'}`)),
                     rows.length === 0 ? (React.createElement(ui_jsx_1.EmptyState, { title: "\u0644\u0627 \u062A\u0648\u062C\u062F \u0642\u0631\u0627\u0621 \u0645\u0639\u062A\u0645\u062F\u0648\u0646", hint: "\u0631\u0627\u062C\u0639 \u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0644\u0625\u0636\u0627\u0641\u0629 \u0642\u0631\u0627\u0621 \u0644\u0647\u0630\u0647 \u0627\u0644\u062E\u0627\u0646\u0629." })) : (React.createElement("div", { className: "overflow-x-auto" },
-                        React.createElement("table", { className: "w-full min-w-[520px]" },
+                        React.createElement("table", { className: "w-full min-w-[640px]" },
                             React.createElement("thead", null,
                                 React.createElement("tr", null,
                                     React.createElement("th", { className: "th" }, "\u0627\u0644\u0642\u0627\u0631\u0626"),
                                     React.createElement("th", { className: "th" }, curName, React.createElement("span", { className: "ms-1 text-[11px] font-semibold text-ink-soft" }, "(الحالي)")),
                                     React.createElement("th", { className: "th" }, prevName, React.createElement("span", { className: "ms-1 text-[11px] font-semibold text-ink-soft" }, "(الماضي)")),
-                                    React.createElement("th", { className: "th" }, "\u0622\u062E\u0631 \u062A\u0644\u0627\u0648\u0629"))),
+                                    React.createElement("th", { className: "th" }, "\u0622\u062E\u0631 \u062A\u0644\u0627\u0648\u0629"), React.createElement("th", { className: "th" }, "الإجراء"))),
                             React.createElement("tbody", null, rows.map(({ r, cur, prev, last }) => (React.createElement("tr", { key: r.id, className: "tr-hover cursor-pointer", onClick: () => setHist({ key: r.id, name: r.name, kind: slotKey === 'fri' ? 'fri' : 'night' }) },
                                 React.createElement("td", { className: "td font-bold" },
                                     React.createElement("div", { className: "flex flex-wrap items-center gap-2" },
                                         r.name,
+                                        tagsFor(r, slotKey),
                                         r.phone && React.createElement(ui_jsx_1.PhoneMenu, { phone: r.phone, name: r.name }))),
                                 React.createElement("td", { className: "td" },
                                     React.createElement("span", { className: `rounded-full px-2.5 py-0.5 text-xs font-bold ${cur > 0 ? 'bg-brand/10 text-brand' : 'bg-hover text-ink-soft'}` }, cur)),
                                 React.createElement("td", { className: "td" },
                                     React.createElement("span", { className: `rounded-full px-2.5 py-0.5 text-xs font-bold ${prev > 0 ? 'bg-brand/10 text-brand' : 'bg-hover text-ink-soft'}` }, prev)),
-                                React.createElement("td", { className: "td text-sm" }, last ? (0, util_js_1.fmtDate)(last) : '\u2014'))))))))));
+                                React.createElement("td", { className: "td text-sm" }, last ? (0, util_js_1.fmtDate)(last) : '\u2014'), actionCell(r, slotKey))))))))));
             }))),
         React.createElement(ReciterHistoryModal_jsx_1.default, { open: Boolean(hist), onClose: () => setHist(null), reciterKeyValue: hist?.key, name: hist?.name, allKind: hist?.kind })));
 }
@@ -4069,6 +4230,128 @@ function UsersPage() {
             needOld && (React.createElement(ui_jsx_1.Field, { label: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u0644\u0644\u0645\u0633\u062A\u062E\u062F\u0645", hint: "\u0623\u062F\u062E\u0644 \u0643\u0644\u0645\u062A\u0647 \u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u0644\u064A\u062A\u0645\u0643\u0646 \u0627\u0644\u0646\u0638\u0627\u0645 \u0645\u0646 \u062A\u063A\u064A\u064A\u0631\u0647\u0627 (\u0644\u0627 \u062A\u0648\u062C\u062F \u0643\u0644\u0645\u0629 \u0645\u062D\u0641\u0648\u0638\u0629 \u0635\u062D\u064A\u062D\u0629)." },
                 React.createElement("input", { className: "input", dir: "ltr", value: pw.old, onChange: (e) => setPw({ ...pw, old: e.target.value }) })))))),
         React.createElement(ui_jsx_1.ConfirmDialog, { open: Boolean(del), danger: true, busy: busy, onClose: () => setDel(null), onConfirm: remove, title: "\u062D\u0630\u0641 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645", confirmLabel: "\u062D\u0630\u0641", message: `سيُحذف «${del?.full_name}» من النظام ولن يستطيع استخدامه. التسجيلات التي أنشأها تبقى محفوظة. هل أنت متأكد؟` })));
+}
+
+};
+defs["src/lib/contacts.js"] = function(exports, require, module, React){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.useContacts = useContacts;
+exports.ContactsProvider = ContactsProvider;
+exports.useReciterDirectory = useReciterDirectory;
+exports.weekStartMs = weekStartMs;
+const react_1 = require("react");
+const supabase_js_1 = require("src/lib/supabase.js");
+const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
+/**
+ * حالات «تم التواصل» / «معتذر» التي يضعها مسؤول الليلة (جدول reciter_contacts).
+ * - تُصفَّر أسبوعياً: كل سبت 7:00 مساءً بتوقيت الرياض (= 16:00 UTC) عبر pg_cron في قاعدة البيانات،
+ *   وكضمان إضافي تتجاهل الواجهة أي سجل أقدم من آخر سبت 7 مساءً حتى لو تأخّر التنظيف.
+ * - معزولة عن DataContext عمداً: لو لم يُطبَّق ملف SQL بعد، يبقى النظام يعمل كما كان (available=false).
+ */
+function weekStartMs(nowMs) {
+    const d = new Date(nowMs);
+    let t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 16, 0, 0);
+    t -= ((d.getUTCDay() - 6 + 7) % 7) * 86400000;
+    if (t > nowMs) t -= 7 * 86400000;
+    return t;
+}
+const Ctx = react_1.createContext(null);
+const EMPTY = { available: false, rows: [], add: async () => ({ ok: false, error: 'غير متاح' }), remove: async () => ({ ok: false, error: 'غير متاح' }), clearSlot: async () => {}, reload: async () => {} };
+function useContacts() {
+    return react_1.useContext(Ctx) || EMPTY;
+}
+function ContactsProvider({ children }) {
+    const { session } = AuthContext_jsx_1.useAuth();
+    const uid = session && session.user ? session.user.id : null;
+    const [all, setAll] = react_1.useState([]);
+    const [available, setAvailable] = react_1.useState(true);
+    const [now, setNow] = react_1.useState(Date.now());
+    react_1.useEffect(() => {
+        const t = setInterval(() => setNow(Date.now()), 5 * 60 * 1000);
+        return () => clearInterval(t);
+    }, []);
+    const load = react_1.useCallback(async () => {
+        const since = new Date(weekStartMs(Date.now())).toISOString();
+        const { data, error } = await supabase_js_1.supabase.from('reciter_contacts').select('*').gte('created_at', since).order('created_at', { ascending: false }).limit(2000);
+        if (error) {
+            console.warn('reciter_contacts:', error.message);
+            setAvailable(false);
+            return;
+        }
+        setAvailable(true);
+        setAll(data || []);
+    }, []);
+    react_1.useEffect(() => {
+        if (!uid) return undefined;
+        load();
+        const ch = supabase_js_1.supabase.channel('tilawat-contacts-' + uid)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'reciter_contacts' }, (payload) => {
+            setAll((list) => {
+                if (payload.eventType === 'DELETE') return list.filter((r) => r.id !== payload.old.id);
+                const row = payload.new;
+                return list.some((r) => r.id === row.id) ? list.map((r) => (r.id === row.id ? row : r)) : [row, ...list];
+            });
+        })
+            .subscribe((status) => { if (status === 'SUBSCRIBED') load(); });
+        return () => { supabase_js_1.supabase.removeChannel(ch); };
+    }, [uid, load]);
+    const rows = react_1.useMemo(() => {
+        const ws = weekStartMs(now);
+        return all.filter((r) => Date.parse(r.created_at) >= ws);
+    }, [all, now]);
+    const add = react_1.useCallback(async (kind, { reciter_id, mosque_id, slot_key }) => {
+        const { data, error } = await supabase_js_1.supabase.from('reciter_contacts').insert({ reciter_id, mosque_id, slot_key, status: kind }).select().single();
+        if (error) {
+            if (error.code === '23505') { await load(); return { ok: true, dup: true }; }
+            return { ok: false, error: error.message };
+        }
+        setAll((list) => (list.some((r) => r.id === data.id) ? list : [data, ...list]));
+        return { ok: true, row: data };
+    }, [load]);
+    const remove = react_1.useCallback(async (id) => {
+        const { data, error } = await supabase_js_1.supabase.from('reciter_contacts').delete().eq('id', id).select();
+        if (error || !(data || []).length) return { ok: false, error: error ? error.message : 'ليست لديك صلاحية التراجع عن هذه الحالة.' };
+        setAll((list) => list.filter((r) => r.id !== id));
+        return { ok: true };
+    }, []);
+    // عند حفظ مسؤول المسجد تلاوة الخانة تنتهي مهمة «تم التواصل» لهذه الخانة
+    const clearSlot = react_1.useCallback(async (mosque_id, slot_key) => {
+        const { error } = await supabase_js_1.supabase.from('reciter_contacts').delete().eq('mosque_id', mosque_id).eq('slot_key', slot_key).eq('status', 'contacted');
+        if (error) { console.warn('clearSlot:', error.message); return; }
+        setAll((list) => list.filter((r) => !(String(r.mosque_id) === String(mosque_id) && r.slot_key === slot_key && r.status === 'contacted')));
+    }, []);
+    const value = react_1.useMemo(() => ({ available, rows, add, remove, clearSlot, reload: load }), [available, rows, add, remove, clearSlot, load]);
+    return react_1.createElement(Ctx.Provider, { value: value }, children);
+}
+/**
+ * دليل القراء الكامل لمسؤول المسجد: كل القراء النشطين في النظام مع أعداد تلاواتهم في كل المساجد
+ * (دالة tilawat_reciter_directory في Supabase). عند تعذّرها يرجع failed=true ويبقى العرض كما كان.
+ */
+function useReciterDirectory(enabled, refreshKey) {
+    const [st, setSt] = react_1.useState({ list: null, slots: null, stats: null, failed: false });
+    react_1.useEffect(() => {
+        if (!enabled) return undefined;
+        let alive = true;
+        supabase_js_1.supabase.rpc('tilawat_reciter_directory').then(({ data, error }) => {
+            if (!alive) return;
+            if (error || !Array.isArray(data)) {
+                console.warn('tilawat_reciter_directory:', error ? error.message : 'unexpected response');
+                setSt({ list: null, slots: null, stats: null, failed: true });
+                return;
+            }
+            if (!data.length) { setSt({ list: null, slots: null, stats: null, failed: false }); return; }
+            const slots = {}, stats = {};
+            const list = data.map((r) => {
+                slots[r.id] = (r.slot_keys || []).map((k) => ({ slot_key: k, reciter_id: r.id }));
+                stats[r.id] = { count: r.read_count || 0, last: r.last_date || '' };
+                return { id: r.id, name: r.name, phone: r.phone || null, notes: r.notes || null, is_active: r.is_active !== false };
+            });
+            setSt({ list, slots, stats, failed: false });
+        });
+        return () => { alive = false; };
+    }, [enabled, refreshKey]);
+    return st;
 }
 
 };
