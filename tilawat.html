@@ -3595,9 +3595,10 @@ function Reciters() {
     const { reciters: reciters0, slotsByReciter: slotsByReciter0, recitation_logs, upsertLocal, removeLocal } = (0, DataContext_jsx_1.useData)();
     // مسؤول المسجد يرى كل القراء في النظام (مع أعداد تلاواتهم في جميع المساجد)، والمدير كما كان
     const dir = (0, contacts_js_1.useReciterDirectory)(!isAdmin, recitation_logs.length);
+    const totals = (0, contacts_js_1.useReciterTotals)(!isAdmin, recitation_logs.length);
     const reciters = dir.list || reciters0;
     const slotsByReciter = dir.slots || slotsByReciter0;
-    const dirNotice = dir.failed ? React.createElement("p", { className: "mb-3 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm font-semibold text-warn" }, "تعذّر جلب الدليل الكامل لكل المساجد؛ يُعرض ما تسمح به الصلاحيات حالياً. تأكد من تطبيق ملف SQL الخاص بالتحديث في Supabase.") : null;
+    const dirNotice = (dir.failed || totals.failed) ? React.createElement("p", { className: "mb-3 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm font-semibold text-warn" }, "تعذّر جلب بيانات كل المساجد؛ يُعرض عدد التلاوات في مسجدك فقط. طبّق ملف SQL الخاص بالتحديث في Supabase (Run) ثم حدّث الصفحة.") : null;
     const toast = (0, ToastContext_jsx_1.useToast)();
     const [q, setQ] = (0, react_1.useState)('');
     const [slotFilter, setSlotFilter] = (0, react_1.useState)('all');
@@ -3608,6 +3609,8 @@ function Reciters() {
     const [del, setDel] = (0, react_1.useState)(null);
     const [busy, setBusy] = (0, react_1.useState)(false);
     const stats = (0, react_1.useMemo)(() => {
+        if (totals.map)
+            return totals.map; // إجمالي كل المساجد
         if (dir.stats)
             return dir.stats;
         const m = {};
@@ -3621,7 +3624,7 @@ function Reciters() {
                 e.last = l.log_date;
         });
         return m;
-    }, [recitation_logs, dir.stats]);
+    }, [recitation_logs, dir.stats, totals.map]);
     const rows = (0, react_1.useMemo)(() => {
         const list = reciters.filter((r) => (showInactive || r.is_active) &&
             (!q || (0, util_js_1.matchesQuery)(r.name, q)) &&
@@ -3831,11 +3834,16 @@ function NightReciters() {
         return map;
     }, [recitation_logs]);
     const apologizedRow = (rid) => contactsApi.rows.find((c) => c.status === 'apologized' && String(c.reciter_id) === String(rid));
-    const contactedRow = (rid, slotKey) => (mosque ? contactsApi.rows.find((c) => c.status === 'contacted' && String(c.reciter_id) === String(rid) && c.slot_key === slotKey && String(c.mosque_id) === String(mosque.id)) : null);
+    // «تم التواصل» يظهر لكل مسؤولي الليلة (حتى من مسجد آخر) لنفس القارئ ونفس الليلة، ويُفضَّل عرض ما وضعه مسجدي
+    const isMyMosque = (c) => activeMosques.some((m) => String(m.id) === String(c.mosque_id));
+    const contactedRow = (rid, slotKey) => {
+        const hits = contactsApi.rows.filter((c) => c.status === 'contacted' && String(c.reciter_id) === String(rid) && c.slot_key === slotKey);
+        return hits.find((c) => mosque && String(c.mosque_id) === String(mosque.id)) || hits.find(isMyMosque) || hits[0] || null;
+    };
     const tagsFor = (r, slotKey) => {
         const ap = apologizedRow(r.id);
         const ct = contactedRow(r.id, slotKey);
-        return React.createElement(React.Fragment, null, ap && React.createElement("span", { className: "badge-warn" }, "معتذر"), !ap && ct && React.createElement("span", { className: "badge-ok" }, "تم التواصل"));
+        return React.createElement(React.Fragment, null, ap && React.createElement("span", { className: "badge-warn" }, "معتذر"), !ap && ct && React.createElement("span", { className: "badge-ok", title: isMyMosque(ct) ? "" : "وضعه مسؤول ليلة في مسجد آخر" }, isMyMosque(ct) ? "تم التواصل" : "تم التواصل — مسجد آخر"));
     };
     const act = async (kind, r, slotKey) => {
         if (!mosque)
@@ -4240,6 +4248,7 @@ exports.useContacts = useContacts;
 exports.ContactsProvider = ContactsProvider;
 exports.useReciterDirectory = useReciterDirectory;
 exports.weekStartMs = weekStartMs;
+exports.useReciterTotals = useReciterTotals;
 const react_1 = require("react");
 const supabase_js_1 = require("src/lib/supabase.js");
 const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
@@ -4323,6 +4332,30 @@ function ContactsProvider({ children }) {
     }, []);
     const value = react_1.useMemo(() => ({ available, rows, add, remove, clearSlot, reload: load }), [available, rows, add, remove, clearSlot, load]);
     return react_1.createElement(Ctx.Provider, { value: value }, children);
+}
+/**
+ * إجمالي تلاوات كل قارئ في جميع المساجد (أعداد مجمّعة فقط عبر الدالة tilawat_reciter_totals) —
+ * ليعرف مسؤول المسجد أن القارئ قرأ سابقاً حتى لو كان ذلك في مسجد آخر.
+ */
+function useReciterTotals(enabled, refreshKey) {
+    const [st, setSt] = react_1.useState({ map: null, failed: false });
+    react_1.useEffect(() => {
+        if (!enabled) return undefined;
+        let alive = true;
+        supabase_js_1.supabase.rpc('tilawat_reciter_totals').then(({ data, error }) => {
+            if (!alive) return;
+            if (error || !Array.isArray(data)) {
+                console.warn('tilawat_reciter_totals:', error ? error.message : 'unexpected response');
+                setSt({ map: null, failed: true });
+                return;
+            }
+            const map = {};
+            data.forEach((r) => { map[r.reciter_id] = { count: r.read_count || 0, last: r.last_date || '' }; });
+            setSt({ map, failed: false });
+        });
+        return () => { alive = false; };
+    }, [enabled, refreshKey]);
+    return st;
 }
 /**
  * دليل القراء الكامل لمسؤول المسجد: كل القراء النشطين في النظام مع أعداد تلاواتهم في كل المساجد
