@@ -1182,7 +1182,7 @@ function ReciterHistoryModal({ open, onClose, reciterKeyValue, name, periodFrom 
         }
         let alive = true;
         setRemote({ rows: null, failed: false });
-        supabase_js_1.supabase.rpc('reciter_history', { p_kind: allKind, p_reciter_id: String(reciterKeyValue) }).then(({ data, error }) => {
+        (allKind === 'all' ? supabase_js_1.supabase.rpc('tilawat_reciter_history', { p_reciter_id: String(reciterKeyValue) }) : supabase_js_1.supabase.rpc('reciter_history', { p_kind: allKind, p_reciter_id: String(reciterKeyValue) })).then(({ data, error }) => {
             if (!alive)
                 return;
             if (error || !Array.isArray(data)) {
@@ -1199,7 +1199,7 @@ function ReciterHistoryModal({ open, onClose, reciterKeyValue, name, periodFrom 
     const loading = Boolean(open && allKind && !remote.rows && !remote.failed);
     const inPeriod = rows.filter((l) => (periodMatch ? periodMatch(l) : (!periodFrom || l.log_date >= periodFrom) && (!periodTo || l.log_date <= periodTo))).length;
     const pages = rows.reduce((s, l) => s + (l.pages || 0), 0);
-    return (React.createElement(ui_jsx_1.Modal, { open: open, onClose: onClose, title: `سجل تلاوات: ${name}${allKind ? (allKind === 'fri' ? ' — كل المساجد (النهارية)' : ' — كل المساجد (الليلية)') : ''}`, size: "xl" },
+    return (React.createElement(ui_jsx_1.Modal, { open: open, onClose: onClose, title: `سجل تلاوات: ${name}${allKind ? (allKind === 'all' ? ' — كل المساجد' : allKind === 'fri' ? ' — كل المساجد (النهارية)' : ' — كل المساجد (الليلية)') : ''}`, size: "xl" },
         React.createElement("div", { className: "mb-4 flex flex-wrap gap-2" },
             React.createElement("span", { className: "badge-brand" },
                 "\u0627\u0644\u0625\u062C\u0645\u0627\u0644\u064A: ",
@@ -3725,7 +3725,7 @@ function Reciters() {
                                 React.createElement("button", { className: "btn-ghost btn-sm !px-2 text-bad", "aria-label": "\u062D\u0630\u0641", onClick: () => setDel(r) },
                                     React.createElement(lucide_react_1.Trash2, { className: "h-4 w-4" })))))));
                 })))))),
-        React.createElement(ReciterHistoryModal_jsx_1.default, { open: Boolean(hist), onClose: () => setHist(null), reciterKeyValue: hist?.key, name: hist?.name }),
+        React.createElement(ReciterHistoryModal_jsx_1.default, { open: Boolean(hist), onClose: () => setHist(null), reciterKeyValue: hist?.key, name: hist?.name, allKind: isAdmin ? null : 'all' }),
         React.createElement(ui_jsx_1.Modal, { drawer: true, open: Boolean(form), onClose: () => setForm(null), title: form?.id ? 'تعديل القارئ' : 'إضافة قارئ', footer: React.createElement(React.Fragment, null,
                 React.createElement("button", { className: "btn-outline", onClick: () => setForm(null) }, "\u0625\u0644\u063A\u0627\u0621"),
                 React.createElement("button", { className: "btn-primary", onClick: save, disabled: busy },
@@ -3831,7 +3831,8 @@ function NightReciters() {
         });
         return map;
     }, [recitation_logs]);
-    const apologizedRow = (rid) => contactsApi.rows.find((c) => c.status === 'apologized' && String(c.reciter_id) === String(rid));
+    // وسم «معتذر» منفصل: اعتذار الليل لا يظهر في الجمعة (النهار) والعكس
+    const apologizedRow = (rid, slotKey) => contactsApi.rows.find((c) => c.status === 'apologized' && String(c.reciter_id) === String(rid) && (c.slot_key === 'fri') === (slotKey === 'fri'));
     // «تم التواصل» يظهر لكل مسؤولي الليلة (حتى من مسجد آخر) لنفس القارئ ونفس الليلة، ويُفضَّل عرض ما وضعه مسجدي
     const isMyMosque = (c) => activeMosques.some((m) => String(m.id) === String(c.mosque_id));
     const contactedRow = (rid, slotKey) => {
@@ -3839,7 +3840,7 @@ function NightReciters() {
         return hits.find((c) => mosque && String(c.mosque_id) === String(mosque.id)) || hits.find(isMyMosque) || hits[0] || null;
     };
     const tagsFor = (r, slotKey) => {
-        const ap = apologizedRow(r.id);
+        const ap = apologizedRow(r.id, slotKey);
         const ct = contactedRow(r.id, slotKey);
         return React.createElement(React.Fragment, null, ap && React.createElement("span", { className: "badge-warn" }, "معتذر"), !ap && ct && React.createElement("span", { className: "badge-ok", title: isMyMosque(ct) ? "" : "وضعه مسؤول ليلة في مسجد آخر" }, isMyMosque(ct) ? "تم التواصل" : "تم التواصل — مسجد آخر"));
     };
@@ -3864,7 +3865,7 @@ function NightReciters() {
             toast.error('تعذّر التراجع', res.error);
     };
     const actionCell = (r, slotKey) => {
-        const ap = apologizedRow(r.id);
+        const ap = apologizedRow(r.id, slotKey);
         const ct = contactedRow(r.id, slotKey);
         const row = ap || ct;
         const busyHere = busyKey === `${r.id}-${slotKey}`;
