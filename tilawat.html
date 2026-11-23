@@ -2584,8 +2584,8 @@ function DailyLog() {
     const slotWord = slot === 'fri' ? 'لهذه الجمعة' : 'لهذه الليلة';
     // القراء الذين تواصل معهم مسؤول الليلة لهذا المسجد وهذه الخانة (هذا الأسبوع)
     const contacted = (0, react_1.useMemo)(() => (!isNight && mosque && slot
-        ? contactsApi.rows.filter((c) => c.status === 'contacted' && String(c.mosque_id) === String(mosque.id) && c.slot_key === slot).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
-        : []), [contactsApi.rows, isNight, mosque, slot]);
+        ? contactsApi.rows.filter((c) => c.status === 'contacted' && String(c.mosque_id) === String(mosque.id) && c.slot_key === slot && !contacts_js_1.isFulfilled(c, recitation_logs)).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+        : []), [contactsApi.rows, isNight, mosque, slot, recitation_logs]);
     const nameOfContact = (c) => (reciterById[c.reciter_id] && reciterById[c.reciter_id].name) || '—';
     const resetEntry = () => {
         setHijriTouched(false);
@@ -2716,8 +2716,6 @@ function DailyLog() {
             return toast.error('تعذّر الحفظ', error.message);
         }
         upsertLocal('recitation_logs', saved);
-        if (!editing)
-            contactsApi.clearSlot(mosque.id, slot); // انتهت مهمة التواصل لهذه الخانة
         toast.success(editing ? 'تم تحديث التسجيل' : 'تم حفظ التسجيل', status === 'read' ? saved.reciter_name : 'سُجّل عدم القراءة');
         resetEntry();
     };
@@ -2966,9 +2964,9 @@ function Coverage({ title, date, slot, mosques, logs }) {
 }
 /** قراء تم التواصل معهم من مسؤول الليلة — تنتقل هنا تلقائياً (لحظياً) لمسؤول المسجد المعني */
 function ContactedPanel() {
-    const { mosques, mosqueById, reciterById, profileById } = (0, DataContext_jsx_1.useData)();
+    const { mosques, mosqueById, reciterById, profileById, recitation_logs } = (0, DataContext_jsx_1.useData)();
     const contactsApi = (0, contacts_js_1.useContacts)();
-    const list = contactsApi.rows.filter((c) => c.status === 'contacted' && c.slot_key !== 'fri' && mosqueById[c.mosque_id]);
+    const list = contactsApi.rows.filter((c) => c.status === 'contacted' && c.slot_key !== 'fri' && mosqueById[c.mosque_id] && !contacts_js_1.isFulfilled(c, recitation_logs));
     return (React.createElement("div", { className: "card mb-5 overflow-hidden" },
         React.createElement("div", { className: "flex items-center justify-between border-b border-cardline px-5 py-3.5" },
             React.createElement("h2", { className: "font-extrabold" }, "قراء تم التواصل معهم"),
@@ -3872,7 +3870,7 @@ function NightReciters() {
         const busyHere = busyKey === `${r.id}-${slotKey}`;
         let body;
         if (row)
-            body = (!row.created_by || row.created_by === uid)
+            body = (!row.created_by || row.created_by === uid || (profile && profile.role === 'admin'))
                 ? [React.createElement("button", { key: "u", type: "button", className: "btn-ghost btn-sm", disabled: busyHere, onClick: () => undo(row) }, "تراجع")]
                 : [React.createElement("span", { key: "x", className: "text-xs text-ink-soft" }, "\u2014")];
         else
@@ -4249,6 +4247,7 @@ exports.ContactsProvider = ContactsProvider;
 exports.useReciterDirectory = useReciterDirectory;
 exports.weekStartMs = weekStartMs;
 exports.useReciterTotals = useReciterTotals;
+exports.isFulfilled = isFulfilled;
 const react_1 = require("react");
 const supabase_js_1 = require("src/lib/supabase.js");
 const AuthContext_jsx_1 = require("src/context/AuthContext.jsx");
@@ -4264,6 +4263,11 @@ function weekStartMs(nowMs) {
     t -= ((d.getUTCDay() - 6 + 7) % 7) * 86400000;
     if (t > nowMs) t -= 7 * 86400000;
     return t;
+}
+/** تم تسجيل تلاوة لهذه الخانة في هذا المسجد بعد التواصل → تنتهي مهمة التواصل (دون حذف الوسم) */
+function isFulfilled(c, logs) {
+    const day = new Date(Date.parse(c.created_at) + 3 * 3600 * 1000).toISOString().slice(0, 10); // تاريخ الرياض
+    return (logs || []).some((l) => String(l.mosque_id) === String(c.mosque_id) && l.slot_key === c.slot_key && String(l.log_date) >= day);
 }
 const Ctx = react_1.createContext(null);
 const EMPTY = { available: false, rows: [], add: async () => ({ ok: false, error: 'غير متاح' }), remove: async () => ({ ok: false, error: 'غير متاح' }), clearSlot: async () => {}, reload: async () => {} };
